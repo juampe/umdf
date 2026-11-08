@@ -16,8 +16,10 @@ $light = Join-Path $wixRoot.FullName "bin\light.exe"
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $wixobj = Join-Path $env:RUNNER_TEMP "umdf.wixobj"
+$license = Join-Path $BinDir "LICENSE.rtf"
+$licenseArg = "-dlicenseRtf=$license"
 
-& $candle -nologo -ext WixUIExtension -dVersion="$Version" -dBinDir="$BinDir" `
+& $candle -nologo -ext WixUIExtension -dVersion="$Version" -dBinDir="$BinDir" $licenseArg `
     packaging\umdf.wxs -out $wixobj
 if ($LASTEXITCODE -ne 0) { throw "candle failed" }
 
