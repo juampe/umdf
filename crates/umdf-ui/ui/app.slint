@@ -144,6 +144,8 @@ export struct HelpLine {
 export struct BrowserEntry {
     name: string,
     path: string,
+    /// 0 = folder, 1 = drive / filesystem root
+    kind: int,
 }
 
 export struct RowItem {
@@ -196,6 +198,36 @@ component FlatButton inherits Rectangle {
     ta := TouchArea {
         enabled: root.enabled;
         clicked => { root.clicked(); }
+    }
+}
+
+component DriveIcon inherits Rectangle {
+    width: 18px;
+    height: 14px;
+    background: transparent;
+    Rectangle {
+        x: 0;
+        y: 1px;
+        width: 18px;
+        height: 12px;
+        border-radius: 2px;
+        background: Theme.muted;
+    }
+    Rectangle {
+        x: 3px;
+        y: 4px;
+        width: 12px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.card;
+    }
+    Rectangle {
+        x: 13px;
+        y: 9px;
+        width: 3px;
+        height: 3px;
+        border-radius: 1.5px;
+        background: Theme.folder;
     }
 }
 
@@ -404,6 +436,7 @@ export component AppWindow inherits Window {
     in-out property <string> browser-path: "";
     in-out property <string> browser-status: "";
     in-out property <string> browser-mode: "folder";
+    in-out property <bool> browser-drives: false;
     in-out property <string> stage: "Ready";
     in-out property <string> status: "Add a folder to begin.";
     in-out property <float> progress: 0;
@@ -464,6 +497,7 @@ export component AppWindow inherits Window {
     callback open-browser(string);
     callback browse-go(string);
     callback browse-up();
+    callback browse-roots();
     callback browse-enter(string);
     callback browse-select();
     callback browse-cancel();
@@ -1156,9 +1190,16 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: 6px;
                         FlatButton {
+                            label: root.strings.computer;
+                            minw: 92px;
+                            bg: Theme.soft;
+                            clicked => { root.browse-roots(); }
+                        }
+                        FlatButton {
                             label: root.strings.up;
                             minw: 64px;
                             bg: Theme.soft;
+                            enabled: !root.browser-drives;
                             clicked => { root.browse-up(); }
                         }
                         LineEdit {
@@ -1189,7 +1230,8 @@ export component AppWindow inherits Window {
                                     padding-left: 12px;
                                     padding-right: 12px;
                                     spacing: 10px;
-                                    FolderIcon { }
+                                    if entry.kind == 1 : DriveIcon { }
+                                    if entry.kind != 1 : FolderIcon { }
                                     Text {
                                         text: entry.name;
                                         color: Theme.text;
@@ -1237,6 +1279,7 @@ export component AppWindow inherits Window {
                             fg: Theme.accent_text;
                             bg: Theme.accent;
                             hover: Theme.accent_hover;
+                            enabled: !root.browser-drives;
                             clicked => { root.browse-select(); scope.focus(); }
                         }
                     }

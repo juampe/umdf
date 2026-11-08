@@ -168,7 +168,9 @@
     "help_about": "UMDF 정보",
     "help_version": "버전 {version}",
     "help_author": "작성자: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
-    "help_disclaimer": "면책 조항: UMDF는 “있는 그대로” 제공되며 어떠한 보증도 하지 않습니다. 작성자는 파일 삭제, 이동 또는 수정을 포함하여 이 소프트웨어 사용으로 인해 발생하는 모든 손실, 손해, 데이터 손실 또는 기타 결과에 대해 책임지지 않습니다. 항상 백업을 보관하고 작업을 적용하기 전에 결과를 검토하세요."
+    "help_disclaimer": "면책 조항: UMDF는 “있는 그대로” 제공되며 어떠한 보증도 하지 않습니다. 작성자는 파일 삭제, 이동 또는 수정을 포함하여 이 소프트웨어 사용으로 인해 발생하는 모든 손실, 손해, 데이터 손실 또는 기타 결과에 대해 책임지지 않습니다. 항상 백업을 보관하고 작업을 적용하기 전에 결과를 검토하세요.",
+    "browser_drives": "드라이브",
+    "browser_drives_hint": "사용 가능한 드라이브: {n}개 — 클릭하여 열기"
   },
   "help": [
     {

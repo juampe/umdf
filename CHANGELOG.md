@@ -4,6 +4,19 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.3] - 2026-11-08
+
+### Fixed
+
+- Windows extended-length prefixes (`\\?\` and `\\?\UNC\`) are stripped
+  from every path shown in the UI: folder list, browser, status messages,
+  destination fields and model paths. Filesystem operations still use the
+  canonical path.
+- The folder browser now has a **drive/root view**. Pressing **Up** at a drive
+  root (or **Computer**) lists the available Windows drives; Up and “Use this
+  folder” are disabled at that level, and drives use a dedicated icon.
+- Added the `--demo-browser` self-test hook.
+
 ## [0.3.2] - 2026-11-08
 
 ### Added

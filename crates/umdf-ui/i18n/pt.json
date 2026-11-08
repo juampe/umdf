@@ -168,7 +168,9 @@
     "help_about": "Sobre o UMDF",
     "help_version": "Versão {version}",
     "help_author": "Autor: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
-    "help_disclaimer": "Aviso legal: O UMDF é fornecido «tal como está», sem garantias de qualquer tipo. Os autores não são responsáveis por perdas, danos, perda de dados ou outras consequências resultantes da utilização deste software, incluindo eliminar, mover ou modificar ficheiros. Faça sempre cópias de segurança e reveja os resultados antes de aplicar ações."
+    "help_disclaimer": "Aviso legal: O UMDF é fornecido «tal como está», sem garantias de qualquer tipo. Os autores não são responsáveis por perdas, danos, perda de dados ou outras consequências resultantes da utilização deste software, incluindo eliminar, mover ou modificar ficheiros. Faça sempre cópias de segurança e reveja os resultados antes de aplicar ações.",
+    "browser_drives": "Unidades",
+    "browser_drives_hint": "Unidades disponíveis: {n} — clique para abrir"
   },
   "help": [
     {

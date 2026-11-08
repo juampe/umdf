@@ -4,6 +4,7 @@
 mod cache;
 mod i18n;
 mod models;
+mod paths;
 mod settings;
 
 use std::cell::{Cell, RefCell};
@@ -23,6 +24,7 @@ use umdf_core::{EmbeddingConfig, KeepPolicy, Metric, Progress, ScanConfig, ScanR
 use cache::CacheDb;
 use i18n::{human_bytes, Lang, Tr, Verb};
 use models::InstalledModel;
+use paths::{clean_path, display_path};
 use settings::Settings;
 
 slint::include_modules!();
@@ -136,7 +138,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     update_cache_label(&ui, &cache);
-    ui.set_models_dir(models_dir.to_string_lossy().to_string().into());
+    ui.set_models_dir(display_path(&models_dir).into());
     ui.set_semantic_device(device);
     ui.set_semantic_threshold(threshold);
     ui.set_semantic_threshold_label(format!("{threshold:.2}").into());
@@ -327,6 +329,10 @@ fn main() -> anyhow::Result<()> {
                 return;
             }
             ui.set_browser_mode("folder".into());
+            if key.as_str() == "root" {
+                show_roots(&ui, &browser_model, &browser_path, &tr);
+                return;
+            }
             let start = match key.as_str() {
                 "pictures" => quick_location("pictures"),
                 "documents" => quick_location("documents"),
@@ -353,6 +359,9 @@ fn main() -> anyhow::Result<()> {
         ui.on_browse_go(move |value| {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
+            if ui.get_browser_drives() && value == tr.browser_drives() {
+                return;
+            }
             let raw = if value.trim().is_empty() {
                 ui.get_browser_path().to_string()
             } else {
@@ -374,10 +383,28 @@ fn main() -> anyhow::Result<()> {
         ui.on_browse_up(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
-            let current = browser_path.borrow().clone();
-            if let Some(parent) = current.parent() {
-                open_browser(&ui, &browser_model, &browser_path, parent.to_path_buf(), &tr);
+            if ui.get_browser_drives() {
+                return;
             }
+            let current = browser_path.borrow().clone();
+            if at_filesystem_root(&current) {
+                show_roots(&ui, &browser_model, &browser_path, &tr);
+            } else if let Some(parent) = current.parent() {
+                open_browser(&ui, &browser_model, &browser_path, parent.to_path_buf(), &tr);
+            } else {
+                show_roots(&ui, &browser_model, &browser_path, &tr);
+            }
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let browser_model = browser_model.clone();
+        let browser_path = browser_path.clone();
+        let lang = lang.clone();
+        ui.on_browse_roots(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let tr = Tr::new(lang.get());
+            show_roots(&ui, &browser_model, &browser_path, &tr);
         });
     }
     {
@@ -405,15 +432,18 @@ fn main() -> anyhow::Result<()> {
         ui.on_browse_select(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
+            if ui.get_browser_drives() {
+                return;
+            }
             let path = browser_path.borrow().clone();
             if ui.get_browser_mode() == "models-dir" {
                 if path.is_dir() {
-                    ui.set_models_dir(path.to_string_lossy().to_string().into());
+                    ui.set_models_dir(display_path(&path).into());
                     save_model_settings(&ui, &settings);
                     refresh_models(&ui, &settings, &ui_models, lang.get());
                     ui.set_models_status(
                         Tr::new(lang.get())
-                            .models_folder(&path.display().to_string())
+                            .models_folder(&display_path(&path))
                             .into(),
                     );
                 }
@@ -422,7 +452,7 @@ fn main() -> anyhow::Result<()> {
             }
             if ui.get_browser_mode() == "destination" {
                 if path.is_dir() {
-                    ui.set_move_dest(path.to_string_lossy().to_string().into());
+                    ui.set_move_dest(display_path(&path).into());
                     ui.set_status(tr.status_folder_added(&path).into());
                 }
             } else {
@@ -555,7 +585,7 @@ fn main() -> anyhow::Result<()> {
             let Some(ui) = ui_handle.upgrade() else { return };
             let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
             if !model.path.is_file() {
-                ui.set_models_status(tr.model_missing(&model.path.display().to_string()).into());
+                ui.set_models_status(tr.model_missing(&display_path(&model.path)).into());
                 return;
             }
             if let Ok(mut guard) = settings.lock() {
@@ -1141,7 +1171,7 @@ fn main() -> anyhow::Result<()> {
         let ui_weak = ui.as_weak();
         slint::Timer::single_shot(std::time::Duration::from_millis(600), move || {
             if let Some(ui) = ui_weak.upgrade() {
-                ui.invoke_open_browser("home".into());
+                ui.invoke_open_browser("root".into());
             }
         });
     }
@@ -1181,7 +1211,7 @@ fn main() -> anyhow::Result<()> {
     }
     if let Some(pos) = args.iter().position(|a| a == "--models-dir") {
         if let Some(dir) = args.get(pos + 1) {
-            ui.set_models_dir(dir.as_str().into());
+            ui.set_models_dir(display_path(Path::new(dir)).into());
             save_model_settings(&ui, &settings);
             refresh_models(&ui, &settings, &ui_models, lang.get());
         }
@@ -1368,7 +1398,7 @@ fn refresh_models(
         rows.push(ModelRow {
             name: name.into(),
             details: format!("{capabilities} · ~{} MB", catalog.size_mb).into(),
-            path: path.to_string_lossy().to_string().into(),
+            path: display_path(&path).into(),
             state,
         });
         entries.push(UiModel {
@@ -1390,7 +1420,7 @@ fn refresh_models(
         rows.push(ModelRow {
             name: model.name.clone().into(),
             details: model.capabilities.clone().into(),
-            path: model.path.to_string_lossy().to_string().into(),
+            path: display_path(&model.path).into(),
             state: if is_active { 2 } else { 1 },
         });
         entries.push(UiModel {
@@ -1651,7 +1681,8 @@ fn open_browser(
     let count = entries.len();
     model.set_vec(entries);
     *current.borrow_mut() = canonical.clone();
-    ui.set_browser_path(canonical.to_string_lossy().to_string().into());
+    ui.set_browser_drives(false);
+    ui.set_browser_path(display_path(&canonical).into());
     let status = if ui.get_browser_mode() == "destination" {
         tr.browser_destination()
     } else {
@@ -1667,9 +1698,59 @@ fn read_directories(path: &Path, show_hidden: bool) -> Vec<BrowserEntry> {
         .filter(|(name, _)| show_hidden || !name.starts_with('.'))
         .map(|(name, path)| BrowserEntry {
             name: name.into(),
-            path: path.to_string_lossy().to_string().into(),
+            path: display_path(&path).into(),
+            kind: 0,
         })
         .collect()
+}
+
+
+fn list_roots() -> Vec<BrowserEntry> {
+    #[cfg(windows)]
+    {
+        (b'A'..=b'Z')
+            .filter_map(|letter| {
+                let root = format!("{}:\\", letter as char);
+                if Path::new(&root).is_dir() {
+                    Some(BrowserEntry {
+                        name: root.clone().into(),
+                        path: root.into(),
+                        kind: 1,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        vec![BrowserEntry {
+            name: "/".into(),
+            path: "/".into(),
+            kind: 1,
+        }]
+    }
+}
+
+fn show_roots(
+    ui: &AppWindow,
+    model: &VecModel<BrowserEntry>,
+    current: &RefCell<PathBuf>,
+    tr: &Tr,
+) {
+    let roots = list_roots();
+    let count = roots.len();
+    model.set_vec(roots);
+    *current.borrow_mut() = PathBuf::new();
+    ui.set_browser_drives(true);
+    ui.set_browser_path(tr.browser_drives().into());
+    ui.set_browser_status(tr.browser_drives_hint(count).into());
+    ui.set_browser_open(true);
+}
+
+fn at_filesystem_root(path: &Path) -> bool {
+    clean_path(path).parent().is_none()
 }
 
 fn add_folder(
@@ -1687,14 +1768,15 @@ fn add_folder(
         ui.set_status(tr.status_folder_exists().into());
         return;
     }
+    let display = display_path(&path);
     let name = path
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.to_string_lossy().to_string());
+        .unwrap_or_else(|| display.clone());
     folders.borrow_mut().push(path.clone());
     model.push(FolderItem {
         name: name.into(),
-        path: path.to_string_lossy().to_string().into(),
+        path: display.into(),
     });
     ui.set_folders_label(tr.folders_label(folders.borrow().len()).into());
     ui.set_status(tr.status_folder_added(&path).into());

@@ -10,6 +10,7 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
+use crate::paths::display_path;
 use crate::{HelpLine, Strings};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -435,7 +436,7 @@ impl Tr {
     }
 
     pub fn status_folder_added(&self, path: &Path) -> String {
-        self.fmt("status_folder_added", &[("path", path.display().to_string())])
+        self.fmt("status_folder_added", &[("path", display_path(path))])
     }
 
     pub fn status_folder_exists(&self) -> String {
@@ -443,7 +444,7 @@ impl Tr {
     }
 
     pub fn status_not_a_folder(&self, path: &Path) -> String {
-        self.fmt("status_not_a_folder", &[("path", path.display().to_string())])
+        self.fmt("status_not_a_folder", &[("path", display_path(path))])
     }
 
     pub fn status_folder_removed(&self) -> String {
@@ -471,27 +472,27 @@ impl Tr {
     }
 
     pub fn status_trashed(&self, path: &Path) -> String {
-        self.fmt("status_trashed", &[("path", path.display().to_string())])
+        self.fmt("status_trashed", &[("path", display_path(path))])
     }
 
     pub fn status_trash_failed(&self, path: &Path) -> String {
-        self.fmt("status_trash_failed", &[("path", path.display().to_string())])
+        self.fmt("status_trash_failed", &[("path", display_path(path))])
     }
 
     pub fn status_deleted(&self, path: &Path) -> String {
-        self.fmt("status_deleted", &[("path", path.display().to_string())])
+        self.fmt("status_deleted", &[("path", display_path(path))])
     }
 
     pub fn status_delete_failed(&self, path: &Path) -> String {
-        self.fmt("status_delete_failed", &[("path", path.display().to_string())])
+        self.fmt("status_delete_failed", &[("path", display_path(path))])
     }
 
     pub fn status_moved(&self, path: &Path) -> String {
-        self.fmt("status_moved", &[("path", path.display().to_string())])
+        self.fmt("status_moved", &[("path", display_path(path))])
     }
 
     pub fn status_move_failed(&self, path: &Path) -> String {
-        self.fmt("status_move_failed", &[("path", path.display().to_string())])
+        self.fmt("status_move_failed", &[("path", display_path(path))])
     }
 
     pub fn status_error(&self, error: &str) -> String {
@@ -507,7 +508,7 @@ impl Tr {
                 &[
                     ("verb", verb),
                     ("count", count),
-                    ("destination", destination.display().to_string()),
+                    ("destination", display_path(destination)),
                 ],
             ),
             None => self.fmt("confirm_bulk", &[("verb", verb), ("count", count)]),
@@ -613,6 +614,14 @@ impl Tr {
         self.fmt("browser_folders", &[("n", n.to_string())])
     }
 
+    pub fn browser_drives(&self) -> String {
+        self.phrase("browser_drives").into()
+    }
+
+    pub fn browser_drives_hint(&self, n: usize) -> String {
+        self.fmt("browser_drives_hint", &[("n", n.to_string())])
+    }
+
     pub fn model_no_url(&self) -> String {
         self.phrase("model_no_url").into()
     }
@@ -663,7 +672,7 @@ impl Tr {
     pub fn browser_not_a_folder(&self, path: &Path) -> String {
         self.fmt(
             "browser_not_a_folder",
-            &[("path", path.display().to_string())],
+            &[("path", display_path(path))],
         )
     }
 

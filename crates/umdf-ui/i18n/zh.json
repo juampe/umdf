@@ -168,7 +168,9 @@
     "help_about": "关于 UMDF",
     "help_version": "版本 {version}",
     "help_author": "作者：Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
-    "help_disclaimer": "免责声明：UMDF 按“原样”提供，不附带任何形式的保证。作者不对因使用本软件而造成的任何损失、损害、数据丢失或其他后果负责，包括删除、移动或修改文件。请始终保留备份，并在执行操作前检查结果。"
+    "help_disclaimer": "免责声明：UMDF 按“原样”提供，不附带任何形式的保证。作者不对因使用本软件而造成的任何损失、损害、数据丢失或其他后果负责，包括删除、移动或修改文件。请始终保留备份，并在执行操作前检查结果。",
+    "browser_drives": "驱动器",
+    "browser_drives_hint": "可用驱动器：{n} — 点击打开"
   },
   "help": [
     {
