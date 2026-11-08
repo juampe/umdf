@@ -78,10 +78,10 @@ fn environment() -> &'static ort::environment::Environment {
             Some(path) => match ort::init_from(&path) {
                 Ok(builder) => builder,
                 Err(error) => {
-                    eprintln!(
+                    crate::log_error(format_args!(
                         "UMDF: could not load bundled ONNX Runtime at {}: {error}",
                         path.display()
-                    );
+                    ));
                     ort::environment::init()
                 }
             },
@@ -164,9 +164,9 @@ impl EmbeddingEngine {
             match Self::build_session(&env, cfg, true) {
                 Ok(session) => session,
                 Err(error) => {
-                    eprintln!(
+                    crate::log_error(format_args!(
                         "UMDF: CUDA execution provider unavailable ({error}); falling back to CPU"
-                    );
+                    ));
                     forced_cpu = true;
                     Self::build_session(&env, cfg, false)?
                 }

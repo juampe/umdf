@@ -4,6 +4,19 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-11-08
+
+### Fixed
+
+- Windows MSI license now embeds the real GPL/ONNX license instead of WiX's
+  "Lorem ipsum" placeholder (`WixVariable WixUILicenseRtf`).
+- The desktop UI is built as a **Windows GUI subsystem** binary, so it no longer
+  opens an extra console window. The CLI remains a console program.
+- Windows diagnostics use non-panicking logging when there is no console.
+- `ffmpeg`/`ffprobe` child processes are started with `CREATE_NO_WINDOW`.
+- The MSI registers as **UMDF — Universal Media Duplicate Finder** in Apps &
+  Features, with **UMDF Media Finder** shortcuts.
+
 ## [0.3.0] - 2026-11-08
 
 ### Added

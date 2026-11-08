@@ -65,17 +65,17 @@ impl Settings {
                 .and_then(|text| toml::from_str::<Settings>(&text).ok())
             {
                 Some(settings) => return settings,
-                None => eprintln!(
+                None => umdf_core::log_error(format_args!(
                     "UMDF: could not parse {}; using defaults",
                     path.display()
-                ),
+                )),
             }
         }
 
         let migrated = Self::migrate_legacy();
         let settings = migrated.unwrap_or_default();
         if let Err(error) = settings.save() {
-            eprintln!("UMDF: could not write config.toml: {error}");
+            umdf_core::log_error(format_args!("UMDF: could not write config.toml: {error}"));
         }
         settings
     }
@@ -201,11 +201,11 @@ impl Settings {
         if settings.save().is_ok() {
             let backup = legacy.with_extension("db.bak");
             let _ = std::fs::rename(&legacy, &backup);
-            eprintln!(
+            umdf_core::log_error(format_args!(
                 "UMDF: migrated settings to {} (legacy database kept as {})",
                 Self::path().display(),
                 backup.display()
-            );
+            ));
         }
         Some(settings)
     }

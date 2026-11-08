@@ -6,6 +6,20 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+/// Create a command that never flashes a console window on Windows (the UI is
+/// a GUI subsystem process and ffmpeg/ffprobe are console tools).
+fn new_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -50,7 +64,7 @@ fn run_with_timeout(
 
 /// Run `ffprobe -show_streams -show_format -of json`.
 pub fn probe(ffprobe: &Path, file: &Path, cancel: &AtomicBool) -> anyhow::Result<Probe> {
-    let mut cmd = Command::new(ffprobe);
+    let mut cmd = new_command(ffprobe);
     cmd.args([
         "-v",
         "quiet",
@@ -134,7 +148,7 @@ pub fn extract_frame(
     out: &Path,
     cancel: &AtomicBool,
 ) -> anyhow::Result<()> {
-    let mut cmd = Command::new(ffmpeg);
+    let mut cmd = new_command(ffmpeg);
     cmd.arg("-v")
         .arg("error")
         .arg("-ss")
@@ -162,7 +176,7 @@ pub fn audio_pcm_hash(
     seconds: f64,
     cancel: &AtomicBool,
 ) -> anyhow::Result<String> {
-    let mut child = Command::new(ffmpeg)
+    let mut child = new_command(ffmpeg)
         .args(["-v", "quiet", "-ss", &format!("{at_secs:.3}")])
         .args(["-t", &format!("{seconds:.3}")])
         .arg("-i")

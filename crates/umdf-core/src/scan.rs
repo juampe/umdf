@@ -310,7 +310,7 @@ fn run_inner(
                         missing.iter().map(|slot| meta[*slot].0.clone()).collect();
                     let mut engine = crate::embeddings::EmbeddingEngine::new(ecfg)?;
                     if engine.forced_cpu() {
-                        eprintln!("UMDF: semantic embeddings are running on the CPU");
+                        crate::log_error(format_args!("UMDF: semantic embeddings are running on the CPU"));
                     }
                     let computed = engine.embed_paths(&paths)?;
                     for (slot, vector) in missing.into_iter().zip(computed) {

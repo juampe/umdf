@@ -1,3 +1,4 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 //! Slint desktop front-end for the Universal Media Duplicate Finder.
 
 mod cache;
@@ -96,7 +97,7 @@ fn main() -> anyhow::Result<()> {
     let cache: Arc<CacheDb> = Arc::new(match CacheDb::open() {
         Ok(cache) => cache,
         Err(error) => {
-            eprintln!("UMDF: could not open cache.db: {error}");
+            umdf_core::log_error(format_args!("UMDF: could not open cache.db: {error}"));
             let fallback = std::env::temp_dir().join("umdf-cache.db");
             CacheDb::open_at(fallback).expect("temporary cache database")
         }
@@ -1312,7 +1313,7 @@ fn save_model_settings(ui: &AppWindow, settings: &Arc<Mutex<Settings>>) {
             guard.set_device_index(device);
             guard.similarity = similarity;
             if let Err(error) = guard.save() {
-                eprintln!("UMDF: could not save config.toml: {error}");
+                umdf_core::log_error(format_args!("UMDF: could not save config.toml: {error}"));
             }
         }
     }

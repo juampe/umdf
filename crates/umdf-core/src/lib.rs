@@ -26,6 +26,13 @@
 //! }
 //! ```
 
+/// Write a diagnostic to stderr without panicking when the process has no
+/// console (for example a Windows GUI application).
+pub fn log_error(args: std::fmt::Arguments<'_>) {
+    use std::io::Write;
+    let _ = writeln!(std::io::stderr(), "{args}");
+}
+
 pub mod action;
 pub mod config;
 #[cfg(feature = "embeddings")]

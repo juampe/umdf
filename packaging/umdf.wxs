@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <WixVariable Id="WixUILicenseRtf" Value="$(var.BinDir)\LICENSE.rtf" />
   <Product Id="*"
-           Name="UMDF"
+           Name="UMDF — Universal Media Duplicate Finder"
            Language="1033"
            Version="$(var.Version)"
            Manufacturer="juampe"
@@ -13,8 +14,7 @@
     <Icon Id="UmdfIcon" SourceFile="$(var.BinDir)\icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="UmdfIcon" />
     <Property Id="ARPHELPLINK" Value="https://github.com/juampe/umdf" />
-    <Property Id="WixUILicenseRtf" Value="$(var.BinDir)\LICENSE.rtf" />
-    <Feature Id="MainFeature" Title="UMDF" Level="1">
+    <Feature Id="MainFeature" Title="UMDF — Universal Media Duplicate Finder" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
@@ -70,7 +70,7 @@
     <DirectoryRef Id="ApplicationProgramsFolder">
       <Component Id="ApplicationShortcut" Guid="2f2a4939-a5f0-4241-b354-7b460b8f56e4">
         <Shortcut Id="StartMenuShortcut"
-                  Name="UMDF"
+                  Name="UMDF Media Finder"
                   Description="Universal Media Duplicate Finder"
                   Target="[INSTALLFOLDER]umdf-ui.exe"
                   WorkingDirectory="INSTALLFOLDER" />
@@ -83,7 +83,7 @@
     <DirectoryRef Id="DesktopFolder">
       <Component Id="DesktopShortcut" Guid="294fd20c-4025-4123-8150-8c7c10d263af">
         <Shortcut Id="DesktopShortcutLink"
-                  Name="UMDF"
+                  Name="UMDF Media Finder"
                   Description="Universal Media Duplicate Finder"
                   Target="[INSTALLFOLDER]umdf-ui.exe"
                   WorkingDirectory="INSTALLFOLDER" />
