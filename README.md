@@ -120,17 +120,29 @@ with the comparison each model enables:
 | CLIP ViT-B/32 (vision) | ~335 MB | semantic similarity: different shots of the same scene/person |
 | SigLIP base 16-224 (vision) | ~355 MB | semantic alternative to CLIP |
 
+**Which model for which problem**
+
+| Problem | Recommended |
+|---|---|
+| Exact duplicates | SHA-256 (no model) |
+| Resized / recompressed | `dpf` (default) or ResNet-18/50 |
+| Crops / different framing | CLIP or SigLIP |
+| Same scene/person, different shots | CLIP/SigLIP, threshold ~0.83 |
+| Rotated with EXIF | automatic (orientation is applied) |
+| Rotated without EXIF (baked into pixels) | semantic models; review manually |
+| Red-eye or small retouching | `dpf` with tolerance 14–18 or `ssim` |
+| Video / audio | frame at `Frame position` / decoded PCM |
+
 * Downloads come from Hugging Face into the **models folder** (default
-  `./models`). An **access token** can be provided for gated models.
+  `./models`). The catalogue only contains public models, so **no token is
+  needed**.
 * After a download the model is inspected (`session.inputs`) to discover the
   input size and suggest the preprocessing (ImageNet vs CLIP).
 * **CUDA/CPU** and the similarity threshold are selectable; if the CUDA
   execution provider cannot be created the engine falls back to CPU.
-* The token, models folder, device, threshold and active model are stored in
+* The models folder, device, threshold and active model are stored in
   **SQLite** at `<config dir>/umdf/config.db` (Linux:
   `~/.config/umdf/config.db`, Windows: `%APPDATA%\umdf\config.db`).
-* The token is stored as plain text in that local file; use a fine-grained,
-  read-only Hugging Face token. A future version can move it to the OS keyring.
 * Model files are not part of the repository (`/models/` and `*.onnx` are
   ignored).
 

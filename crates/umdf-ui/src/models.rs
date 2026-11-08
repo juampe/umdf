@@ -100,6 +100,9 @@ impl Db {
                  created_at TEXT NOT NULL DEFAULT (datetime('now'))
              );",
         )?;
+        // Older builds stored a Hugging Face token; the catalogue no longer
+        // needs one, so remove any leftover value.
+        let _ = conn.execute("DELETE FROM settings WHERE key = 'hf_token'", []);
         Ok(Self { conn, path })
     }
 
@@ -174,17 +177,12 @@ impl Db {
 }
 
 /// Download `url` to `dest`, creating parent directories. Follows Hugging Face
-/// redirects and sends a bearer token when provided.
-pub fn download(url: &str, token: &str, dest: &Path) -> Result<u64> {
+/// redirects. The catalogue only contains public models, so no token is used.
+pub fn download(url: &str, dest: &Path) -> Result<u64> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut request = ureq::get(url);
-    let token = token.trim();
-    if !token.is_empty() {
-        request = request.set("Authorization", &format!("Bearer {token}"));
-    }
-    let response = request
+    let response = ureq::get(url)
         .call()
         .map_err(|e| anyhow::anyhow!("download failed: {e}"))?;
     let mut reader = response.into_reader();
@@ -209,7 +207,6 @@ mod tests {
         let dest = dir.join("config.json");
         let bytes = download(
             "https://huggingface.co/Xenova/resnet-18/resolve/main/config.json",
-            "",
             &dest,
         )
         .expect("download");

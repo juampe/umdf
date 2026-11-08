@@ -104,7 +104,6 @@ fn main() -> anyhow::Result<()> {
     let mut models_dir = std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("models");
-    let mut hf_token = String::new();
     let mut device = 0i32;
     let mut threshold = 0.90f32;
     let mut active_model = String::new();
@@ -112,9 +111,6 @@ fn main() -> anyhow::Result<()> {
         if let Some(database) = guard.as_ref() {
             if let Some(value) = database.get("models_dir") {
                 models_dir = PathBuf::from(value);
-            }
-            if let Some(value) = database.get("hf_token") {
-                hf_token = value;
             }
             if let Some(value) = database.get("semantic_device") {
                 device = if value == "cpu" { 1 } else { 0 };
@@ -136,7 +132,6 @@ fn main() -> anyhow::Result<()> {
             .into(),
     );
     ui.set_models_dir(models_dir.to_string_lossy().to_string().into());
-    ui.set_hf_token(hf_token.into());
     ui.set_semantic_device(device);
     ui.set_semantic_threshold(threshold);
     ui.set_semantic_threshold_label(format!("{threshold:.2}").into());
@@ -477,13 +472,12 @@ fn main() -> anyhow::Result<()> {
                 ui.set_models_status(tr.model_no_url().into());
                 return;
             }
-            let token = ui.get_hf_token().to_string();
             ui.set_models_status(tr.model_downloading(&model.name).into());
             let ui_weak = ui_handle.clone();
             let db = db.clone();
             let ui_models = ui_models.clone();
             std::thread::spawn(move || {
-                let result = models::download(&model.url, &token, &model.path);
+                let result = models::download(&model.url, &model.path);
                 let _ = slint::invoke_from_event_loop(move || {
                     let Some(ui) = ui_weak.upgrade() else { return };
                     match result {
@@ -1237,7 +1231,6 @@ fn verb_for(kind: &str) -> Verb {
 fn save_model_settings(ui: &AppWindow, db: &Arc<Mutex<Option<Db>>>) {
     if let Ok(guard) = db.lock() {
         if let Some(database) = guard.as_ref() {
-            let _ = database.set("hf_token", &ui.get_hf_token().to_string());
             let _ = database.set("models_dir", &ui.get_models_dir().to_string());
             let _ = database.set(
                 "semantic_device",

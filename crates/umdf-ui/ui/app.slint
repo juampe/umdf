@@ -77,7 +77,6 @@ export struct Strings {
     models_manage: string,
     models_title: string,
     models_help: string,
-    models_token: string,
     models_folder: string,
     models_capabilities: string,
     models_download: string,
@@ -345,7 +344,6 @@ export component AppWindow inherits Window {
         models_manage: "Models…",
         models_title: "Models",
         models_help: "Download an image-embedding model from Hugging Face. Models are stored in the folder below and remembered in config.db.",
-        models_token: "Hugging Face token (optional)",
         models_folder: "Models folder",
         models_capabilities: "Capabilities",
         models_download: "Download",
@@ -435,7 +433,6 @@ export component AppWindow inherits Window {
     in-out property <[ModelRow]> model-rows;
     in-out property <string> models-status: "";
     in-out property <string> models-db: "";
-    in-out property <string> hf-token: "";
     in-out property <string> models-dir: "models";
     in-out property <string> move-dest: "";
 
@@ -1250,37 +1247,22 @@ export component AppWindow inherits Window {
                     Text { text: root.strings.models_title; color: Theme.text; font-size: 18px; font-weight: 700; }
                     Text { text: root.strings.models_help; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
 
-                    HorizontalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            horizontal-stretch: 1;
-                            spacing: 3px;
-                            Text { text: root.strings.models_token; color: Theme.text2; font-size: 10px; }
+                    VerticalLayout {
+                        spacing: 3px;
+                        Text { text: root.strings.models_folder; color: Theme.text2; font-size: 10px; }
+                        HorizontalLayout {
+                            spacing: 6px;
                             LineEdit {
-                                text <=> root.hf-token;
+                                text <=> root.models-dir;
                                 height: 30px;
-                                placeholder-text: "hf_…";
+                                horizontal-stretch: 1;
                                 edited => { root.save-model-settings(); }
                             }
-                        }
-                        VerticalLayout {
-                            horizontal-stretch: 1;
-                            spacing: 3px;
-                            Text { text: root.strings.models_folder; color: Theme.text2; font-size: 10px; }
-                            HorizontalLayout {
-                                spacing: 6px;
-                                LineEdit {
-                                    text <=> root.models-dir;
-                                    height: 30px;
-                                    horizontal-stretch: 1;
-                                    edited => { root.save-model-settings(); }
-                                }
-                                FlatButton {
-                                    label: root.strings.browse;
-                                    minw: 84px;
-                                    bg: Theme.soft;
-                                    clicked => { root.open-browser("models-dir"); }
-                                }
+                            FlatButton {
+                                label: root.strings.browse;
+                                minw: 84px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("models-dir"); }
                             }
                         }
                     }
