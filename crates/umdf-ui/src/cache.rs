@@ -549,6 +549,9 @@ mod tests {
                 params![r"B:/Photos/a.jpg", data],
             )
             .unwrap();
+            // `open_at` already migrated the empty database on Windows and
+            // set user_version = 1; reset it so the test exercises the merge.
+            conn.pragma_update(None, "user_version", 0).unwrap();
             migrate_keys_for(&conn, true).unwrap();
             let count: i64 = conn
                 .query_row("SELECT COUNT(*) FROM fingerprint_cache", [], |row| row.get(0))
