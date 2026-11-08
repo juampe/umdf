@@ -124,7 +124,10 @@ fn main() -> anyhow::Result<()> {
     ui.set_semantic_threshold(threshold);
     ui.set_semantic_threshold_label(format!("{threshold:.2}").into());
 
-    if !active_model.is_empty() && Path::new(&active_model).is_file() {
+    if cfg!(feature = "embeddings")
+        && !active_model.is_empty()
+        && Path::new(&active_model).is_file()
+    {
         ui.set_semantic_enabled(true);
         ui.set_semantic_model(active_model.clone().into());
         if let Some(found) = installed

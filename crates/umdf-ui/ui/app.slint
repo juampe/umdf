@@ -87,6 +87,7 @@ export struct Strings {
     models_threshold: string,
     models_none: string,
     models_clear_cache: string,
+    semantic_unavailable: string,
     opt_tolerance: string,
 
     trash_all: string,
@@ -355,6 +356,7 @@ export component AppWindow inherits Window {
         models_threshold: "Similarity",
         models_none: "No models installed yet. Download one below.",
         models_clear_cache: "Clear cache",
+        semantic_unavailable: "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
         opt_tolerance: "Pixel tolerance",
         trash_all: "Trash all duplicates",
         move_all: "Move all",
@@ -792,8 +794,15 @@ export component AppWindow inherits Window {
                                     CheckBox {
                                         text: root.strings.opt_semantic;
                                         checked <=> root.semantic-enabled;
+                                        enabled: root.embeddings-supported;
                                     }
-                                    if root.semantic-enabled : HorizontalLayout {
+                                    if !root.embeddings-supported : Text {
+                                        text: root.strings.semantic_unavailable;
+                                        color: Theme.faint;
+                                        font-size: 9px;
+                                        wrap: word-wrap;
+                                    }
+                                    if root.embeddings-supported && root.semantic-enabled : HorizontalLayout {
                                         spacing: 6px;
                                         Text {
                                             text: root.semantic-summary;
