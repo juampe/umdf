@@ -1,0 +1,1200 @@
+// Universal Media Duplicate Finder — Slint desktop UI.
+//
+// Light/dark card based theme. All colours live in the `Theme` global so the
+// whole UI switches at once. Text comes from `Strings` (EN/ES, see i18n.rs).
+
+import { CheckBox, ComboBox, LineEdit, ListView, Palette, ScrollView, Slider } from "std-widgets.slint";
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+global Theme {
+    in-out property <bool> dark: false;
+
+    out property <color> bg: dark ? #0b1220 : #f3f4f6;
+    out property <color> card: dark ? #111827 : #ffffff;
+    out property <color> soft: dark ? #0f172a : #f8fafc;
+    out property <color> soft2: dark ? #1e293b : #f1f5f9;
+    out property <color> text: dark ? #e5e7eb : #0f172a;
+    out property <color> text2: dark ? #cbd5e1 : #334155;
+    out property <color> muted: dark ? #94a3b8 : #64748b;
+    out property <color> faint: dark ? #64748b : #94a3b8;
+    out property <color> line: dark ? #1f2937 : #e5e7eb;
+    out property <color> line_soft: dark ? #172033 : #f1f5f9;
+    out property <color> hover: dark ? #1f2937 : #eef2f7;
+    out property <color> accent: #2563eb;
+    out property <color> accent_hover: #1d4ed8;
+    out property <color> accent_text: #ffffff;
+    out property <color> selected: dark ? #16294a : #eff6ff;
+    out property <color> danger: dark ? #f87171 : #b91c1c;
+    out property <color> danger_bg: dark ? #2a1518 : #fef2f2;
+    out property <color> danger_hover: dark ? #3a1b1f : #fee2e2;
+    out property <color> warn_bg: dark ? #2d2416 : #fff7ed;
+    out property <color> warn_text: dark ? #fdba74 : #9a3412;
+    out property <color> folder: #f59e0b;
+    out property <color> backdrop: #0f172a99;
+    out property <color> thumb_bg: dark ? #0f172a : #f1f5f9;
+}
+
+// ---------------------------------------------------------------------------
+// Strings (filled by Rust, EN by default)
+// ---------------------------------------------------------------------------
+export struct Strings {
+    title: string,
+    add_folder: string,
+    remove: string,
+    clear: string,
+    options: string,
+    start: string,
+    scanning: string,
+    stop: string,
+    dark: string,
+    light: string,
+    language: string,
+    help: string,
+    help_title: string,
+    close: string,
+
+    locations: string,
+    pictures: string,
+    documents: string,
+    home: string,
+    computer: string,
+
+    folders_none: string,
+    remove_selected: string,
+    clear_all: string,
+
+    opt_scan_subfolders: string,
+    opt_only_identical: string,
+    opt_compare_media: string,
+    opt_similarity: string,
+    opt_keep: string,
+    opt_metric: string,
+    opt_threads: string,
+    opt_tolerance: string,
+
+    trash_all: string,
+    move_all: string,
+    delete_all: string,
+    keeps_best: string,
+    cancel: string,
+    confirm: string,
+
+    match_list: string,
+    col_group: string,
+    col_original: string,
+    col_duplicate: string,
+    col_similarity: string,
+    col_size: string,
+    empty_list: string,
+
+    preview: string,
+    original: string,
+    duplicate: string,
+    move_destination: string,
+    move_placeholder: string,
+    browse: string,
+    trash: string,
+    move: string,
+    delete: string,
+
+    select_folder: string,
+    up: string,
+    go: string,
+    select_this_folder: string,
+    show_hidden: string,
+}
+
+export struct FolderItem {
+    name: string,
+    path: string,
+}
+
+export struct HelpLine {
+    text: string,
+    /// 0 = heading, 1 = paragraph, 2 = bullet
+    kind: int,
+}
+
+export struct BrowserEntry {
+    name: string,
+    path: string,
+}
+
+export struct RowItem {
+    group: string,
+    original: string,
+    duplicate: string,
+    similarity: string,
+    size: string,
+    original-path: string,
+    duplicate-path: string,
+    keep-confidence: string,
+    keep-reason: string,
+    keep-pct: float,
+    keep-codes: string,
+    original-thumb: image,
+    duplicate-thumb: image,
+}
+
+// ---------------------------------------------------------------------------
+// Reusable pieces
+// ---------------------------------------------------------------------------
+component FlatButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <color> fg: Theme.text;
+    in property <color> bg: transparent;
+    in property <color> hover: Theme.hover;
+    in property <length> minw: 0px;
+    callback clicked();
+
+    height: 32px;
+    min-width: minw;
+    border-radius: 8px;
+    opacity: enabled ? 1.0 : 0.35;
+    background: ta.pressed ? hover : (ta.has-hover && enabled ? hover : bg);
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: label;
+            color: fg;
+            font-size: 12px;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component FolderIcon inherits Rectangle {
+    width: 18px;
+    height: 14px;
+    background: transparent;
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 8px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.folder;
+    }
+    Rectangle {
+        x: 0;
+        y: 3px;
+        width: 18px;
+        height: 11px;
+        border-radius: 2px;
+        background: Theme.folder;
+    }
+}
+
+component SettingsIcon inherits Rectangle {
+    width: 18px;
+    height: 18px;
+    background: transparent;
+    Rectangle { y: 3px; width: 18px; height: 2px; border-radius: 1px; background: Theme.muted; }
+    Rectangle { y: 8px; width: 18px; height: 2px; border-radius: 1px; background: Theme.muted; }
+    Rectangle { y: 13px; width: 18px; height: 2px; border-radius: 1px; background: Theme.muted; }
+    Rectangle { x: 3px; y: 1px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent; }
+    Rectangle { x: 10px; y: 6px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent; }
+    Rectangle { x: 5px; y: 11px; width: 6px; height: 6px; border-radius: 3px; background: Theme.accent; }
+}
+
+component SunIcon inherits Rectangle {
+    width: 18px;
+    height: 18px;
+    background: transparent;
+    Path {
+        width: 18px;
+        height: 18px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: Theme.text2;
+        commands: "M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z";
+    }
+    Path {
+        width: 18px;
+        height: 18px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        stroke: Theme.text2;
+        stroke-width: 1.8px;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        fill: transparent;
+        commands: "M12 2v1.8 M12 20.2v1.8 M2 12h1.8 M20.2 12h1.8 M4.9 4.9l1.3 1.3 M17.8 17.8l1.3 1.3 M4.9 19.1l1.3-1.3 M17.8 6.2l1.3-1.3";
+    }
+}
+
+component MoonIcon inherits Rectangle {
+    width: 18px;
+    height: 18px;
+    background: transparent;
+    Path {
+        width: 18px;
+        height: 18px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        fill: Theme.text2;
+        commands: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z";
+    }
+}
+
+component IconButton inherits Rectangle {
+    in property <string> kind;
+    in property <bool> dark: false;
+    callback clicked();
+
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    background: ta.pressed
+        ? Theme.card
+        : (ta.has-hover ? Theme.card : transparent);
+
+    if kind == "settings" : SettingsIcon {
+        x: 8px;
+        y: 8px;
+    }
+    if kind == "theme" : Rectangle {
+        x: 8px;
+        y: 8px;
+        width: 18px;
+        height: 18px;
+        background: transparent;
+        if root.dark : SunIcon { }
+        if !root.dark : MoonIcon { }
+    }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Main window
+// ---------------------------------------------------------------------------
+export component AppWindow inherits Window {
+    title: "Universal Media Duplicate Finder";
+    background: Theme.bg;
+
+    in-out property <Strings> strings: {
+        title: "Universal Media Duplicate Finder",
+        add_folder: "Add folder…",
+        remove: "Remove",
+        clear: "Clear",
+        options: "Options",
+        start: "Start",
+        scanning: "Scanning…",
+        stop: "Stop",
+        dark: "Dark",
+        light: "Light",
+        language: "Language",
+        help: "Help",
+        help_title: "Help",
+        close: "Close",
+        locations: "Locations",
+        pictures: "Pictures",
+        documents: "Documents",
+        home: "Home",
+        computer: "Computer",
+        folders_none: "Folders to scan (none)",
+        remove_selected: "Remove selected",
+        clear_all: "Clear all",
+        opt_scan_subfolders: "Scan subfolders",
+        opt_only_identical: "Only 100% identical",
+        opt_compare_media: "Compare media content",
+        opt_similarity: "Similarity",
+        opt_keep: "Keep",
+        opt_metric: "Metric",
+        opt_threads: "Threads",
+        opt_tolerance: "Pixel tolerance",
+        trash_all: "Trash all duplicates",
+        move_all: "Move all",
+        delete_all: "Delete all",
+        keeps_best: "keeps the original of each group",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        match_list: "Match list",
+        col_group: "Group",
+        col_original: "Original",
+        col_duplicate: "Duplicate",
+        col_similarity: "Similarity",
+        col_size: "Size",
+        empty_list: "The match list is empty.",
+        preview: "Preview",
+        original: "Original",
+        duplicate: "Duplicate",
+        move_destination: "Move destination",
+        move_placeholder: "/path/for/duplicates",
+        browse: "Browse…",
+        trash: "Trash",
+        move: "Move",
+        delete: "Delete",
+        select_folder: "Select a folder",
+        up: "Up",
+        go: "Go",
+        select_this_folder: "Select this folder",
+        show_hidden: "Show hidden",
+    };
+
+    in-out property <bool> dark-mode: false;
+    in-out property <[FolderItem]> folders;
+    in-out property <[BrowserEntry]> browser-entries;
+    in-out property <[RowItem]> rows;
+    in-out property <[HelpLine]> help-lines;
+
+    in-out property <int> folder-selected: -1;
+    in-out property <int> selected-row: -1;
+    in-out property <bool> busy: false;
+    in-out property <bool> options-open: true;
+    in-out property <bool> browser-open: false;
+    in-out property <bool> help-open: false;
+    in-out property <bool> show-hidden: false;
+    in-out property <string> browser-path: "";
+    in-out property <string> browser-status: "";
+    in-out property <string> browser-mode: "folder";
+    in-out property <string> stage: "Ready";
+    in-out property <string> status: "Add a folder to begin.";
+    in-out property <float> progress: 0;
+    in-out property <int> lang-index: 0;
+
+    in-out property <string> scanned-label: "Files scanned: 0";
+    in-out property <string> found-label: "Duplicates found: 0";
+    in-out property <string> space-label: "Reclaimable: 0 B";
+    in-out property <string> elapsed-label: "Elapsed: 00:00:00";
+    in-out property <string> folders-label: "Folders to scan (none)";
+    in-out property <string> threshold-label: "90 %";
+    in-out property <string> tolerance-label: "10";
+
+    in-out property <bool> recursive: true;
+    in-out property <bool> only-identical: false;
+    in-out property <bool> compare-media: true;
+    in-out property <float> threshold: 90;
+    in-out property <float> tolerance: 10;
+    in-out property <int> keep-index: 0;
+    in-out property <int> metric-index: 0;
+    in-out property <int> threads-index: 0;
+    in-out property <string> move-dest: "";
+
+    in-out property <bool> confirm-open: false;
+    in-out property <string> confirm-text: "";
+    in-out property <string> confirm-kind: "";
+
+    in-out property <image> preview-left;
+    in-out property <image> preview-right;
+    in-out property <string> preview-left-info: "";
+    in-out property <string> preview-right-info: "";
+    in-out property <string> keep-confidence: "";
+    in-out property <string> keep-reason: "";
+
+    callback start();
+    callback stop();
+    callback set-lang(int);
+    callback toggle-theme();
+    callback toggle-hidden(bool);
+    callback threshold-changed(float);
+    callback tolerance-changed(float);
+    callback open-browser(string);
+    callback browse-go(string);
+    callback browse-up();
+    callback browse-enter(string);
+    callback browse-select();
+    callback browse-cancel();
+    callback remove-folder();
+    callback clear-folders();
+    callback select-folder(int);
+    callback select-row(int);
+    callback move-selection(int);
+    callback trash-row(int);
+    callback move-row(int);
+    callback delete-row(int);
+    callback apply-all(string);
+    callback confirm-apply();
+    callback confirm-cancel();
+
+    property <length> row-height: 38px;
+
+    init => {
+        scope.focus();
+        Theme.dark = root.dark-mode;
+        Palette.color-scheme = root.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    }
+    changed dark-mode => {
+        Theme.dark = root.dark-mode;
+        Palette.color-scheme = root.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    scope := FocusScope {
+        preferred-width: 1280px;
+        preferred-height: 820px;
+        width: 100%;
+        height: 100%;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.browser-open || root.help-open) {
+                return reject;
+            }
+            if (event.text == Key.DownArrow) {
+                root.move-selection(1);
+                return accept;
+            }
+            if (event.text == Key.UpArrow) {
+                root.move-selection(-1);
+                return accept;
+            }
+            if (event.text == Key.Delete) {
+                if (root.selected-row >= 0) {
+                    root.delete-row(root.selected-row);
+                }
+                return accept;
+            }
+            return reject;
+        }
+
+        Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Theme.bg;
+
+        VerticalLayout {
+            spacing: 0px;
+
+            // ======================= top bar =======================
+            Rectangle {
+                height: 60px;
+                background: Theme.card;
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Theme.line;
+                }
+
+                HorizontalLayout {
+                    y: (parent.height - self.height) / 2;
+                    height: 36px;
+                    padding-left: 14px;
+                    padding-right: 14px;
+                    spacing: 8px;
+
+                    Text {
+                        text: root.strings.title;
+                        color: Theme.text;
+                        font-size: 15px;
+                        font-weight: 700;
+                        height: 36px;
+                        vertical-alignment: center;
+                    }
+
+                    Rectangle { width: 6px; }
+
+                    // ---- folder actions ----
+                    Rectangle {
+                        height: 36px;
+                        background: Theme.soft;
+                        border-radius: 8px;
+                        HorizontalLayout {
+                            padding: 1px;
+                            spacing: 2px;
+                            FlatButton {
+                                label: root.strings.add_folder;
+                                height: 34px;
+                                minw: 92px;
+                                hover: Theme.card;
+                                clicked => { root.open-browser(""); }
+                            }
+                            FlatButton {
+                                label: root.strings.remove;
+                                height: 34px;
+                                minw: 72px;
+                                enabled: root.folder-selected >= 0;
+                                hover: Theme.card;
+                                clicked => { root.remove-folder(); }
+                            }
+                            FlatButton {
+                                label: root.strings.clear;
+                                height: 34px;
+                                minw: 60px;
+                                enabled: root.folders.length > 0;
+                                hover: Theme.card;
+                                clicked => { root.clear-folders(); }
+                            }
+                        }
+                    }
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    // ---- interface settings ----
+                    Rectangle {
+                        height: 36px;
+                        background: Theme.soft;
+                        border-radius: 8px;
+                        HorizontalLayout {
+                            padding: 1px;
+                            spacing: 2px;
+                            FlatButton {
+                                label: root.strings.help;
+                                height: 34px;
+                                minw: 56px;
+                                hover: Theme.card;
+                                clicked => { root.help-open = true; }
+                            }
+                            IconButton {
+                                kind: "settings";
+                                clicked => { root.options-open = !root.options-open; }
+                            }
+                            IconButton {
+                                kind: "theme";
+                                dark: root.dark-mode;
+                                clicked => { root.toggle-theme(); }
+                            }
+                            ComboBox {
+                                model: ["English", "Español"];
+                                current-index <=> root.lang-index;
+                                selected => { root.set-lang(root.lang-index); }
+                                width: 112px;
+                                height: 34px;
+                            }
+                        }
+                    }
+
+                    // ---- separator ----
+                    Rectangle {
+                        width: 1px;
+                        height: 24px;
+                        background: Theme.line;
+                    }
+
+                    // ---- run ----
+                    FlatButton {
+                        label: root.busy ? root.strings.scanning : root.strings.start;
+                        height: 36px;
+                        minw: 96px;
+                        enabled: !root.busy;
+                        fg: Theme.accent_text;
+                        bg: Theme.accent;
+                        hover: Theme.accent_hover;
+                        clicked => { root.start(); }
+                    }
+                    FlatButton {
+                        label: root.strings.stop;
+                        height: 36px;
+                        minw: 72px;
+                        enabled: root.busy;
+                        bg: Theme.soft;
+                        clicked => { root.stop(); }
+                    }
+                }
+            }
+
+            // ======================= main body =======================
+            HorizontalLayout {
+                spacing: 10px;
+                padding: 10px;
+                vertical-stretch: 1;
+
+                // ---------- left column ----------
+                Rectangle {
+                    width: 300px;
+                    background: Theme.card;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 8px;
+
+                        Text { text: root.strings.locations; color: Theme.text; font-size: 12px; font-weight: 700; }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.pictures;
+                                minw: 130px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("pictures"); }
+                            }
+                            FlatButton {
+                                label: root.strings.documents;
+                                minw: 130px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("documents"); }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.home;
+                                minw: 130px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("home"); }
+                            }
+                            FlatButton {
+                                label: root.strings.computer;
+                                minw: 130px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("root"); }
+                            }
+                        }
+
+                        Rectangle { height: 1px; background: Theme.line_soft; }
+                        Text { text: root.folders-label; color: Theme.text; font-size: 12px; font-weight: 700; }
+
+                        Rectangle {
+                            vertical-stretch: 1;
+                            background: Theme.soft;
+                            border-radius: 8px;
+                            ListView {
+                                for folder[i] in root.folders : Rectangle {
+                                    height: 44px;
+                                    background: i == root.folder-selected ? Theme.selected : transparent;
+                                    Rectangle {
+                                        x: 0;
+                                        width: i == root.folder-selected ? 3px : 0px;
+                                        height: parent.height;
+                                        background: Theme.accent;
+                                    }
+                                    VerticalLayout {
+                                        padding-left: 10px;
+                                        padding-right: 8px;
+                                        padding-top: 5px;
+                                        padding-bottom: 5px;
+                                        Text { text: folder.name; color: Theme.text; font-size: 12px; font-weight: 600; overflow: elide; }
+                                        Text { text: folder.path; color: Theme.muted; font-size: 10px; overflow: elide; }
+                                    }
+                                    TouchArea { clicked => { root.select-folder(i); } }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.remove_selected;
+                                minw: 130px;
+                                enabled: root.folder-selected >= 0;
+                                clicked => { root.remove-folder(); }
+                            }
+                            FlatButton {
+                                label: root.strings.clear_all;
+                                minw: 130px;
+                                clicked => { root.clear-folders(); }
+                            }
+                        }
+
+                        if root.options-open : Rectangle {
+                            background: Theme.soft;
+                            border-radius: 8px;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 5px;
+                                Text { text: root.strings.options; color: Theme.text; font-size: 12px; font-weight: 700; }
+                                CheckBox { text: root.strings.opt_scan_subfolders; checked <=> root.recursive; }
+                                CheckBox { text: root.strings.opt_only_identical; checked <=> root.only-identical; }
+                                CheckBox { text: root.strings.opt_compare_media; checked <=> root.compare-media; }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    Text { text: root.strings.opt_similarity; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                    Slider {
+                                        minimum: 0;
+                                        maximum: 100;
+                                        value <=> root.threshold;
+                                        changed(value) => { root.threshold-changed(value); }
+                                        horizontal-stretch: 1;
+                                    }
+                                    Text { text: root.threshold-label; vertical-alignment: center; font-size: 11px; color: Theme.text2; width: 40px; }
+                                }
+                                Text { text: root.strings.opt_keep; font-size: 11px; color: Theme.text2; }
+                                ComboBox {
+                                    model: ["original", "dimensions", "filesize", "earlierdate", "earlierexifdate", "oldest", "name", "path"];
+                                    current-index <=> root.keep-index;
+                                }
+                                Text { text: root.strings.opt_metric; font-size: 11px; color: Theme.text2; }
+                                ComboBox {
+                                    model: ["dpf", "ssim", "sign", "pearson", "legacy"];
+                                    current-index <=> root.metric-index;
+                                }
+                                Text { text: root.strings.opt_threads; font-size: 11px; color: Theme.text2; }
+                                ComboBox {
+                                    model: ["Auto", "1", "2", "4", "8", "16", "32"];
+                                    current-index <=> root.threads-index;
+                                }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    Text { text: root.strings.opt_tolerance; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                    Slider {
+                                        minimum: 0;
+                                        maximum: 64;
+                                        value <=> root.tolerance;
+                                        changed(value) => { root.tolerance-changed(value); }
+                                        horizontal-stretch: 1;
+                                    }
+                                    Text { text: root.tolerance-label; vertical-alignment: center; font-size: 11px; color: Theme.text2; width: 28px; }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- centre column ----------
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: Theme.card;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: root.strings.match_list; color: Theme.text; font-size: 13px; font-weight: 700; }
+                            Rectangle { horizontal-stretch: 1; }
+                            Text { text: root.stage; color: Theme.accent; font-size: 11px; vertical-alignment: center; }
+                        }
+                        Rectangle {
+                            height: 6px;
+                            border-radius: 3px;
+                            background: Theme.line_soft;
+                            Rectangle {
+                                width: parent.width * (root.progress / 100.0);
+                                background: Theme.accent;
+                                border-radius: 3px;
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.trash_all;
+                                minw: 132px;
+                                bg: Theme.soft;
+                                enabled: root.rows.length > 0;
+                                clicked => { root.apply-all("trash"); }
+                            }
+                            FlatButton {
+                                label: root.strings.move_all;
+                                minw: 90px;
+                                bg: Theme.soft;
+                                enabled: root.rows.length > 0;
+                                clicked => { root.apply-all("move"); }
+                            }
+                            FlatButton {
+                                label: root.strings.delete_all;
+                                minw: 96px;
+                                fg: Theme.danger;
+                                bg: Theme.danger_bg;
+                                hover: Theme.danger_hover;
+                                enabled: root.rows.length > 0;
+                                clicked => { root.apply-all("delete"); }
+                            }
+                            Text {
+                                text: root.strings.keeps_best;
+                                color: Theme.faint;
+                                font-size: 10px;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                overflow: elide;
+                            }
+                        }
+
+                        if root.confirm-open : Rectangle {
+                            background: Theme.warn_bg;
+                            border-radius: 8px;
+                            HorizontalLayout {
+                                padding: 8px;
+                                spacing: 8px;
+                                Text {
+                                    text: root.confirm-text;
+                                    color: Theme.warn_text;
+                                    font-size: 11px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                                FlatButton {
+                                    label: root.strings.cancel;
+                                    minw: 76px;
+                                    bg: Theme.card;
+                                    clicked => { root.confirm-cancel(); }
+                                }
+                                FlatButton {
+                                    label: root.strings.confirm;
+                                    minw: 84px;
+                                    fg: Theme.accent_text;
+                                    bg: Theme.danger;
+                                    hover: Theme.danger_hover;
+                                    clicked => { root.confirm-apply(); }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            height: 30px;
+                            padding-left: 4px;
+                            Text { text: root.strings.col_group; width: 45px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_original; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_duplicate; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_similarity; width: 64px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_size; horizontal-stretch: 1; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                        }
+
+                        Rectangle {
+                            vertical-stretch: 1;
+                            ListView {
+                                for row[i] in root.rows : Rectangle {
+                                    height: root.row-height;
+                                    background: i == root.selected-row
+                                        ? Theme.selected
+                                        : (Math.mod(i, 2) == 0 ? Theme.card : Theme.soft);
+                                    Rectangle {
+                                        x: 0;
+                                        width: i == root.selected-row ? 3px : 0px;
+                                        height: parent.height;
+                                        background: Theme.accent;
+                                    }
+                                    HorizontalLayout {
+                                        padding-left: 6px;
+                                        spacing: 4px;
+                                        Text { text: row.group; width: 45px; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                        HorizontalLayout {
+                                            width: 190px;
+                                            spacing: 6px;
+                                            Rectangle {
+                                                width: 26px;
+                                                height: 26px;
+                                                border-radius: 4px;
+                                                clip: true;
+                                                background: Theme.thumb_bg;
+                                                Image { width: parent.width; height: parent.height; source: row.original-thumb; image-fit: cover; }
+                                            }
+                                            Text { text: row.original; vertical-alignment: center; font-size: 11px; color: Theme.text; overflow: elide; }
+                                        }
+                                        HorizontalLayout {
+                                            width: 190px;
+                                            spacing: 6px;
+                                            Rectangle {
+                                                width: 26px;
+                                                height: 26px;
+                                                border-radius: 4px;
+                                                clip: true;
+                                                background: Theme.thumb_bg;
+                                                Image { width: parent.width; height: parent.height; source: row.duplicate-thumb; image-fit: cover; }
+                                            }
+                                            Text { text: row.duplicate; vertical-alignment: center; font-size: 11px; color: Theme.text; overflow: elide; }
+                                        }
+                                        Text { text: row.similarity; width: 64px; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                        Text { text: row.size; horizontal-stretch: 1; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                    }
+                                    TouchArea { clicked => { scope.focus(); root.select-row(i); } }
+                                }
+                            }
+                        }
+
+                        if root.rows.length == 0 : Text {
+                            text: root.strings.empty_list;
+                            color: Theme.faint;
+                            horizontal-alignment: center;
+                            font-size: 12px;
+                        }
+                    }
+                }
+
+                // ---------- right column ----------
+                Rectangle {
+                    width: 340px;
+                    background: Theme.card;
+                    border-radius: 8px;
+                    VerticalLayout {
+                        padding: 12px;
+                        padding-bottom: 16px;
+                        spacing: 5px;
+                        Text { text: root.strings.preview; color: Theme.text; font-size: 13px; font-weight: 700; }
+
+                        Text {
+                            text: root.keep-confidence == "" ? root.strings.original : root.keep-confidence;
+                            color: Theme.text;
+                            font-size: 11px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: root.keep-reason;
+                            color: Theme.accent;
+                            font-size: 10px;
+                            wrap: word-wrap;
+                            height: 26px;
+                        }
+                        Rectangle {
+                            height: 138px;
+                            background: Theme.soft;
+                            border-radius: 6px;
+                            clip: true;
+                            Image { width: parent.width; height: parent.height; source: root.preview-left; image-fit: contain; }
+                        }
+                        Text {
+                            text: root.preview-left-info;
+                            color: Theme.muted;
+                            font-size: 10px;
+                            wrap: word-wrap;
+                            height: 30px;
+                        }
+
+                        Text { text: root.strings.duplicate; color: Theme.text; font-size: 11px; font-weight: 600; }
+                        Rectangle {
+                            height: 138px;
+                            background: Theme.soft;
+                            border-radius: 6px;
+                            clip: true;
+                            Image { width: parent.width; height: parent.height; source: root.preview-right; image-fit: contain; }
+                        }
+                        Text {
+                            text: root.preview-right-info;
+                            color: Theme.muted;
+                            font-size: 10px;
+                            wrap: word-wrap;
+                            height: 30px;
+                        }
+
+                        Rectangle { height: 1px; background: Theme.line_soft; }
+                        Text { text: root.strings.move_destination; color: Theme.text2; font-size: 11px; font-weight: 600; }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            LineEdit {
+                                text <=> root.move-dest;
+                                placeholder-text: root.strings.move_placeholder;
+                                height: 32px;
+                                horizontal-stretch: 1;
+                            }
+                            FlatButton {
+                                label: root.strings.browse;
+                                minw: 84px;
+                                bg: Theme.soft;
+                                clicked => { root.open-browser("destination"); }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.trash;
+                                minw: 92px;
+                                bg: Theme.soft;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.trash-row(root.selected-row); }
+                            }
+                            FlatButton {
+                                label: root.strings.move;
+                                minw: 84px;
+                                bg: Theme.soft;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.move-row(root.selected-row); }
+                            }
+                            FlatButton {
+                                label: root.strings.delete;
+                                minw: 92px;
+                                fg: Theme.danger;
+                                bg: Theme.danger_bg;
+                                hover: Theme.danger_hover;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.delete-row(root.selected-row); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ======================= status bar =======================
+            Rectangle {
+                height: 30px;
+                background: Theme.card;
+                Rectangle {
+                    y: 0;
+                    height: 1px;
+                    background: Theme.line;
+                }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 16px;
+                    Text {
+                        text: root.status;
+                        color: Theme.text2;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                    }
+                    Text { text: root.scanned-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                    Text { text: root.found-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                    Text { text: root.space-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                    Text { text: root.elapsed-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // ======================= folder browser (modal) =======================
+        if root.browser-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Theme.backdrop;
+
+            card := Rectangle {
+                width: 720px;
+                height: 580px;
+                x: (parent.width - card.width) / 2;
+                y: (parent.height - card.height) / 2;
+                background: Theme.card;
+                border-radius: 12px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text { text: root.strings.select_folder; color: Theme.text; font-size: 18px; font-weight: 700; }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        FlatButton {
+                            label: root.strings.up;
+                            minw: 64px;
+                            bg: Theme.soft;
+                            clicked => { root.browse-up(); }
+                        }
+                        LineEdit {
+                            text <=> root.browser-path;
+                            horizontal-stretch: 1;
+                            height: 34px;
+                        }
+                        FlatButton {
+                            label: root.strings.go;
+                            minw: 64px;
+                            fg: Theme.accent_text;
+                            bg: Theme.accent;
+                            hover: Theme.accent_hover;
+                            clicked => { root.browse-go(root.browser-path); }
+                        }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1;
+                        background: Theme.soft;
+                        border-radius: 8px;
+                        ListView {
+                            for entry[i] in root.browser-entries : Rectangle {
+                                height: 32px;
+                                background: row-ta.has-hover
+                                    ? Theme.hover
+                                    : (Math.mod(i, 2) == 0 ? transparent : Theme.soft2);
+                                HorizontalLayout {
+                                    padding-left: 12px;
+                                    padding-right: 12px;
+                                    spacing: 10px;
+                                    FolderIcon { }
+                                    Text {
+                                        text: entry.name;
+                                        color: Theme.text;
+                                        font-size: 12px;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: left;
+                                        horizontal-stretch: 1;
+                                        overflow: elide;
+                                    }
+                                }
+                                row-ta := TouchArea {
+                                    clicked => { root.browse-enter(entry.path); }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        CheckBox {
+                            text: root.strings.show_hidden;
+                            checked <=> root.show-hidden;
+                            toggled => { root.toggle-hidden(root.show-hidden); }
+                        }
+                        Text {
+                            text: root.browser-status;
+                            color: Theme.muted;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Rectangle { horizontal-stretch: 1; }
+                        FlatButton {
+                            label: root.strings.cancel;
+                            minw: 88px;
+                            bg: Theme.soft;
+                            clicked => { root.browse-cancel(); scope.focus(); }
+                        }
+                        FlatButton {
+                            label: root.strings.select_this_folder;
+                            minw: 160px;
+                            fg: Theme.accent_text;
+                            bg: Theme.accent;
+                            hover: Theme.accent_hover;
+                            clicked => { root.browse-select(); scope.focus(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.help-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Theme.backdrop;
+
+            help-card := Rectangle {
+                width: 760px;
+                height: 600px;
+                x: (parent.width - help-card.width) / 2;
+                y: (parent.height - help-card.height) / 2;
+                background: Theme.card;
+                border-radius: 12px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text {
+                        text: root.strings.help_title;
+                        color: Theme.text;
+                        font-size: 18px;
+                        font-weight: 700;
+                    }
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            padding-right: 8px;
+                            spacing: 6px;
+                            for line in root.help-lines : Text {
+                                text: line.text;
+                                color: line.kind == 0 ? Theme.text : Theme.text2;
+                                font-size: line.kind == 0 ? 13px : 11px;
+                                font-weight: line.kind == 0 ? 700 : 400;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; }
+                        FlatButton {
+                            label: root.strings.close;
+                            minw: 96px;
+                            fg: Theme.accent_text;
+                            bg: Theme.accent;
+                            hover: Theme.accent_hover;
+                            clicked => { root.help-open = false; scope.focus(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    }
+}

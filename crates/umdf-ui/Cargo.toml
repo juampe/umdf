@@ -1,0 +1,22 @@
+[package]
+name = "umdf-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Slint desktop UI for the Universal Media Duplicate Finder"
+
+[[bin]]
+name = "umdf-ui"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+image.workspace = true
+rayon.workspace = true
+slint = "1.8"
+trash.workspace = true
+umdf-core = { path = "../umdf-core" }
+
+[build-dependencies]
+slint-build = "1.8"

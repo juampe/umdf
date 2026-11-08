@@ -1,0 +1,163 @@
+# UMDF — Universal Media Duplicate Finder
+
+UMDF finds duplicate and visually similar **photos, videos, audio and files**.
+It combines exact byte comparison with perceptual fingerprints, groups the
+matches, and proposes which copy to keep using an explainable
+"most likely original" score.
+
+* **Exact duplicates** — size + streaming SHA-256 (full content).
+* **Perceptual duplicates** — resampled greyscale fingerprints with a
+  configurable gray tolerance, plus three alternative metrics.
+* **Video** — ffprobe metadata and one frame extracted with ffmpeg, compared
+  as an image.
+* **Audio** — decoded PCM hashed, so re-muxed or retagged files match.
+* **Groups and decisions** — union-find groups and six keep policies
+  (`original` by default).
+* **Safe actions** — trash, move or delete with a dry run, confirmation for
+  bulk actions and a hard "leave one" guarantee.
+* **Exports** — CSV and XML.
+* **Desktop UI in Slint** — light/dark theme, English/Spanish, folder picker,
+  thumbnails, side-by-side preview and keyboard-driven chained deletion.
+
+## Layout
+
+```
+crates/umdf-core   engine: discovery, hashing, fingerprints, grouping,
+                   policies, actions, CSV/XML export, ffmpeg integration
+crates/umdf-cli    `umdf` headless CLI
+crates/umdf-ui     `umdf-ui` Slint desktop app
+```
+
+## Build
+
+```bash
+cargo build --workspace
+cargo test -p umdf-core
+```
+
+## CLI
+
+```bash
+# Report only (no changes on disk)
+umdf --folder ~/Pictures
+
+# Keep the copy most likely to be the original and move the rest
+umdf --folder ~/Pictures --selectby=original --moveto ~/Duplicates --apply
+
+# Only byte-identical files, export both formats
+umdf --folder ~/Pictures --only-identical --csv out.csv --xml out.xml
+
+# Images + video + audio by content (needs ffmpeg/ffprobe on PATH)
+umdf --folder ~/Media --all-media --threshold 92
+
+# Limit the worker pool (0 = one per CPU)
+umdf --folder ~/Pictures --threads 8
+```
+
+Defaults: `--metric dpf --grid 75 --tolerance 10 --threshold 90
+--selectby original`.
+
+## Which copy is kept? (`--selectby original`, default)
+
+Duplicates are usually derivatives of an original that was resized,
+re-compressed, renamed or copied to another folder. UMDF scores every member of
+a group with a transparent heuristic and keeps the highest score:
+
+| Signal | Weight | More original when… |
+|--------|-------:|---------------------|
+| resolution | 0.22 | more pixels (photos/video) |
+| quality | 0.20 | more bytes per pixel (or per second of audio) |
+| file age | 0.20 | older modification date (derivatives are written later) |
+| metadata | 0.14 | richer EXIF, camera make/model present |
+| file name | 0.14 | no `copy`, `(1)`, `edited`, `resized`, `whatsapp`… |
+| location | 0.10 | `DCIM`/`Camera`/`Pictures` rather than `Downloads`/`Desktop`/temp |
+
+The score and the reasons are shown in the UI (`Original · 63% likely —
+better quality per pixel, older file date, …`) and in the CLI. The other
+policies remain available: `dimensions`, `filesize`, `earlierdate`,
+`earlierexifdate`, `oldest`, `name`, `path`.
+
+## Metrics
+
+| value | meaning |
+|---|---|
+| `dpf` (default) | resample + pixel gray tolerance |
+| `ssim` | structural similarity; robust to local retouching |
+| `sign` | corrected sign agreement of the normalised grid |
+| `pearson` | correlation of the normalised grids |
+| `legacy` | legacy sign-agreement metric kept for comparison |
+
+`dpf` resamples both pictures to 75×75 and counts the fraction of cells whose
+gray level differs by at most `--tolerance` (default 10). Raise it for edited
+copies (red-eye correction, recompression); lower it for strict archives.
+
+## Video and audio
+
+Exact duplicates always work (SHA-256). Content comparison needs
+`ffmpeg`/`ffprobe` on `PATH` (or `--ffmpeg <path>`):
+
+* **video**: `ffprobe` metadata + a frame extracted at `--frame-position`
+  (default 1 s) that is fingerprinted like an image;
+* **audio** (and audio tracks inside video): 5 s of decoded PCM hashed, so
+  re-muxed/retagged files match while re-encoded ones do not.
+
+## UI
+
+```bash
+cargo run -p umdf-ui
+```
+
+Layout is a modern light/dark card design:
+
+* **Top bar** in three aligned blocks: title + Add/Remove/Clear; Help, settings,
+  sun/moon theme toggle and language selector; separator; Start and Stop.
+* **Add folder…** opens a centred modal with a dimmed backdrop, folder icons,
+  hover, a path field and **Show hidden**.
+* **Folders to scan** always shows the added folders with their full path.
+* **Match list** with stage, progress, bulk actions, thumbnails, 38 px rows and
+  a soft selection tint plus a left accent bar.
+* **Preview** with both pictures, file information, the originality score and
+  reasons, a compact move destination with **Browse…**, and Trash/Move/Delete.
+* **Delete in chain**: after Trash / Move / Delete the next row is selected
+  automatically (and its preview loaded), so you can keep comparing and
+  deleting. `↑`/`↓` move the selection and `Supr`/`Delete` removes the selected
+  duplicate. Counters update live.
+* **Help** button with a formatted, scrollable guide (including what the gray
+  tolerance means).
+* **Parallel by default**: decoding, hashing and comparison use a dedicated
+  Rayon pool (one worker per CPU). The **Threads** option in *Options* (and
+  `--threads N`) overrides it.
+* **Previews and thumbnails are decoded off the UI thread**, with
+  latest-request-wins coalescing and a small cache.
+* **Language selector** switches the whole interface between English and
+  Español at runtime.
+* **Light / dark mode** with a single `Theme` global; native widgets follow
+  `Palette.color-scheme`.
+
+Self-test hooks used for automated UI checks (no mouse needed):
+
+```bash
+umdf-ui --demo /path/to/folder --demo-select
+umdf-ui --demo /path/to/folder --demo-stop-ms 900 --demo-restart-ms 1500
+umdf-ui --demo /path/to/folder --demo-lang es
+umdf-ui --demo /path/to/folder --demo-bulk trash
+umdf-ui --demo /path/to/folder --demo-delete 3
+umdf-ui --demo-help
+```
+
+## Design notes
+
+* Exact duplicates: streaming SHA-256, computed only for files sharing a size.
+* Perceptual duplicates: mean-normalised greyscale grid (75×75 by default)
+  with a 1.5× aspect-ratio gate.
+* Groups: union-find over accepted pairs.
+* Decisions: six keep policies plus a hard `leave_one` guarantee.
+* Safety: dry-run unless `--apply`; OS trash instead of permanent delete.
+* Cancellation: checked during discovery, every 1 MiB of hashing, every 256
+  comparisons and with timeouts for ffmpeg/ffprobe.
+* Rotated photos: EXIF orientation is applied when decoding, so a photo with an
+  orientation tag matches its physically rotated copy.
+
+## License
+
+MIT

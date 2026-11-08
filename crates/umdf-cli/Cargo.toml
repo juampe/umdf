@@ -1,0 +1,17 @@
+[package]
+name = "umdf-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless CLI for the Universal Media Duplicate Finder"
+
+[[bin]]
+name = "umdf"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+umdf-core = { path = "../umdf-core" }

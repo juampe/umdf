@@ -1,0 +1,19 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Local design notes (kept out of the repository)
+/ADPF.md
+
+# Local logs and generated exports
+*.log
+*.tmp
+*.csv
+*.xml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
