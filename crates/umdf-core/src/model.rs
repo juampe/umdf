@@ -60,6 +60,10 @@ pub struct MediaItem {
     /// Perceptual fingerprint. `None` for files we cannot decode.
     pub fingerprint: Option<Fingerprint>,
 
+    /// Optional semantic embedding (L2-normalised). Requires the `embeddings`
+    /// feature; `None` otherwise.
+    pub embedding: Option<Vec<f32>>,
+
     /// Human readable reason why the file was skipped during extraction.
     pub extract_error: Option<String>,
 }
@@ -82,6 +86,7 @@ impl MediaItem {
             content_hash: None,
             media_signature: None,
             fingerprint: None,
+            embedding: None,
             extract_error: None,
         }
     }

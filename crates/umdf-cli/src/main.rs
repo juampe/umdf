@@ -17,6 +17,8 @@ use umdf_core::config::{
     is_image_ext, is_video_ext,
 };
 use umdf_core::{Action, KeepPolicy, Metric, ScanConfig};
+#[cfg(feature = "embeddings")]
+use umdf_core::EmbeddingConfig;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -90,6 +92,33 @@ struct Cli {
     /// Worker threads for decoding/hashing/comparing (0 = one per CPU).
     #[arg(long, default_value_t = 0)]
     threads: usize,
+
+    /// Optional ONNX image-embedding model (ResNet/CLIP/SigLIP) for semantic
+    /// comparison. Requires a build with `--features embeddings`.
+    #[arg(long)]
+    embeddings_model: Option<PathBuf>,
+
+    #[arg(long, default_value_t = 32)]
+    embeddings_batch: usize,
+
+    /// Cosine-similarity threshold in 0..1.
+    #[arg(long, default_value_t = 0.90)]
+    embeddings_threshold: f32,
+
+    /// `cuda` or `cpu`.
+    #[arg(long, default_value = "cuda")]
+    embeddings_device: String,
+
+    #[arg(long, default_value_t = 224)]
+    embeddings_size: u32,
+
+    /// Per-channel normalization mean (RGB), e.g. 0.485,0.456,0.406.
+    #[arg(long, default_value = "0.485,0.456,0.406")]
+    embeddings_mean: String,
+
+    /// Per-channel normalization std (RGB), e.g. 0.229,0.224,0.225.
+    #[arg(long, default_value = "0.229,0.224,0.225")]
+    embeddings_std: String,
 
     /// How to choose the copy to keep:
     /// original (default) | filesize | dimensions | earlierdate |
@@ -285,6 +314,28 @@ fn build_config(cli: &Cli) -> anyhow::Result<ScanConfig> {
     });
     cfg.threads = cli.threads.min(256);
 
+    if let Some(model) = &cli.embeddings_model {
+        #[cfg(feature = "embeddings")]
+        {
+            cfg.embeddings = Some(EmbeddingConfig {
+                model_path: model.clone(),
+                input_size: cli.embeddings_size.clamp(32, 1024),
+                batch_size: cli.embeddings_batch.clamp(1, 512),
+                threshold: cli.embeddings_threshold.clamp(0.0, 1.0),
+                use_cuda: cli.embeddings_device.eq_ignore_ascii_case("cuda"),
+                mean: parse3(&cli.embeddings_mean)?,
+                std: parse3(&cli.embeddings_std)?,
+            });
+        }
+        #[cfg(not(feature = "embeddings"))]
+        {
+            let _ = model;
+            anyhow::bail!(
+                "this build was compiled without the `embeddings` feature; rebuild with                  `cargo build --features embeddings` and set ORT_DYLIB_PATH"
+            );
+        }
+    }
+
     cfg.metric = Metric::parse(&cli.metric)
         .ok_or_else(|| anyhow::anyhow!("unknown --metric '{}'", cli.metric))?;
 
@@ -350,6 +401,18 @@ fn reason_label(code: &str) -> &'static str {
         "location" => "typical original location",
         _ => "most consistent signal set",
     }
+}
+
+#[cfg(feature = "embeddings")]
+fn parse3(value: &str) -> anyhow::Result<[f32; 3]> {
+    let numbers: Vec<f32> = value
+        .split(',')
+        .filter_map(|part| part.trim().parse::<f32>().ok())
+        .collect();
+    if numbers.len() != 3 {
+        anyhow::bail!("expected three comma-separated numbers, got '{value}'");
+    }
+    Ok([numbers[0], numbers[1], numbers[2]])
 }
 
 fn human_bytes(n: u64) -> String {

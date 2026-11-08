@@ -101,6 +101,46 @@ Exact duplicates always work (SHA-256). Content comparison needs
 * **audio** (and audio tracks inside video): 5 s of decoded PCM hashed, so
   re-muxed/retagged files match while re-encoded ones do not.
 
+## Semantic embeddings (optional, GPU)
+
+UMDF can compare images by their **content embedding** instead of (or in
+addition to) the pixel fingerprint. This helps with crops, brightness changes,
+recompression and different photos of the same scene. It is an opt-in cargo
+feature, so the default build has no ONNX Runtime dependency.
+
+```bash
+# 1. Build with the feature
+cargo build --release -p umdf-cli --features embeddings
+
+# 2. Provide a CUDA-enabled ONNX Runtime at runtime
+export ORT_DYLIB_PATH=/path/to/libonnxruntime.so   # e.g. from onnxruntime-gpu
+
+# 3. Export any image-embedding model to ONNX (Hugging Face + optimum)
+optimum-cli export onnx --model microsoft/resnet-50 resnet50/
+# or: optimum-cli export onnx --model openai/clip-vit-base-patch32 --task feature-extraction clip/
+
+# 4. Scan
+umdf --folder ~/Pictures \
+     --embeddings-model resnet50/model.onnx \
+     --embeddings-device cuda \
+     --embeddings-threshold 0.90
+```
+
+* Preprocessing (EXIF-aware decode, 224×224 resize, per-channel normalisation)
+  runs on Rayon.
+* Images are sent to the model in batches (`--embeddings-batch`, default 32)
+  as `[N, 3, 224, 224]` tensors; embeddings are L2-normalised and compared by
+  cosine similarity.
+* If the CUDA execution provider cannot be created, the engine falls back to
+  the CPU automatically.
+* For CLIP/SigLIP set the matching normalisation:
+  `--embeddings-mean 0.48145466,0.4578275,0.40821073 --embeddings-std 0.26862954,0.26130258,0.27577711`
+  and usually a lower threshold (0.85).
+* Model files are not part of the repository (`models/` and `*.onnx` are
+  ignored).
+* The UI shows the **Semantic (GPU)** options only when built with
+  `cargo build -p umdf-ui --features embeddings`.
+
 ## UI
 
 ```bash
@@ -143,6 +183,8 @@ umdf-ui --demo /path/to/folder --demo-lang es
 umdf-ui --demo /path/to/folder --demo-bulk trash
 umdf-ui --demo /path/to/folder --demo-delete 3
 umdf-ui --demo-help
+umdf-ui --demo /path/to/folder --semantic-model models/resnet18.onnx  # needs --features embeddings
+
 ```
 
 ## Design notes

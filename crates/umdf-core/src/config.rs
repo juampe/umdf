@@ -84,6 +84,38 @@ pub enum Action {
     MoveTo(PathBuf),
 }
 
+/// Optional semantic embeddings with ONNX Runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingConfig {
+    /// Path to a `.onnx` image-embedding model (ResNet, CLIP, SigLIP…).
+    pub model_path: PathBuf,
+    /// Square model input size (224 for ResNet/CLIP ViT-B/32).
+    pub input_size: u32,
+    pub batch_size: usize,
+    /// Cosine-similarity threshold in 0..1.
+    pub threshold: f32,
+    /// Use the CUDA execution provider when available.
+    pub use_cuda: bool,
+    /// Per-channel normalization mean (RGB).
+    pub mean: [f32; 3],
+    /// Per-channel normalization std (RGB).
+    pub std: [f32; 3],
+}
+
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            model_path: PathBuf::new(),
+            input_size: 224,
+            batch_size: 32,
+            threshold: 0.90,
+            use_cuda: true,
+            mean: [0.485, 0.456, 0.406],
+            std: [0.229, 0.224, 0.225],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanConfig {
     pub folders: Vec<PathBuf>,
@@ -115,6 +147,8 @@ pub struct ScanConfig {
     /// Worker threads for decoding/hashing/comparing. `0` = one per available
     /// CPU (rayon default).
     pub threads: usize,
+    /// Optional semantic embeddings (requires the `embeddings` feature).
+    pub embeddings: Option<EmbeddingConfig>,
     /// Position (seconds) used to grab the video frame for the image metric.
     pub frame_position_secs: f64,
     /// External ffmpeg/ffprobe. `None` disables media content comparison.
@@ -159,6 +193,7 @@ impl Default for ScanConfig {
             only_identical: false,
             compare_media_content: false,
             threads: 0,
+            embeddings: None,
             frame_position_secs: 1.0,
             ffmpeg: None,
             keep_policy: KeepPolicy::MostLikelyOriginal,

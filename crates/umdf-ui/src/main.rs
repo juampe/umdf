@@ -14,7 +14,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
 use umdf_core::config::{
     default_audio_extensions, default_image_extensions, default_video_extensions,
 };
-use umdf_core::{KeepPolicy, Metric, Progress, ScanConfig, ScanReport};
+use umdf_core::{EmbeddingConfig, KeepPolicy, Metric, Progress, ScanConfig, ScanReport};
 
 use i18n::{human_bytes, Lang, Tr, Verb};
 
@@ -76,6 +76,7 @@ fn main() -> anyhow::Result<()> {
     let boot = Tr::new(Lang::En);
     ui.set_strings(boot.strings().into());
     ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
+    ui.set_embeddings_supported(cfg!(feature = "embeddings"));
     ui.set_preview_left_info(boot.no_picture().into());
     ui.set_preview_right_info(boot.no_picture().into());
     ui.set_folders_label(boot.folders_label(0).into());
@@ -502,6 +503,29 @@ fn main() -> anyhow::Result<()> {
             cfg.keep_policy = KEEP_POLICIES[ui.get_keep_index().clamp(0, 7) as usize];
             cfg.metric = METRICS[ui.get_metric_index().clamp(0, 4) as usize];
             cfg.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
+            if cfg!(feature = "embeddings") && ui.get_semantic_enabled() {
+                let model = PathBuf::from(ui.get_semantic_model().to_string());
+                if !model.as_os_str().is_empty() {
+                    let clip = ui.get_semantic_preset() == 1;
+                    cfg.embeddings = Some(EmbeddingConfig {
+                        model_path: model,
+                        input_size: 224,
+                        batch_size: 32,
+                        threshold: 0.90,
+                        use_cuda: ui.get_semantic_device() == 0,
+                        mean: if clip {
+                            [0.481_454_66, 0.457_827_5, 0.408_210_73]
+                        } else {
+                            [0.485, 0.456, 0.406]
+                        },
+                        std: if clip {
+                            [0.268_629_54, 0.261_302_58, 0.275_777_11]
+                        } else {
+                            [0.229, 0.224, 0.225]
+                        },
+                    });
+                }
+            }
             cfg.extensions = default_image_extensions()
                 .into_iter()
                 .chain(default_video_extensions())
@@ -838,6 +862,12 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    if let Some(pos) = args.iter().position(|a| a == "--semantic-model") {
+        if let Some(model) = args.get(pos + 1) {
+            ui.set_semantic_enabled(true);
+            ui.set_semantic_model(model.as_str().into());
+        }
+    }
     if args.iter().any(|a| a == "--demo-help") {
         ui.set_help_open(true);
     }
@@ -927,10 +957,19 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             ui.set_progress(pct);
             ui.set_scanned_label(tr.files_scanned_progress(index, total).into());
         }
+        Progress::Embedding { done, total } => {
+            ui.set_stage(tr.stage_embedding(done, total).into());
+            let pct = if total > 0 {
+                40.0 + 10.0 * done as f32 / total as f32
+            } else {
+                50.0
+            };
+            ui.set_progress(pct);
+        }
         Progress::Hashing { done, total } => {
             ui.set_stage(tr.stage_hashing(done, total).into());
             let pct = if total > 0 {
-                40.0 + 15.0 * done as f32 / total as f32
+                50.0 + 5.0 * done as f32 / total as f32
             } else {
                 55.0
             };

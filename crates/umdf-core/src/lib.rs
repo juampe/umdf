@@ -28,6 +28,8 @@
 
 pub mod action;
 pub mod config;
+#[cfg(feature = "embeddings")]
+pub mod embeddings;
 pub mod export;
 pub mod fingerprint;
 pub mod group;
@@ -39,7 +41,7 @@ pub mod originality;
 pub mod scan;
 pub mod walk;
 
-pub use config::{Action, KeepPolicy, Metric, ScanConfig};
+pub use config::{Action, EmbeddingConfig, KeepPolicy, Metric, ScanConfig};
 pub use model::{Fingerprint, Group, Match, MatchKind, MediaItem, MediaKind};
 pub use scan::{run as scan, run_with_progress, Progress, ScanReport, Stats};
 

@@ -9,6 +9,9 @@ description = "Headless CLI for the Universal Media Duplicate Finder"
 name = "umdf"
 path = "src/main.rs"
 
+[features]
+embeddings = ["umdf-core/embeddings"]
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true

@@ -21,6 +21,7 @@ use crate::walk;
 pub enum Progress {
     Discovered { total: usize },
     Loaded { index: usize, total: usize, path: PathBuf },
+    Embedding { done: usize, total: usize },
     Hashing { done: usize, total: usize },
     Comparing { done: usize, total: usize },
     Grouped { groups: usize, duplicates: usize },
@@ -43,6 +44,7 @@ pub struct Stats {
     pub cancelled: bool,
     /// Worker threads used by this scan.
     pub threads: usize,
+    pub embeddings: usize,
     pub extract_ms: u128,
     pub hash_ms: u128,
     pub compare_ms: u128,
@@ -189,6 +191,45 @@ fn run_inner(
     }
 
     stats.extract_ms = extract_started.elapsed().as_millis();
+
+    // ---- Stage 1b: semantic embeddings (optional) --------------------------
+    #[cfg(feature = "embeddings")]
+    if !cfg.only_identical {
+        if let Some(ecfg) = &cfg.embeddings {
+            let ids: Vec<usize> = items
+                .iter()
+                .filter(|item| item.kind == MediaKind::Image)
+                .map(|item| item.id)
+                .collect();
+            if !ids.is_empty() {
+                emit(
+                    tx,
+                    Progress::Embedding {
+                        done: 0,
+                        total: ids.len(),
+                    },
+                );
+                let paths: Vec<PathBuf> =
+                    ids.iter().map(|id| items[*id].path.clone()).collect();
+                let mut engine = crate::embeddings::EmbeddingEngine::new(ecfg)?;
+                if engine.forced_cpu() {
+                    eprintln!("UMDF: semantic embeddings are running on the CPU");
+                }
+                let vectors = engine.embed_paths(&paths)?;
+                for (id, vector) in ids.iter().zip(vectors) {
+                    items[*id].embedding = Some(vector);
+                }
+                stats.embeddings = ids.len();
+                emit(
+                    tx,
+                    Progress::Embedding {
+                        done: ids.len(),
+                        total: ids.len(),
+                    },
+                );
+            }
+        }
+    }
 
     // ---- Stage 2: exact content --------------------------------------------
     let hash_started = Instant::now();
@@ -369,23 +410,41 @@ fn run_inner(
                         break;
                     }
                     counted += 1;
-                    let (Some(fa), Some(fb)) = (
-                        items[ai].fingerprint.as_ref(),
-                        items[bj].fingerprint.as_ref(),
-                    ) else {
-                        continue;
-                    };
-                    if let Some(sim) =
-                        fingerprint::similarity(fa, fb, cfg.metric, cfg.pixel_tolerance)
+                    let uses_embeddings = items[ai].embedding.is_some()
+                        && items[bj].embedding.is_some();
+                    let sim = if let (Some(ea), Some(eb)) =
+                        (items[ai].embedding.as_ref(), items[bj].embedding.as_ref())
                     {
-                        if sim >= cfg.similarity_threshold {
-                            local.push(Match {
-                                a: ai,
-                                b: bj,
-                                similarity: sim,
-                                kind: MatchKind::Similar,
-                            });
-                        }
+                        fingerprint::cosine_percent(ea, eb)
+                    } else {
+                        let (Some(fa), Some(fb)) = (
+                            items[ai].fingerprint.as_ref(),
+                            items[bj].fingerprint.as_ref(),
+                        ) else {
+                            continue;
+                        };
+                        let Some(similarity) =
+                            fingerprint::similarity(fa, fb, cfg.metric, cfg.pixel_tolerance)
+                        else {
+                            continue;
+                        };
+                        similarity
+                    };
+                    let threshold = if uses_embeddings {
+                        cfg.embeddings
+                            .as_ref()
+                            .map(|e| e.threshold * 100.0)
+                            .unwrap_or(cfg.similarity_threshold)
+                    } else {
+                        cfg.similarity_threshold
+                    };
+                    if sim >= threshold {
+                        local.push(Match {
+                            a: ai,
+                            b: bj,
+                            similarity: sim,
+                            kind: MatchKind::Similar,
+                        });
                     }
                 }
                 (counted, local)

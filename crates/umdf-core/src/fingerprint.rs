@@ -122,6 +122,20 @@ pub fn pixel_tolerance_similarity(a: &Fingerprint, b: &Fingerprint, tolerance: u
     (matching as f32 / n as f32) * 100.0
 }
 
+/// Dot product of two L2-normalised embeddings (= cosine similarity).
+pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| x * y)
+        .sum::<f32>()
+        .clamp(-1.0, 1.0)
+}
+
+/// Cosine similarity mapped to 0..100.
+pub fn cosine_percent(a: &[f32], b: &[f32]) -> f32 {
+    (cosine_similarity(a, b).max(0.0)) * 100.0
+}
+
 /// Global structural similarity (SSIM) over the raw greyscale grids.
 ///
 /// `C1 = (0.01·255)²` and `C2 = (0.03·255)²` are the standard stabilisation
@@ -301,6 +315,17 @@ mod tests {
         assert!(normalized_sign_agreement(&a, &b) < 10.0);
         assert!(pearson(&a, &b) < 10.0);
         assert!(ssim(&a, &b) < 20.0);
+    }
+
+    #[test]
+    fn cosine_helpers() {
+        let a = [1.0f32, 0.0, 0.0];
+        let b = [1.0f32, 0.0, 0.0];
+        let c = [0.0f32, 1.0, 0.0];
+        assert!((cosine_similarity(&a, &b) - 1.0).abs() < 1e-6);
+        assert!(cosine_similarity(&a, &c).abs() < 1e-6);
+        assert!((cosine_percent(&a, &b) - 100.0).abs() < 1e-4);
+        assert!(cosine_percent(&a, &c).abs() < 1e-4);
     }
 
     #[test]

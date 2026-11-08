@@ -76,6 +76,8 @@ impl Tr {
                 opt_keep: "Conservar".into(),
                 opt_metric: "Métrica".into(),
                 opt_threads: "Hilos".into(),
+                opt_semantic: "Semántica (GPU)".into(),
+                semantic_model: "Ruta del modelo .onnx".into(),
                 opt_tolerance: "Tolerancia de gris".into(),
                 trash_all: "A la papelera".into(),
                 move_all: "Mover todos".into(),
@@ -136,6 +138,8 @@ impl Tr {
                 opt_keep: "Keep".into(),
                 opt_metric: "Metric".into(),
                 opt_threads: "Threads".into(),
+                opt_semantic: "Semantic (GPU)".into(),
+                semantic_model: "Path to the .onnx model".into(),
                 opt_tolerance: "Pixel tolerance".into(),
                 trash_all: "Trash all duplicates".into(),
                 move_all: "Move all".into(),
@@ -197,6 +201,13 @@ impl Tr {
             format!("Etapa 1 de 2 — Cargando: {name}")
         } else {
             format!("Stage 1 of 2 — Loading: {name}")
+        }
+    }
+    pub fn stage_embedding(&self, done: usize, total: usize) -> String {
+        if self.es() {
+            format!("Embebiendo {done} / {total}")
+        } else {
+            format!("Embedding {done} / {total}")
         }
     }
     pub fn stage_hashing(&self, done: usize, total: usize) -> String {
@@ -600,6 +611,7 @@ impl Tr {
                 ("• sign: acuerdo de signo de la rejilla normalizada.", 2),
                 ("• pearson: correlación de las rejillas; más estricta con la estructura.", 2),
                 ("• legacy: métrica de signo heredada, solo para comparación.", 2),
+                ("• Semántica (opcional): embeddings ONNX (ResNet/CLIP) comparados por coseno; requiere compilar con --features embeddings.", 2),
                 ("Fotos rotadas y editadas", 0),
                 ("• Se aplica la orientación EXIF al decodificar: una foto con la etiqueta de rotación coincide con su copia rotada físicamente.", 2),
                 ("• Una rotación «horneada» en los píxeles sin EXIF aún puede escaparse; revísala a mano.", 2),
@@ -634,6 +646,7 @@ impl Tr {
                 ("• sign: sign agreement of the normalised grid.", 2),
                 ("• pearson: correlation of the grids; stricter about structure.", 2),
                 ("• legacy: legacy sign-agreement metric kept for comparison.", 2),
+                ("• Semantic (optional): ONNX embeddings (ResNet/CLIP) compared by cosine; requires a build with --features embeddings.", 2),
                 ("Rotated and edited photos", 0),
                 ("• EXIF orientation is applied when decoding, so a tagged rotated photo matches its physically rotated copy.", 2),
                 ("• A rotation baked into the pixels without EXIF can still be missed; review those manually.", 2),

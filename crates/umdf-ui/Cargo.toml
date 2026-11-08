@@ -9,6 +9,9 @@ description = "Slint desktop UI for the Universal Media Duplicate Finder"
 name = "umdf-ui"
 path = "src/main.rs"
 
+[features]
+embeddings = ["umdf-core/embeddings"]
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true

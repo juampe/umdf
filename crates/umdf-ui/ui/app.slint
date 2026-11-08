@@ -72,6 +72,8 @@ export struct Strings {
     opt_keep: string,
     opt_metric: string,
     opt_threads: string,
+    opt_semantic: string,
+    semantic_model: string,
     opt_tolerance: string,
 
     trash_all: string,
@@ -317,6 +319,8 @@ export component AppWindow inherits Window {
         opt_keep: "Keep",
         opt_metric: "Metric",
         opt_threads: "Threads",
+        opt_semantic: "Semantic (GPU)",
+        semantic_model: "Path to the .onnx model",
         opt_tolerance: "Pixel tolerance",
         trash_all: "Trash all duplicates",
         move_all: "Move all",
@@ -384,6 +388,11 @@ export component AppWindow inherits Window {
     in-out property <int> keep-index: 0;
     in-out property <int> metric-index: 0;
     in-out property <int> threads-index: 0;
+    in-out property <bool> embeddings-supported: false;
+    in-out property <bool> semantic-enabled: false;
+    in-out property <string> semantic-model: "";
+    in-out property <int> semantic-device: 0;
+    in-out property <int> semantic-preset: 0;
     in-out property <string> move-dest: "";
 
     in-out property <bool> confirm-open: false;
@@ -724,6 +733,34 @@ export component AppWindow inherits Window {
                                 ComboBox {
                                     model: ["Auto", "1", "2", "4", "8", "16", "32"];
                                     current-index <=> root.threads-index;
+                                }
+                                if root.embeddings-supported : VerticalLayout {
+                                    spacing: 5px;
+                                    CheckBox {
+                                        text: root.strings.opt_semantic;
+                                        checked <=> root.semantic-enabled;
+                                    }
+                                    if root.semantic-enabled : VerticalLayout {
+                                        spacing: 5px;
+                                        LineEdit {
+                                            text <=> root.semantic-model;
+                                            placeholder-text: root.strings.semantic_model;
+                                            height: 30px;
+                                        }
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            ComboBox {
+                                                model: ["CUDA", "CPU"];
+                                                current-index <=> root.semantic-device;
+                                                horizontal-stretch: 1;
+                                            }
+                                            ComboBox {
+                                                model: ["ImageNet", "CLIP"];
+                                                current-index <=> root.semantic-preset;
+                                                horizontal-stretch: 1;
+                                            }
+                                        }
+                                    }
                                 }
                                 HorizontalLayout {
                                     spacing: 6px;

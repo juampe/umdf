@@ -6,6 +6,10 @@
 # Local design notes (kept out of the repository)
 /ADPF.md
 
+# Models (not distributed)
+/models/
+*.onnx
+
 # Local logs and generated exports
 *.log
 *.tmp
