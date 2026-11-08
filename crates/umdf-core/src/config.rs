@@ -120,6 +120,8 @@ impl Default for EmbeddingConfig {
 pub struct ScanConfig {
     pub folders: Vec<PathBuf>,
     pub recursive: bool,
+    /// Directory names to skip while walking (trash/recycle bins, ...).
+    pub exclude_dirs: Vec<String>,
 
     /// Lower-case extensions without the dot. Empty = every configured kind.
     pub extensions: Vec<String>,
@@ -181,6 +183,7 @@ impl Default for ScanConfig {
         Self {
             folders: Vec::new(),
             recursive: true,
+            exclude_dirs: Vec::new(),
             extensions: default_image_extensions(),
             min_width: 0,
             min_height: 0,

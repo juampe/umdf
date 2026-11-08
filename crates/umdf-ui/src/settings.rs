@@ -27,6 +27,36 @@ pub struct Settings {
     pub active_model: String,
     /// Models registered after a download (or added by hand).
     pub models: Vec<InstalledModel>,
+
+    // ---- scan/UI options (persisted so the app reopens as the user left it) --
+    /// Folders to scan, as shown in the UI.
+    pub folders: Vec<PathBuf>,
+    /// Destination folder for Move (empty = not set).
+    pub move_dest: String,
+    /// Include subfolders in scans.
+    pub recursive: bool,
+    /// Only report byte-identical files.
+    pub only_identical: bool,
+    /// Compare video/audio content through ffmpeg/ffprobe.
+    pub compare_media: bool,
+    /// Pixel similarity threshold (0..100).
+    pub pixel_similarity: f32,
+    /// Grey-level tolerance (0..255).
+    pub pixel_tolerance: u8,
+    /// `dpf`, `ssim`, `sign`, `pearson` or `legacy`.
+    pub metric: String,
+    /// `original`, `dimensions`, `filesize`, `earlierdate`, `earlierexifdate`,
+    /// `oldest`, `name` or `path`.
+    pub keep_policy: String,
+    /// Worker threads (0 = auto).
+    pub threads: usize,
+    /// Dark theme.
+    pub dark_mode: bool,
+    /// Skip trash directories during scans.
+    pub exclude_trash: bool,
+    /// Directory names to skip when `exclude_trash` is true. Edit this list in
+    /// config.toml to add/remove entries.
+    pub trash_dirs: Vec<String>,
 }
 
 impl Default for Settings {
@@ -43,6 +73,26 @@ impl Default for Settings {
             similarity: 0.90,
             active_model: String::new(),
             models: Vec::new(),
+            folders: Vec::new(),
+            move_dest: String::new(),
+            recursive: true,
+            only_identical: false,
+            compare_media: true,
+            pixel_similarity: 90.0,
+            pixel_tolerance: 10,
+            metric: "dpf".to_string(),
+            keep_policy: "original".to_string(),
+            threads: 0,
+            dark_mode: false,
+            exclude_trash: true,
+            trash_dirs: vec![
+                ".dtrash".to_string(),
+                ".Trash".to_string(),
+                ".Trash-1000".to_string(),
+                "$RECYCLE.BIN".to_string(),
+                "RECYCLER".to_string(),
+                ".Trashes".to_string(),
+            ],
         }
     }
 }
@@ -222,6 +272,10 @@ mod tests {
         assert!((settings.similarity - 0.90).abs() < f32::EPSILON);
         assert!(settings.models_dir.ends_with("models"));
         assert_eq!(settings.language, "en");
+        assert!(settings.exclude_trash);
+        assert!(settings.trash_dirs.iter().any(|d| d == ".dtrash"));
+        assert_eq!(settings.metric, "dpf");
+        assert_eq!(settings.keep_policy, "original");
     }
 
     #[test]
@@ -230,6 +284,10 @@ mod tests {
         settings.similarity = 0.83;
         settings.device = "cpu".to_string();
         settings.language = "fr".to_string();
+        settings.recursive = false;
+        settings.pixel_similarity = 87.0;
+        settings.exclude_trash = false;
+        settings.folders = vec![PathBuf::from("/tmp/photos")];
         settings.models.push(InstalledModel {
             name: "CLIP".into(),
             path: PathBuf::from("/tmp/clip.onnx"),
@@ -243,6 +301,10 @@ mod tests {
         let back: Settings = toml::from_str(&text).unwrap();
         assert_eq!(back.device, "cpu");
         assert_eq!(back.language, "fr");
+        assert!(!back.recursive);
+        assert!((back.pixel_similarity - 87.0).abs() < f32::EPSILON);
+        assert!(!back.exclude_trash);
+        assert_eq!(back.folders, vec![PathBuf::from("/tmp/photos")]);
         assert!((back.similarity - 0.83).abs() < f32::EPSILON);
         assert_eq!(back.models.len(), 1);
         assert_eq!(back.models[0].path, PathBuf::from("/tmp/clip.onnx"));

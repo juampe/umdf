@@ -171,7 +171,10 @@
     "help_disclaimer": "免责声明：UMDF 按“原样”提供，不附带任何形式的保证。作者不对因使用本软件而造成的任何损失、损害、数据丢失或其他后果负责，包括删除、移动或修改文件。请始终保留备份，并在执行操作前检查结果。",
     "browser_drives": "驱动器",
     "browser_drives_hint": "可用驱动器：{n} — 点击打开",
-    "status_finished_skipped": "已完成：{groups} 组，{duplicates} 个重复文件；跳过 {skipped} 个文件。"
+    "status_finished_skipped": "已完成：{groups} 组，{duplicates} 个重复文件；跳过 {skipped} 个文件。",
+    "opt_exclude_trash": "排除回收站文件夹",
+    "help_config": "配置（config.toml）",
+    "help_config_body": "文件夹、目标位置、指标、容差、线程、主题和回收站排除会自动保存在 config.toml 中。可在其中编辑默认的 trash_dirs 列表（.dtrash、.Trash、$RECYCLE.BIN 等）；取消勾选“排除回收站文件夹”即可关闭排除。"
   },
   "help": [
     {

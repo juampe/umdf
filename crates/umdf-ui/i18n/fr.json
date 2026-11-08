@@ -171,7 +171,10 @@
     "help_disclaimer": "Avertissement : UMDF est fourni « en l’état », sans garantie d’aucune sorte. Les auteurs ne sont responsables d’aucune perte, dommage, perte de données ou autre conséquence résultant de l’utilisation de ce logiciel, y compris la suppression, le déplacement ou la modification de fichiers. Faites toujours des sauvegardes et vérifiez les résultats avant d’appliquer des actions.",
     "browser_drives": "Lecteurs",
     "browser_drives_hint": "Lecteurs disponibles : {n} — cliquez pour ouvrir",
-    "status_finished_skipped": "Terminé : {groups} groupe(s), {duplicates} doublon(s) ; {skipped} fichier(s) ignoré(s)."
+    "status_finished_skipped": "Terminé : {groups} groupe(s), {duplicates} doublon(s) ; {skipped} fichier(s) ignoré(s).",
+    "opt_exclude_trash": "Exclure les corbeilles",
+    "help_config": "Configuration (config.toml)",
+    "help_config_body": "Les dossiers, la destination, la métrique, la tolérance, les threads, le thème et l’exclusion des corbeilles sont enregistrés automatiquement dans config.toml. La liste trash_dirs par défaut (.dtrash, .Trash, $RECYCLE.BIN…) peut y être modifiée ; désactivez l’exclusion avec la case « Exclure les corbeilles »."
   },
   "help": [
     {

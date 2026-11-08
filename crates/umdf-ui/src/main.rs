@@ -54,6 +54,51 @@ const METRICS: &[Metric] = &[
     Metric::LegacySignAgreement,
 ];
 
+const KEEP_NAMES: &[&str] = &[
+    "original",
+    "dimensions",
+    "filesize",
+    "earlierdate",
+    "earlierexifdate",
+    "oldest",
+    "name",
+    "path",
+];
+
+const METRIC_NAMES: &[&str] = &["dpf", "ssim", "sign", "pearson", "legacy"];
+
+fn keep_index(name: &str) -> i32 {
+    match name.to_ascii_lowercase().as_str() {
+        "original" | "auto" | "likely-original" => 0,
+        "dimensions" | "resolution" => 1,
+        "filesize" | "largest" => 2,
+        "earlierdate" | "newest" => 3,
+        "earlierexifdate" => 4,
+        "oldest" => 5,
+        "name" => 6,
+        "path" => 7,
+        _ => 0,
+    }
+}
+
+fn metric_index(name: &str) -> i32 {
+    match name.to_ascii_lowercase().as_str() {
+        "dpf" | "pixel" | "tolerance" => 0,
+        "ssim" => 1,
+        "sign" | "sign-agreement" => 2,
+        "pearson" | "correlation" => 3,
+        "legacy" | "legacy-sign" => 4,
+        _ => 0,
+    }
+}
+
+fn threads_index(threads: usize) -> i32 {
+    THREAD_OPTIONS
+        .iter()
+        .position(|&value| value == threads)
+        .unwrap_or(0) as i32
+}
+
 /// Above this many rows we skip thumbnails to keep the UI responsive.
 const MAX_THUMBNAIL_ROWS: usize = 300;
 
@@ -136,6 +181,51 @@ fn main() -> anyhow::Result<()> {
             guard.models.clone(),
         )
     };
+    let (
+        boot_folders,
+        boot_move_dest,
+        boot_recursive,
+        boot_only_identical,
+        boot_compare_media,
+        boot_pixel_similarity,
+        boot_pixel_tolerance,
+        boot_metric,
+        boot_keep,
+        boot_threads,
+        boot_dark,
+        boot_exclude_trash,
+    ) = {
+        let guard = settings.lock().expect("settings lock");
+        (
+            guard.folders.clone(),
+            guard.move_dest.clone(),
+            guard.recursive,
+            guard.only_identical,
+            guard.compare_media,
+            guard.pixel_similarity,
+            guard.pixel_tolerance,
+            guard.metric.clone(),
+            guard.keep_policy.clone(),
+            guard.threads,
+            guard.dark_mode,
+            guard.exclude_trash,
+        )
+    };
+
+    ui.set_recursive(boot_recursive);
+    ui.set_only_identical(boot_only_identical);
+    ui.set_compare_media(boot_compare_media);
+    ui.set_threshold(boot_pixel_similarity);
+    ui.set_threshold_label(format!("{} %", boot_pixel_similarity.round() as i32).into());
+    ui.set_tolerance(boot_pixel_tolerance as f32);
+    ui.set_tolerance_label(boot_pixel_tolerance.to_string().into());
+    ui.set_keep_index(keep_index(&boot_keep));
+    ui.set_metric_index(metric_index(&boot_metric));
+    ui.set_threads_index(threads_index(boot_threads));
+    ui.set_dark_mode(boot_dark);
+    ui.set_exclude_trash(boot_exclude_trash);
+    ui.set_exclude_trash_label(boot.exclude_trash_label().into());
+    ui.set_move_dest(boot_move_dest.into());
 
     update_cache_label(&ui, &cache);
     ui.set_models_dir(display_path(&models_dir).into());
@@ -177,6 +267,14 @@ fn main() -> anyhow::Result<()> {
     ui.set_browser_entries(ModelRc::from(browser_model.clone()));
 
     let folders: Rc<RefCell<Vec<PathBuf>>> = Rc::new(RefCell::new(Vec::new()));
+    for path in boot_folders {
+        if path.is_dir() {
+            add_folder(&ui, &folder_model, &folders, path, &boot);
+        }
+    }
+    ui.set_folders_label(boot.folders_label(folders.borrow().len()).into());
+    ui.set_status(boot.status_ready().into());
+    save_ui_settings(&ui, &settings, &folders);
     let browser_path: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(current_dir()));
     let cancel = Arc::new(AtomicBool::new(false));
     let ui_stats: Rc<RefCell<UiStats>> = Rc::new(RefCell::new(UiStats {
@@ -212,6 +310,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_strings(tr.strings());
             ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(tr.help_lines()))));
             set_combo_labels(&ui, &tr);
+            ui.set_exclude_trash_label(tr.exclude_trash_label().into());
             ui.set_folders_label(tr.folders_label(folders.borrow().len()).into());
             if let Ok(mut guard) = settings.lock() {
                 guard.language = new_lang.code().to_string();
@@ -279,10 +378,23 @@ fn main() -> anyhow::Result<()> {
     // ---- theme --------------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
+        let settings = settings.clone();
+        let folders = folders.clone();
         ui.on_toggle_theme(move || {
             if let Some(ui) = ui_handle.upgrade() {
                 let next = !ui.get_dark_mode();
                 ui.set_dark_mode(next);
+                save_ui_settings(&ui, &settings, &folders);
+            }
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let settings = settings.clone();
+        let folders = folders.clone();
+        ui.on_persist_settings(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                save_ui_settings(&ui, &settings, &folders);
             }
         });
     }
@@ -454,9 +566,11 @@ fn main() -> anyhow::Result<()> {
                 if path.is_dir() {
                     ui.set_move_dest(display_path(&path).into());
                     ui.set_status(tr.status_folder_added(&path).into());
+                    save_ui_settings(&ui, &settings, &folders);
                 }
             } else {
                 add_folder(&ui, &folder_model, &folders, path, &tr);
+                save_ui_settings(&ui, &settings, &folders);
             }
             ui.set_browser_open(false);
         });
@@ -678,6 +792,7 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let folder_model = folder_model.clone();
         let lang = lang.clone();
+        let settings = settings.clone();
         ui.on_remove_folder(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -688,6 +803,7 @@ fn main() -> anyhow::Result<()> {
                 ui.set_folder_selected(-1);
                 ui.set_folders_label(tr.folders_label(folders.borrow().len()).into());
                 ui.set_status(tr.status_folder_removed().into());
+                save_ui_settings(&ui, &settings, &folders);
             }
         });
     }
@@ -696,6 +812,7 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let folder_model = folder_model.clone();
         let lang = lang.clone();
+        let settings = settings.clone();
         ui.on_clear_folders(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -704,6 +821,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_folder_selected(-1);
             ui.set_folders_label(tr.folders_label(0).into());
             ui.set_status(tr.status_folders_cleared().into());
+            save_ui_settings(&ui, &settings, &folders);
         });
     }
     {
@@ -718,17 +836,23 @@ fn main() -> anyhow::Result<()> {
     // ---- threshold / tolerance labels --------------------------------------
     {
         let ui_handle = ui.as_weak();
+        let settings = settings.clone();
+        let folders = folders.clone();
         ui.on_threshold_changed(move |value| {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_threshold_label(format!("{} %", value.round() as i32).into());
+                save_ui_settings(&ui, &settings, &folders);
             }
         });
     }
     {
         let ui_handle = ui.as_weak();
+        let settings = settings.clone();
+        let folders = folders.clone();
         ui.on_tolerance_changed(move |value| {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_tolerance_label(format!("{}", value.round() as i32).into());
+                save_ui_settings(&ui, &settings, &folders);
             }
         });
     }
@@ -811,6 +935,7 @@ fn main() -> anyhow::Result<()> {
         let rows = rows.clone();
         let lang = lang.clone();
         let cache = cache.clone();
+        let settings = settings.clone();
         ui.on_start(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -827,9 +952,19 @@ fn main() -> anyhow::Result<()> {
             while prx.borrow_mut().try_recv().is_ok() {}
             while drx.borrow_mut().try_recv().is_ok() {}
             cancel.store(false, Ordering::Relaxed);
+            save_ui_settings(&ui, &settings, &folders);
 
             let mut cfg = ScanConfig::default();
             cfg.folders = folders.borrow().clone();
+            cfg.exclude_dirs = if ui.get_exclude_trash() {
+                settings
+                    .lock()
+                    .ok()
+                    .map(|guard| guard.trash_dirs.clone())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
             cfg.recursive = ui.get_recursive();
             cfg.only_identical = ui.get_only_identical();
             cfg.compare_media_content = ui.get_compare_media();
@@ -1315,6 +1450,35 @@ fn set_combo_labels(ui: &AppWindow, tr: &Tr) {
     let threads: Vec<slint::SharedString> =
         tr.thread_labels().into_iter().map(Into::into).collect();
     ui.set_thread_labels(ModelRc::from(Rc::new(VecModel::from(threads))));
+}
+
+fn save_ui_settings(
+    ui: &AppWindow,
+    settings: &Arc<Mutex<Settings>>,
+    folders: &Rc<RefCell<Vec<PathBuf>>>,
+) {
+    let folder_paths: Vec<PathBuf> = folders
+        .borrow()
+        .iter()
+        .map(|path| PathBuf::from(display_path(path)))
+        .collect();
+    if let Ok(mut guard) = settings.lock() {
+        guard.folders = folder_paths;
+        guard.move_dest = ui.get_move_dest().to_string();
+        guard.recursive = ui.get_recursive();
+        guard.only_identical = ui.get_only_identical();
+        guard.compare_media = ui.get_compare_media();
+        guard.pixel_similarity = ui.get_threshold();
+        guard.pixel_tolerance = ui.get_tolerance().round().clamp(0.0, 255.0) as u8;
+        guard.metric = METRIC_NAMES[ui.get_metric_index().clamp(0, 4) as usize].to_string();
+        guard.keep_policy = KEEP_NAMES[ui.get_keep_index().clamp(0, 7) as usize].to_string();
+        guard.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
+        guard.dark_mode = ui.get_dark_mode();
+        guard.exclude_trash = ui.get_exclude_trash();
+        if let Err(error) = guard.save() {
+            umdf_core::log_error(format_args!("UMDF: could not save config.toml: {error}"));
+        }
+    }
 }
 
 fn register_bundled_fonts() {

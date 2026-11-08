@@ -297,6 +297,14 @@ impl Tr {
             })
             .collect();
         lines.push(HelpLine {
+            text: self.phrase("help_config").into(),
+            kind: 0,
+        });
+        lines.push(HelpLine {
+            text: self.phrase("help_config_body").into(),
+            kind: 1,
+        });
+        lines.push(HelpLine {
             text: self.phrase("help_about").into(),
             kind: 0,
         });
@@ -633,6 +641,10 @@ impl Tr {
         self.fmt("browser_folders", &[("n", n.to_string())])
     }
 
+    pub fn exclude_trash_label(&self) -> String {
+        self.phrase("opt_exclude_trash").into()
+    }
+
     pub fn browser_drives(&self) -> String {
         self.phrase("browser_drives").into()
     }
@@ -758,7 +770,7 @@ mod tests {
             let catalog = catalog(lang);
             assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
             assert!(catalog.help.len() > 10, "{}", lang.code());
-            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped"] {
+            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "help_config"] {
                 assert!(
                     catalog.phrases.contains_key(key),
                     "{} missing {key}",

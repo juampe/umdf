@@ -475,6 +475,8 @@ export component AppWindow inherits Window {
     in-out property <string> models-db: "";
     in-out property <string> models-dir: "models";
     in-out property <string> move-dest: "";
+    in-out property <bool> exclude-trash: true;
+    in-out property <string> exclude-trash-label: "Exclude trash folders";
 
     in-out property <bool> confirm-open: false;
     in-out property <string> confirm-text: "";
@@ -487,6 +489,7 @@ export component AppWindow inherits Window {
     in-out property <string> keep-confidence: "";
     in-out property <string> keep-reason: "";
 
+    callback persist-settings();
     callback start();
     callback stop();
     callback set-lang(int);
@@ -793,9 +796,10 @@ export component AppWindow inherits Window {
                                 padding: 10px;
                                 spacing: 5px;
                                 Text { text: root.strings.options; color: Theme.text; font-size: 12px; font-weight: 700; }
-                                CheckBox { text: root.strings.opt_scan_subfolders; checked <=> root.recursive; }
-                                CheckBox { text: root.strings.opt_only_identical; checked <=> root.only-identical; }
-                                CheckBox { text: root.strings.opt_compare_media; checked <=> root.compare-media; }
+                                CheckBox { text: root.strings.opt_scan_subfolders; checked <=> root.recursive; toggled => { root.persist-settings(); } }
+                                CheckBox { text: root.strings.opt_only_identical; checked <=> root.only-identical; toggled => { root.persist-settings(); } }
+                                CheckBox { text: root.strings.opt_compare_media; checked <=> root.compare-media; toggled => { root.persist-settings(); } }
+                                CheckBox { text: root.exclude-trash-label; checked <=> root.exclude-trash; toggled => { root.persist-settings(); } }
                                 if !root.semantic-enabled : HorizontalLayout {
                                     spacing: 6px;
                                     Text { text: root.strings.opt_similarity; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
@@ -812,6 +816,7 @@ export component AppWindow inherits Window {
                                 ComboBox {
                                     model: root.keep-labels;
                                     current-index <=> root.keep-index;
+                                    selected => { root.persist-settings(); }
                                 }
                                 if !root.semantic-enabled : VerticalLayout {
                                     spacing: 5px;
@@ -819,12 +824,14 @@ export component AppWindow inherits Window {
                                     ComboBox {
                                         model: ["dpf", "ssim", "sign", "pearson", "legacy"];
                                         current-index <=> root.metric-index;
+                                        selected => { root.persist-settings(); }
                                     }
                                 }
                                 Text { text: root.strings.opt_threads; font-size: 11px; color: Theme.text2; }
                                 ComboBox {
                                     model: root.thread-labels;
                                     current-index <=> root.threads-index;
+                                    selected => { root.persist-settings(); }
                                 }
                                 VerticalLayout {
                                     spacing: 5px;
@@ -1102,6 +1109,7 @@ export component AppWindow inherits Window {
                                 placeholder-text: root.strings.move_placeholder;
                                 height: 32px;
                                 horizontal-stretch: 1;
+                                edited => { root.persist-settings(); }
                             }
                             FlatButton {
                                 label: root.strings.browse;

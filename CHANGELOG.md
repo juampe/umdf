@@ -4,6 +4,21 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.5] - 2026-11-08
+
+### Added
+
+- **Exclude trash folders** checkbox (enabled by default). The default list is
+  `.dtrash`, `.Trash`, `.Trash-1000`, `$RECYCLE.BIN`, `RECYCLER` and
+  `.Trashes`, matched case-insensitively against directory names. It is also
+  available as `exclude_trash` and `trash_dirs` in `config.toml` and can be
+  edited by hand.
+- All scan/UI options are now persisted in `config.toml`: `folders`,
+  `move_dest`, `recursive`, `only_identical`, `compare_media`,
+  `pixel_similarity`, `pixel_tolerance`, `metric`, `keep_policy`, `threads`,
+  `dark_mode`, `exclude_trash` and `trash_dirs`.
+- The Help includes a configuration section in all nine languages.
+
 ## [0.3.4] - 2026-11-08
 
 ### Fixed

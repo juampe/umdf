@@ -171,7 +171,10 @@
     "help_disclaimer": "Disclaimer: UMDF is provided “as is”, without warranty of any kind. The authors are not responsible for any loss, damage, data loss or other consequences resulting from the use of this software, including deleting, moving or modifying files. Always keep backups and review the results before applying actions.",
     "browser_drives": "Drives",
     "browser_drives_hint": "Available drives: {n} — click one to open",
-    "status_finished_skipped": "Finished: {groups} group(s), {duplicates} duplicate(s); {skipped} file(s) skipped."
+    "status_finished_skipped": "Finished: {groups} group(s), {duplicates} duplicate(s); {skipped} file(s) skipped.",
+    "opt_exclude_trash": "Exclude trash folders",
+    "help_config": "Configuration (config.toml)",
+    "help_config_body": "Folders, destination, metric, tolerance, threads, theme and trash-folder exclusion are saved automatically in config.toml. The default trash_dirs list (.dtrash, .Trash, $RECYCLE.BIN, ...) can be edited there; disable the exclusion with the “Exclude trash folders” checkbox."
   },
   "help": [
     {

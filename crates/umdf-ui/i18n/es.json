@@ -171,7 +171,10 @@
     "help_disclaimer": "Aviso legal: UMDF se proporciona «tal cual», sin garantías de ningún tipo. Los autores no se hacen responsables de pérdidas, daños, pérdida de datos ni otras consecuencias derivadas del uso del programa, incluido el borrado, movimiento o modificación de archivos. Haz copias de seguridad y revisa los resultados antes de aplicar acciones.",
     "browser_drives": "Unidades",
     "browser_drives_hint": "Unidades disponibles: {n} — pulsa una para abrirla",
-    "status_finished_skipped": "Terminado: {groups} grupo(s), {duplicates} duplicado(s); {skipped} archivo(s) omitido(s)."
+    "status_finished_skipped": "Terminado: {groups} grupo(s), {duplicates} duplicado(s); {skipped} archivo(s) omitido(s).",
+    "opt_exclude_trash": "Excluir papeleras",
+    "help_config": "Configuración (config.toml)",
+    "help_config_body": "Las carpetas, el destino, la métrica, la tolerancia, los hilos, el tema y la exclusión de papeleras se guardan automáticamente en config.toml. La lista trash_dirs por defecto (.dtrash, .Trash, $RECYCLE.BIN...) se puede editar ahí; desactiva la exclusión con la casilla «Excluir papeleras»."
   },
   "help": [
     {

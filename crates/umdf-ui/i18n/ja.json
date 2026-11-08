@@ -171,7 +171,10 @@
     "help_disclaimer": "免責事項: UMDF は「現状のまま」提供され、いかなる保証もありません。作者は、ファイルの削除、移動、変更を含む本ソフトウェアの使用に起因する損失、損害、データ損失、その他の結果について一切責任を負いません。必ずバックアップを保持し、操作を実行する前に結果を確認してください。",
     "browser_drives": "ドライブ",
     "browser_drives_hint": "利用可能なドライブ: {n} — クリックして開く",
-    "status_finished_skipped": "完了: {groups} グループ、{duplicates} 個の重複、{skipped} 個のファイルをスキップ。"
+    "status_finished_skipped": "完了: {groups} グループ、{duplicates} 個の重複、{skipped} 個のファイルをスキップ。",
+    "opt_exclude_trash": "ゴミ箱フォルダーを除外",
+    "help_config": "設定（config.toml）",
+    "help_config_body": "フォルダー、保存先、指標、許容値、スレッド、テーマ、ゴミ箱の除外は config.toml に自動保存されます。既定の trash_dirs リスト（.dtrash、.Trash、$RECYCLE.BIN など）はそこで編集できます。「ゴミ箱フォルダーを除外」をオフにすると除外されません。"
   },
   "help": [
     {

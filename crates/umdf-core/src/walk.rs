@@ -51,7 +51,21 @@ pub fn collect_candidates_cancellable(
             WalkDir::new(folder).max_depth(1).follow_links(false)
         };
 
-        for entry in walker.into_iter().filter_map(Result::ok) {
+        let excluded: Vec<String> = cfg
+            .exclude_dirs
+            .iter()
+            .map(|name| name.trim().trim_matches(['/', '\\']).to_ascii_lowercase())
+            .filter(|name| !name.is_empty())
+            .collect();
+        let entries = walker.into_iter().filter_entry(|entry| {
+            // Never skip the folder the user explicitly selected.
+            if entry.depth() == 0 || !entry.file_type().is_dir() {
+                return true;
+            }
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            !excluded.iter().any(|excluded| name == *excluded)
+        });
+        for entry in entries.filter_map(Result::ok) {
             visited += 1;
             if visited % 256 == 0 && cancel.load(Ordering::Relaxed) {
                 return (out, true);
@@ -124,6 +138,30 @@ pub fn list_directories(path: &Path) -> Vec<(String, PathBuf)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn excludes_trash_directories_case_insensitively() {
+        let root = std::env::temp_dir().join(format!("umdf-walk-exclude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("keep")).unwrap();
+        std::fs::create_dir_all(root.join(".Trash")).unwrap();
+        std::fs::create_dir_all(root.join(".dtrash")).unwrap();
+        std::fs::create_dir_all(root.join("$RECYCLE.BIN")).unwrap();
+        std::fs::write(root.join("keep").join("a.jpg"), b"a").unwrap();
+        std::fs::write(root.join(".Trash").join("b.jpg"), b"b").unwrap();
+        std::fs::write(root.join(".dtrash").join("c.jpg"), b"c").unwrap();
+        std::fs::write(root.join("$RECYCLE.BIN").join("d.jpg"), b"d").unwrap();
+
+        let mut cfg = ScanConfig::default();
+        cfg.folders = vec![root.clone()];
+        cfg.extensions = vec!["jpg".to_string()];
+        cfg.exclude_dirs = vec![".dtrash".into(), ".trash".into(), "$recycle.bin".into()];
+        let files = collect_candidates(&cfg);
+        assert_eq!(files.len(), 1);
+        assert!(files[0].path.ends_with("keep/a.jpg"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn list_directories_is_sorted_and_dirs_only() {

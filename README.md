@@ -49,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.3.4_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.3.4-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.3.4-x86_64.AppImage && ./umdf-0.3.4-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.5_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.5-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.5-x86_64.AppImage && ./umdf-0.3.5-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -206,9 +206,34 @@ with the comparison each model enables:
 ### Configuration and cache
 
 * `<config dir>/umdf/config.toml` stores user configuration: `models_dir`,
-  `device`, `similarity`, `active_model` and the `[[models]]` registry (Linux
-  `~/.config/umdf/config.toml`, Windows `%APPDATA%\umdf\config.toml`). It is
-  plain TOML, easy to review or edit by hand.
+  `device`, `similarity` (semantic threshold), `active_model`, the
+  `[[models]]` registry, and all scan/UI choices: `folders`, `move_dest`,
+  `recursive`, `only_identical`, `compare_media`, `pixel_similarity`,
+  `pixel_tolerance`, `metric`, `keep_policy`, `threads`, `dark_mode`,
+  `exclude_trash` and `trash_dirs` (Linux `~/.config/umdf/config.toml`, Windows
+  `%APPDATA%\umdf\config.toml`). It is plain TOML, easy to review or edit by
+  hand.
+
+  ```toml
+  folders = ["/home/me/Pictures"]
+  move_dest = "/home/me/Duplicates"
+  recursive = true
+  only_identical = false
+  compare_media = true
+  pixel_similarity = 90.0
+  pixel_tolerance = 10
+  metric = "dpf"                 # dpf | ssim | sign | pearson | legacy
+  keep_policy = "original"       # original | dimensions | filesize | ...
+  threads = 0                    # 0 = one per CPU
+  dark_mode = false
+  exclude_trash = true
+  trash_dirs = [".dtrash", ".Trash", ".Trash-1000", "$RECYCLE.BIN", "RECYCLER", ".Trashes"]
+  ```
+
+* Trash/recycle directories are skipped by default. `trash_dirs` entries are
+  matched **case-insensitively against directory names**; add or remove names
+  in `config.toml`. The folder explicitly selected as a scan root is never
+  skipped. Disable the **Exclude trash folders** checkbox to scan them.
 * Older builds kept this in `config.db`; it is migrated automatically on first
   start and the legacy file is kept as `config.db.bak`.
 * `<config dir>/umdf/cache.db` is a **disposable SQLite cache** of derived

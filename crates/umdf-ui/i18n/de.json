@@ -171,7 +171,10 @@
     "help_disclaimer": "Haftungsausschluss: UMDF wird „wie besehen“ ohne jegliche Gewährleistung bereitgestellt. Die Autoren haften nicht für Verluste, Schäden, Datenverlust oder sonstige Folgen, die sich aus der Nutzung dieser Software ergeben, einschließlich des Löschens, Verschiebens oder Änderns von Dateien. Erstellen Sie immer Sicherungskopien und prüfen Sie die Ergebnisse, bevor Sie Aktionen ausführen.",
     "browser_drives": "Laufwerke",
     "browser_drives_hint": "Verfügbare Laufwerke: {n} — zum Öffnen anklicken",
-    "status_finished_skipped": "Fertig: {groups} Gruppe(n), {duplicates} Duplikat(e); {skipped} Datei(en) übersprungen."
+    "status_finished_skipped": "Fertig: {groups} Gruppe(n), {duplicates} Duplikat(e); {skipped} Datei(en) übersprungen.",
+    "opt_exclude_trash": "Papierkörbe ausschließen",
+    "help_config": "Konfiguration (config.toml)",
+    "help_config_body": "Ordner, Ziel, Metrik, Toleranz, Threads, Theme und der Ausschluss von Papierkörben werden automatisch in config.toml gespeichert. Die Standardliste trash_dirs (.dtrash, .Trash, $RECYCLE.BIN, …) kann dort bearbeitet werden; deaktiviere den Ausschluss mit „Papierkörbe ausschließen“."
   },
   "help": [
     {

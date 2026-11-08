@@ -171,7 +171,10 @@
     "help_disclaimer": "Avviso legale: UMDF viene fornito «così com’è», senza garanzie di alcun tipo. Gli autori non sono responsabili per perdite, danni, perdita di dati o altre conseguenze derivanti dall’uso di questo software, inclusa l’eliminazione, lo spostamento o la modifica di file. Conserva sempre copie di backup e controlla i risultati prima di applicare azioni.",
     "browser_drives": "Unità",
     "browser_drives_hint": "Unità disponibili: {n} — fai clic per aprire",
-    "status_finished_skipped": "Finito: {groups} gruppo/i, {duplicates} duplicato/i; {skipped} file ignorato/i."
+    "status_finished_skipped": "Finito: {groups} gruppo/i, {duplicates} duplicato/i; {skipped} file ignorato/i.",
+    "opt_exclude_trash": "Escludi i cestini",
+    "help_config": "Configurazione (config.toml)",
+    "help_config_body": "Cartelle, destinazione, metrica, tolleranza, thread, tema ed esclusione dei cestini vengono salvati automaticamente in config.toml. La lista predefinita trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) può essere modificata lì; disattiva l’esclusione con la casella «Escludi i cestini»."
   },
   "help": [
     {
