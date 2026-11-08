@@ -1094,7 +1094,7 @@ fn main() -> anyhow::Result<()> {
                                 ui.invoke_select_row(0);
                             }
                             ui.set_progress(100.0);
-                            let message = if stopped {
+                            let mut message = if stopped {
                                 ui.set_stage(tr.stage_stopped().into());
                                 if report.stats.files_scanned == 0 {
                                     tr.status_stopped_zero()
@@ -1118,6 +1118,13 @@ fn main() -> anyhow::Result<()> {
                                     )
                                 }
                             };
+                            if !stopped && report.stats.fingerprints_from_cache > 0 {
+                                message = format!(
+                                    "{} · {}",
+                                    message,
+                                    tr.status_cache_hits(report.stats.fingerprints_from_cache)
+                                );
+                            }
                             ui.set_status(message.into());
                         }
                         Err(error) => {

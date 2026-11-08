@@ -174,7 +174,8 @@
     "status_finished_skipped": "完了: {groups} グループ、{duplicates} 個の重複、{skipped} 個のファイルをスキップ。",
     "opt_exclude_trash": "ゴミ箱フォルダーを除外",
     "help_config": "設定（config.toml）",
-    "help_config_body": "フォルダー、保存先、指標、許容値、スレッド、テーマ、ゴミ箱の除外は config.toml に自動保存されます。既定の trash_dirs リスト（.dtrash、.Trash、$RECYCLE.BIN など）はそこで編集できます。「ゴミ箱フォルダーを除外」をオフにすると除外されません。"
+    "help_config_body": "フォルダー、保存先、指標、許容値、スレッド、テーマ、ゴミ箱の除外は config.toml に自動保存されます。既定の trash_dirs リスト（.dtrash、.Trash、$RECYCLE.BIN など）はそこで編集できます。「ゴミ箱フォルダーを除外」をオフにすると除外されません。",
+    "status_cache_hits": "{count} 件はキャッシュから"
   },
   "help": [
     {

@@ -47,6 +47,14 @@ pub struct Stats {
     pub embeddings: usize,
     /// Files that could not be decoded during extraction.
     pub extract_errors: usize,
+    /// Fingerprints restored from the cache without decoding the file.
+    pub fingerprints_from_cache: usize,
+    /// Fingerprints produced by decoding the file in this scan.
+    pub fingerprints_computed: usize,
+    /// Embeddings restored from the cache.
+    pub embeddings_from_cache: usize,
+    /// Embeddings produced by the model in this scan.
+    pub embeddings_computed: usize,
     /// Images whose semantic embedding failed (the scan continued).
     pub embedding_errors: usize,
     pub extract_ms: u128,
@@ -253,6 +261,11 @@ fn run_inner(
             if let Some(item) = maybe {
                 if item.fingerprint.is_some() {
                     stats.files_fingerprinted += 1;
+                    if item.fingerprint_cached {
+                        stats.fingerprints_from_cache += 1;
+                    } else {
+                        stats.fingerprints_computed += 1;
+                    }
                 }
                 if item.media_signature.is_some() {
                     stats.files_media_signed += 1;
@@ -338,6 +351,7 @@ fn run_inner(
                 let missing: Vec<usize> = (0..ids.len())
                     .filter(|slot| vectors[*slot].is_none())
                     .collect();
+                stats.embeddings_from_cache += ids.len() - missing.len();
                 if !missing.is_empty() {
                     let paths: Vec<PathBuf> =
                         missing.iter().map(|slot| meta[*slot].0.clone()).collect();
@@ -363,6 +377,7 @@ fn run_inner(
                                 for (slot, maybe_vector) in missing.into_iter().zip(computed) {
                                     match maybe_vector {
                                         Some(vector) => {
+                                            stats.embeddings_computed += 1;
                                             if let Some(cache) = cache {
                                                 let (path, size, modified) = &meta[slot];
                                                 cache.store_embedding(
@@ -713,7 +728,10 @@ fn extract_item(
             match cache.and_then(|cache| {
                 cache.fingerprint(&cand.path, cand.size, modified_ms, cfg.grid)
             }) {
-                Some(fp) => item.fingerprint = Some(fp),
+                Some(fp) => {
+                    item.fingerprint = Some(fp);
+                    item.fingerprint_cached = true;
+                }
                 None => match fingerprint::load_fingerprint(&cand.path, cfg.grid) {
                     Ok(fp) => {
                         if let Some(cache) = cache {
@@ -844,12 +862,102 @@ fn emit(tx: Option<&Sender<Progress>>, p: Progress) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct MemoryCache {
+        fingerprints: Mutex<HashMap<PathBuf, (u64, Option<i64>, u32, Fingerprint)>>,
+    }
+
+    impl ScanCache for MemoryCache {
+        fn fingerprint(
+            &self,
+            path: &Path,
+            size: u64,
+            modified_ms: Option<i64>,
+            grid: u32,
+        ) -> Option<Fingerprint> {
+            let cache = self.fingerprints.lock().ok()?;
+            cache.get(path).and_then(|(cached_size, cached_modified, cached_grid, fp)| {
+                if *cached_size == size && *cached_modified == modified_ms && *cached_grid == grid
+                {
+                    Some(fp.clone())
+                } else {
+                    None
+                }
+            })
+        }
+
+        fn store_fingerprint(
+            &self,
+            path: &Path,
+            size: u64,
+            modified_ms: Option<i64>,
+            grid: u32,
+            fingerprint: &Fingerprint,
+        ) {
+            if let Ok(mut cache) = self.fingerprints.lock() {
+                cache.insert(
+                    path.to_path_buf(),
+                    (size, modified_ms, grid, fingerprint.clone()),
+                );
+            }
+        }
+
+        fn embedding(
+            &self,
+            _path: &Path,
+            _model: &str,
+            _size: u64,
+            _modified_ms: Option<i64>,
+        ) -> Option<Vec<f32>> {
+            None
+        }
+
+        fn store_embedding(
+            &self,
+            _path: &Path,
+            _model: &str,
+            _size: u64,
+            _modified_ms: Option<i64>,
+            _values: &[f32],
+        ) {
+        }
+    }
 
     fn valid_image(path: &Path) {
         let image = image::RgbImage::from_fn(32, 32, |x, y| {
             image::Rgb([(x * 8) as u8, (y * 8) as u8, 120])
         });
         image.save(path).unwrap();
+    }
+
+    #[test]
+    fn second_scan_reuses_cached_fingerprints() {
+        let root =
+            std::env::temp_dir().join(format!("umdf-scan-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        valid_image(&root.join("a.png"));
+        valid_image(&root.join("b.png"));
+
+        let mut cfg = ScanConfig::default();
+        cfg.folders = vec![root.clone()];
+        cfg.extensions = vec!["png".into()];
+        let cache = MemoryCache::default();
+
+        let first = run_with_progress_cached(&cfg, None, Some(&cache)).unwrap();
+        assert_eq!(first.stats.files_fingerprinted, 2);
+        assert_eq!(first.stats.fingerprints_computed, 2);
+        assert_eq!(first.stats.fingerprints_from_cache, 0);
+
+        let second = run_with_progress_cached(&cfg, None, Some(&cache)).unwrap();
+        assert_eq!(second.stats.files_fingerprinted, 2);
+        assert_eq!(second.stats.fingerprints_computed, 0);
+        assert_eq!(second.stats.fingerprints_from_cache, 2);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

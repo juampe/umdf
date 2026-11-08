@@ -174,7 +174,8 @@
     "status_finished_skipped": "Terminé : {groups} groupe(s), {duplicates} doublon(s) ; {skipped} fichier(s) ignoré(s).",
     "opt_exclude_trash": "Exclure les corbeilles",
     "help_config": "Configuration (config.toml)",
-    "help_config_body": "Les dossiers, la destination, la métrique, la tolérance, les threads, le thème et l’exclusion des corbeilles sont enregistrés automatiquement dans config.toml. La liste trash_dirs par défaut (.dtrash, .Trash, $RECYCLE.BIN…) peut y être modifiée ; désactivez l’exclusion avec la case « Exclure les corbeilles »."
+    "help_config_body": "Les dossiers, la destination, la métrique, la tolérance, les threads, le thème et l’exclusion des corbeilles sont enregistrés automatiquement dans config.toml. La liste trash_dirs par défaut (.dtrash, .Trash, $RECYCLE.BIN…) peut y être modifiée ; désactivez l’exclusion avec la case « Exclure les corbeilles ».",
+    "status_cache_hits": "{count} depuis le cache"
   },
   "help": [
     {

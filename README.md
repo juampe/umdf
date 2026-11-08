@@ -49,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.3.6_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.3.6-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.3.6-x86_64.AppImage && ./umdf-0.3.6-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.7_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.7-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.7-x86_64.AppImage && ./umdf-0.3.7-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -236,12 +236,20 @@ with the comparison each model enables:
   skipped. Disable the **Exclude trash folders** checkbox to scan them.
 * Older builds kept this in `config.db`; it is migrated automatically on first
   start and the legacy file is kept as `config.db.bak`.
-* `<config dir>/umdf/cache.db` is a **disposable SQLite cache** of derived
-  values: `fingerprint_cache` (perceptual grids) and `embedding_cache`
-  (semantic vectors). Entries are keyed by absolute path and validated against
-  file size, modification time and the grid/model that produced them, so an
-  edited or replaced file is recomputed automatically. Deleting `cache.db` is
-  always safe and only makes the next scan slower.
+* `<config dir>/umdf/cache.db` on Linux/macOS and
+  `%LOCALAPPDATA%\umdf\cache.db` on Windows is a **disposable SQLite cache** of
+  derived values: `fingerprint_cache` (perceptual grids) and
+  `embedding_cache` (semantic vectors). Entries are keyed by absolute path and
+  validated against file size, modification time and the grid/model that
+  produced them, so an edited or replaced file is recomputed automatically.
+  Deleting `cache.db` is always safe and only makes the next scan slower.
+  On Windows the cache is kept out of the roaming profile; an older cache in
+  `%APPDATA%\umdf` is migrated automatically.
+* Windows cache keys are normalised (drive/UNC form, separators and case), so
+  the canonicalised path used by the folder browser and the display path saved
+  in `config.toml` share the same cache entries.
+* The status bar reports how many fingerprints came from the cache
+  (`N desde caché`), and the CLI prints `fingerprinted N (M from cache)`.
 * The Models manager shows the cache size (fingerprints, embeddings, bytes)
   and a **Clear cache** button.
 

@@ -28,15 +28,168 @@ pub struct CacheStats {
     pub bytes: u64,
 }
 
+/// Canonical key for the cache tables.
+///
+/// Windows paths are case-insensitive and can arrive with or without the
+/// extended-length prefix (`\\?\`): the folder browser canonicalises paths,
+/// while `config.toml` stores the display form. Normalising both to the same
+/// key avoids spurious cache misses when the user reopens the app.
+fn normalize_key(text: &str, windows: bool) -> String {
+    if !windows {
+        return text.to_string();
+    }
+    let mut key = text.replace('/', "\\");
+    if let Some(rest) = key.strip_prefix(r"\\?\UNC\") {
+        key = format!(r"\\{rest}");
+    } else if let Some(rest) = key.strip_prefix(r"\\?\") {
+        key = rest.to_string();
+    }
+    key.to_lowercase()
+}
+
+fn cache_key(path: &Path) -> String {
+    normalize_key(&path.to_string_lossy(), cfg!(windows))
+}
+
+/// Merge cache entries created with different Windows path spellings
+/// (`\\?\B:\...`, `B:/...`, different case) into a single key per file.
+///
+/// Runs once per database (`PRAGMA user_version`), before the cache is used.
+/// The blobs stay in SQLite; only row ids and paths are read into memory.
+fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
+    if !windows {
+        return Ok(());
+    }
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version >= 1 {
+        return Ok(());
+    }
+
+    fn plan(
+        rows: Vec<(i64, String, String)>,
+    ) -> (Vec<i64>, Vec<(i64, String)>) {
+        use std::collections::HashMap;
+        let mut kept: HashMap<String, (i64, String)> = HashMap::new();
+        let mut delete = Vec::new();
+        for (rowid, path, created) in rows {
+            let key = normalize_key(&path, true);
+            match kept.get(&key) {
+                Some((_, existing)) if existing >= &created => delete.push(rowid),
+                Some((old_rowid, _)) => {
+                    delete.push(*old_rowid);
+                    kept.insert(key, (rowid, created));
+                }
+                None => {
+                    kept.insert(key, (rowid, created));
+                }
+            }
+        }
+        let updates = kept
+            .into_iter()
+            .map(|(key, (rowid, _))| (rowid, key))
+            .collect();
+        (delete, updates)
+    }
+
+    let fingerprint_rows: Vec<(i64, String, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT rowid, path, created_at FROM fingerprint_cache")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()?
+    };
+    let embedding_rows: Vec<(i64, String, String)> = {
+        let mut stmt = conn.prepare(
+            "SELECT rowid, path, created_at FROM embedding_cache",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()?
+    };
+
+    let (fingerprint_delete, fingerprint_update) = plan(fingerprint_rows);
+    let (embedding_delete, embedding_update) = plan(embedding_rows);
+
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare("DELETE FROM fingerprint_cache WHERE rowid = ?1")?;
+        for rowid in fingerprint_delete {
+            stmt.execute([rowid])?;
+        }
+    }
+    {
+        let mut stmt = tx.prepare("UPDATE fingerprint_cache SET path = ?1 WHERE rowid = ?2")?;
+        for (rowid, key) in fingerprint_update {
+            stmt.execute(params![key, rowid])?;
+        }
+    }
+    {
+        let mut stmt = tx.prepare("DELETE FROM embedding_cache WHERE rowid = ?1")?;
+        for rowid in embedding_delete {
+            stmt.execute([rowid])?;
+        }
+    }
+    {
+        let mut stmt = tx.prepare("UPDATE embedding_cache SET path = ?1 WHERE rowid = ?2")?;
+        for (rowid, key) in embedding_update {
+            stmt.execute(params![key, rowid])?;
+        }
+    }
+    tx.pragma_update(None, "user_version", 1)?;
+    tx.commit()?;
+    Ok(())
+}
+
 impl CacheDb {
-    /// `<config dir>/umdf/cache.db`.
+    /// `<config dir>/umdf/cache.db`, except on Windows where it lives in
+    /// `%LOCALAPPDATA%` so SQLite is not affected by roaming-profile sync.
     pub fn default_path() -> PathBuf {
-        let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-        base.join("umdf").join("cache.db")
+        #[cfg(windows)]
+        let base = dirs::data_local_dir().or_else(dirs::config_dir);
+        #[cfg(not(windows))]
+        let base = dirs::config_dir();
+        base.unwrap_or_else(|| PathBuf::from("."))
+            .join("umdf")
+            .join("cache.db")
     }
 
     pub fn open() -> Result<Self> {
-        Self::open_at(Self::default_path())
+        let path = Self::default_path();
+        #[cfg(windows)]
+        Self::migrate_legacy_cache(&path);
+        Self::open_at(path)
+    }
+
+    /// Move a cache created by an older build from `%APPDATA%` (Roaming) to
+    /// `%LOCALAPPDATA%`. The cache is disposable, so a failed move is harmless.
+    #[cfg(windows)]
+    fn migrate_legacy_cache(new_path: &Path) {
+        if new_path.exists() {
+            return;
+        }
+        let Some(old_base) = dirs::config_dir() else {
+            return;
+        };
+        let old_path = old_base.join("umdf").join("cache.db");
+        if !old_path.is_file() {
+            return;
+        }
+        if let Some(parent) = new_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        for suffix in ["", "-wal", "-shm"] {
+            let from = PathBuf::from(format!("{}{suffix}", old_path.display()));
+            if !from.is_file() {
+                continue;
+            }
+            let to = PathBuf::from(format!("{}{suffix}", new_path.display()));
+            if std::fs::rename(&from, &to).is_err() {
+                let _ = std::fs::copy(&from, &to);
+                let _ = std::fs::remove_file(&from);
+            }
+        }
     }
 
     pub fn open_at(path: PathBuf) -> Result<Self> {
@@ -74,6 +227,7 @@ impl CacheDb {
                  ON embedding_cache(created_at);",
         )
         .context("creating cache schema")?;
+        migrate_keys_for(&conn, cfg!(windows)).context("migrating cache keys")?;
         Ok(Self {
             conn: Mutex::new(conn),
             path,
@@ -141,7 +295,7 @@ impl CacheDb {
             .query_row(
                 "SELECT size, modified, grid, mean, data
                  FROM fingerprint_cache WHERE path = ?1",
-                params![path.to_string_lossy()],
+                params![cache_key(path)],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
@@ -192,7 +346,7 @@ impl CacheDb {
                  data = excluded.data,
                  created_at = datetime('now')",
             params![
-                path.to_string_lossy(),
+                cache_key(path),
                 size as i64,
                 modified,
                 grid as i64,
@@ -214,7 +368,7 @@ impl CacheDb {
             .query_row(
                 "SELECT size, modified, dims, data
                  FROM embedding_cache WHERE path = ?1 AND model = ?2",
-                params![path.to_string_lossy(), model],
+                params![cache_key(path), model],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
@@ -255,7 +409,7 @@ impl CacheDb {
                  data = excluded.data,
                  created_at = datetime('now')",
             params![
-                path.to_string_lossy(),
+                cache_key(path),
                 model,
                 size as i64,
                 modified,
@@ -355,6 +509,66 @@ mod tests {
         ));
         let db = CacheDb::open_at(path.clone()).unwrap();
         (path, db)
+    }
+
+    #[test]
+    fn windows_cache_keys_are_normalized() {
+        assert_eq!(
+            normalize_key(r"\\?\B:\OwnCloud\Album\A.JPG", true),
+            r"b:\owncloud\album\a.jpg"
+        );
+        assert_eq!(
+            normalize_key(r"B:/ownCloud/A.JPG", true),
+            r"b:\owncloud\a.jpg"
+        );
+        assert_eq!(
+            normalize_key(r"\\?\UNC\Server\Share\A.JPG", true),
+            r"\\server\share\a.jpg"
+        );
+        assert_eq!(
+            normalize_key("/Photos/A.JPG", false),
+            "/Photos/A.JPG"
+        );
+    }
+
+    #[test]
+    fn migrates_extended_and_drive_letter_keys() {
+        let (path, db) = temp_db("migrate");
+        {
+            let conn = db.conn.lock().unwrap();
+            let data = encode_i16(&[1, 2, 3, 4]);
+            conn.execute(
+                "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data, created_at)
+                 VALUES(?1, 10, 100, 2, 0, ?2, '2026-01-01 00:00:00')",
+                params![r"\\?\B:\Photos\A.JPG", data],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data, created_at)
+                 VALUES(?1, 10, 100, 2, 0, ?2, '2026-01-02 00:00:00')",
+                params![r"B:/Photos/a.jpg", data],
+            )
+            .unwrap();
+            migrate_keys_for(&conn, true).unwrap();
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM fingerprint_cache", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 1);
+            let stored: String = conn
+                .query_row("SELECT path FROM fingerprint_cache", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(stored, r"b:\photos\a.jpg");
+            let version: i64 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(version, 1);
+        }
+        // The stored key is already normalised; on Windows `cache_key` also
+        // normalises any spelling of the same file before querying.
+        assert!(db
+            .get_fingerprint(Path::new(r"b:\photos\a.jpg"), 10, Some(100), 2)
+            .is_some());
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

@@ -213,6 +213,10 @@ fn main() -> anyhow::Result<()> {
                 "files_scanned": report.stats.files_scanned,
                 "files_hashed": report.stats.files_hashed,
                 "files_fingerprinted": report.stats.files_fingerprinted,
+                "fingerprints_from_cache": report.stats.fingerprints_from_cache,
+                "fingerprints_computed": report.stats.fingerprints_computed,
+                "embeddings_from_cache": report.stats.embeddings_from_cache,
+                "embeddings_computed": report.stats.embeddings_computed,
                 "pairs_compared": report.stats.pairs_compared,
                 "duplicates_found": report.stats.duplicates_found,
                 "groups": report.stats.groups,
@@ -242,10 +246,16 @@ fn main() -> anyhow::Result<()> {
     }
 
     if !cli.quiet {
+        let cache_note = if report.stats.fingerprints_from_cache > 0 {
+            format!(" ({} from cache)", report.stats.fingerprints_from_cache)
+        } else {
+            String::new()
+        };
         println!(
-            "scanned {} file(s), fingerprinted {}, hashed {}, compared {} pair(s) in {:.2}s with {} thread(s)",
+            "scanned {} file(s), fingerprinted {}{}, hashed {}, compared {} pair(s) in {:.2}s with {} thread(s)",
             report.stats.files_scanned,
             report.stats.files_fingerprinted,
+            cache_note,
             report.stats.files_hashed,
             report.stats.pairs_compared,
             report.stats.elapsed_ms as f64 / 1000.0,

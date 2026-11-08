@@ -174,7 +174,8 @@
     "status_finished_skipped": "Fertig: {groups} Gruppe(n), {duplicates} Duplikat(e); {skipped} Datei(en) übersprungen.",
     "opt_exclude_trash": "Papierkörbe ausschließen",
     "help_config": "Konfiguration (config.toml)",
-    "help_config_body": "Ordner, Ziel, Metrik, Toleranz, Threads, Theme und der Ausschluss von Papierkörben werden automatisch in config.toml gespeichert. Die Standardliste trash_dirs (.dtrash, .Trash, $RECYCLE.BIN, …) kann dort bearbeitet werden; deaktiviere den Ausschluss mit „Papierkörbe ausschließen“."
+    "help_config_body": "Ordner, Ziel, Metrik, Toleranz, Threads, Theme und der Ausschluss von Papierkörben werden automatisch in config.toml gespeichert. Die Standardliste trash_dirs (.dtrash, .Trash, $RECYCLE.BIN, …) kann dort bearbeitet werden; deaktiviere den Ausschluss mit „Papierkörbe ausschließen“.",
+    "status_cache_hits": "{count} aus dem Cache"
   },
   "help": [
     {

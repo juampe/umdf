@@ -174,7 +174,8 @@
     "status_finished_skipped": "Finito: {groups} gruppo/i, {duplicates} duplicato/i; {skipped} file ignorato/i.",
     "opt_exclude_trash": "Escludi i cestini",
     "help_config": "Configurazione (config.toml)",
-    "help_config_body": "Cartelle, destinazione, metrica, tolleranza, thread, tema ed esclusione dei cestini vengono salvati automaticamente in config.toml. La lista predefinita trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) può essere modificata lì; disattiva l’esclusione con la casella «Escludi i cestini»."
+    "help_config_body": "Cartelle, destinazione, metrica, tolleranza, thread, tema ed esclusione dei cestini vengono salvati automaticamente in config.toml. La lista predefinita trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) può essere modificata lì; disattiva l’esclusione con la casella «Escludi i cestini».",
+    "status_cache_hits": "{count} dalla cache"
   },
   "help": [
     {

@@ -637,6 +637,10 @@ impl Tr {
         )
     }
 
+    pub fn status_cache_hits(&self, count: usize) -> String {
+        self.fmt("status_cache_hits", &[("count", count.to_string())])
+    }
+
     pub fn browser_folders(&self, n: usize) -> String {
         self.fmt("browser_folders", &[("n", n.to_string())])
     }
@@ -770,7 +774,7 @@ mod tests {
             let catalog = catalog(lang);
             assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
             assert!(catalog.help.len() > 10, "{}", lang.code());
-            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "help_config"] {
+            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "status_cache_hits", "help_config"] {
                 assert!(
                     catalog.phrases.contains_key(key),
                     "{} missing {key}",

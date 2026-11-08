@@ -174,7 +174,8 @@
     "status_finished_skipped": "Finished: {groups} group(s), {duplicates} duplicate(s); {skipped} file(s) skipped.",
     "opt_exclude_trash": "Exclude trash folders",
     "help_config": "Configuration (config.toml)",
-    "help_config_body": "Folders, destination, metric, tolerance, threads, theme and trash-folder exclusion are saved automatically in config.toml. The default trash_dirs list (.dtrash, .Trash, $RECYCLE.BIN, ...) can be edited there; disable the exclusion with the “Exclude trash folders” checkbox."
+    "help_config_body": "Folders, destination, metric, tolerance, threads, theme and trash-folder exclusion are saved automatically in config.toml. The default trash_dirs list (.dtrash, .Trash, $RECYCLE.BIN, ...) can be edited there; disable the exclusion with the “Exclude trash folders” checkbox.",
+    "status_cache_hits": "{count} from cache"
   },
   "help": [
     {

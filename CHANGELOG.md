@@ -4,6 +4,27 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.7] - 2026-11-08
+
+### Fixed
+
+- Windows cache keys are now normalised. The folder browser canonicalises
+  paths to `\\?\B:\...`, while `config.toml` stores the display form
+  `B:\...`; both now map to the same cache entry. Existing databases are
+  merged automatically on first start (one row per file, newest entry wins).
+- The Windows cache moved from Roaming (`%APPDATA%\umdf`) to
+  `%LOCALAPPDATA%\umdf`, away from roaming-profile/OneDrive sync. An existing
+  cache is migrated automatically.
+- The status bar now reports fingerprints restored from the cache
+  (`N desde caché`), and the CLI prints `fingerprinted N (M from cache)`.
+  JSON output includes `fingerprints_from_cache`, `fingerprints_computed`,
+  `embeddings_from_cache` and `embeddings_computed`.
+
+### Added
+
+- Regression tests for cache-key normalisation, the one-time migration and
+  cache-hit accounting on a second scan.
+
 ## [0.3.6] - 2026-11-08
 
 ### Fixed

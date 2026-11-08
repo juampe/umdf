@@ -59,6 +59,10 @@ pub struct MediaItem {
 
     /// Perceptual fingerprint. `None` for files we cannot decode.
     pub fingerprint: Option<Fingerprint>,
+    /// True when the fingerprint was restored from the cache instead of being
+    /// decoded again. Transient: it is not part of exports.
+    #[serde(skip)]
+    pub fingerprint_cached: bool,
 
     /// Optional semantic embedding (L2-normalised). Requires the `embeddings`
     /// feature; `None` otherwise.
@@ -86,6 +90,7 @@ impl MediaItem {
             content_hash: None,
             media_signature: None,
             fingerprint: None,
+            fingerprint_cached: false,
             embedding: None,
             extract_error: None,
         }

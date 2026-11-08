@@ -174,7 +174,8 @@
     "status_finished_skipped": "완료: {groups}개 그룹, {duplicates}개 중복, {skipped}개 파일 건너뜀.",
     "opt_exclude_trash": "휴지통 폴더 제외",
     "help_config": "설정 (config.toml)",
-    "help_config_body": "폴더, 대상, 지표, 허용 오차, 스레드, 테마, 휴지통 제외가 config.toml에 자동 저장됩니다. 기본 trash_dirs 목록(.dtrash, .Trash, $RECYCLE.BIN 등)을 여기에서 수정할 수 있습니다. “휴지통 폴더 제외”를 끄면 제외하지 않습니다."
+    "help_config_body": "폴더, 대상, 지표, 허용 오차, 스레드, 테마, 휴지통 제외가 config.toml에 자동 저장됩니다. 기본 trash_dirs 목록(.dtrash, .Trash, $RECYCLE.BIN 등)을 여기에서 수정할 수 있습니다. “휴지통 폴더 제외”를 끄면 제외하지 않습니다.",
+    "status_cache_hits": "{count}개 캐시에서"
   },
   "help": [
     {

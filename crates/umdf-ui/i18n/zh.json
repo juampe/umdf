@@ -174,7 +174,8 @@
     "status_finished_skipped": "已完成：{groups} 组，{duplicates} 个重复文件；跳过 {skipped} 个文件。",
     "opt_exclude_trash": "排除回收站文件夹",
     "help_config": "配置（config.toml）",
-    "help_config_body": "文件夹、目标位置、指标、容差、线程、主题和回收站排除会自动保存在 config.toml 中。可在其中编辑默认的 trash_dirs 列表（.dtrash、.Trash、$RECYCLE.BIN 等）；取消勾选“排除回收站文件夹”即可关闭排除。"
+    "help_config_body": "文件夹、目标位置、指标、容差、线程、主题和回收站排除会自动保存在 config.toml 中。可在其中编辑默认的 trash_dirs 列表（.dtrash、.Trash、$RECYCLE.BIN 等）；取消勾选“排除回收站文件夹”即可关闭排除。",
+    "status_cache_hits": "{count} 个来自缓存"
   },
   "help": [
     {

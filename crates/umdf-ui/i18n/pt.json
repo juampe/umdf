@@ -174,7 +174,8 @@
     "status_finished_skipped": "Concluído: {groups} grupo(s), {duplicates} duplicado(s); {skipped} ficheiro(s) ignorado(s).",
     "opt_exclude_trash": "Excluir pastas de lixo",
     "help_config": "Configuração (config.toml)",
-    "help_config_body": "Pastas, destino, métrica, tolerância, threads, tema e exclusão de pastas de lixo são guardados automaticamente em config.toml. A lista predefinida trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) pode ser editada aí; desative a exclusão com a caixa «Excluir pastas de lixo»."
+    "help_config_body": "Pastas, destino, métrica, tolerância, threads, tema e exclusão de pastas de lixo são guardados automaticamente em config.toml. A lista predefinida trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) pode ser editada aí; desative a exclusão com a caixa «Excluir pastas de lixo».",
+    "status_cache_hits": "{count} da cache"
   },
   "help": [
     {
