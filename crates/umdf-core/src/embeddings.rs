@@ -12,6 +12,7 @@
 //! embeddings → cosine similarity.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
@@ -153,6 +154,7 @@ pub struct EmbeddingEngine {
     mean: [f32; 3],
     std: [f32; 3],
     forced_cpu: bool,
+    used_cuda: bool,
 }
 
 impl EmbeddingEngine {
@@ -160,9 +162,13 @@ impl EmbeddingEngine {
         let env = environment();
 
         let mut forced_cpu = false;
+        let mut used_cuda = false;
         let session = if cfg.use_cuda {
             match Self::build_session(&env, cfg, true) {
-                Ok(session) => session,
+                Ok(session) => {
+                    used_cuda = true;
+                    session
+                }
                 Err(error) => {
                     crate::log_error(format_args!(
                         "UMDF: CUDA execution provider unavailable ({error}); falling back to CPU"
@@ -189,6 +195,7 @@ impl EmbeddingEngine {
             mean: cfg.mean,
             std: cfg.std,
             forced_cpu,
+            used_cuda,
         })
     }
 
@@ -214,17 +221,52 @@ impl EmbeddingEngine {
         self.forced_cpu
     }
 
+    /// True when the CUDA execution provider was actually selected.
+    pub fn uses_cuda(&self) -> bool {
+        self.used_cuda
+    }
+
     /// Embed every image in batches. Files that cannot be decoded are skipped
     /// (their slot is `None`), so a single corrupt image never aborts a scan.
     /// A batch-level model/inference error is logged and skipped as well.
     pub fn embed_paths(&mut self, paths: &[PathBuf]) -> Result<Vec<Option<Vec<f32>>>> {
         let mut out: Vec<Option<Vec<f32>>> = vec![None; paths.len()];
+        let never = AtomicBool::new(false);
+        self.embed_paths_incremental(paths, &never, |start, batch| {
+            for (offset, value) in batch.into_iter().enumerate() {
+                out[start + offset] = value;
+            }
+        })?;
+        Ok(out)
+    }
+
+    /// Like [`Self::embed_paths`], but hands each finished batch to
+    /// `on_batch(start, values)` immediately. `start` is the offset in `paths`;
+    /// each value is `None` when that file could not be decoded or inferred.
+    ///
+    /// This lets callers persist vectors as they are computed and report real
+    /// progress. A long scan interrupted halfway keeps the batches already
+    /// stored instead of losing all of them.
+    pub fn embed_paths_incremental<F>(
+        &mut self,
+        paths: &[PathBuf],
+        cancel: &AtomicBool,
+        mut on_batch: F,
+    ) -> Result<()>
+    where
+        F: FnMut(usize, Vec<Option<Vec<f32>>>),
+    {
         let size = self.input_size;
         let mean = self.mean;
         let std = self.std;
         let batch_size = self.batch_size.max(1);
 
         for (chunk_index, chunk) in paths.chunks(batch_size).enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            let start = chunk_index * batch_size;
+            let mut chunk_out: Vec<Option<Vec<f32>>> = vec![None; chunk.len()];
             let prepared: Vec<Result<Vec<f32>>> = chunk
                 .par_iter()
                 .map(|path| {
@@ -236,12 +278,12 @@ impl EmbeddingEngine {
                 })
                 .collect();
             let mut batch = Vec::with_capacity(prepared.len());
-            let mut slots = Vec::with_capacity(prepared.len());
+            let mut offsets = Vec::with_capacity(prepared.len());
             for (offset, result) in prepared.into_iter().enumerate() {
                 match result {
                     Ok(tensor) => {
                         batch.push(tensor);
-                        slots.push(chunk_index * batch_size + offset);
+                        offsets.push(offset);
                     }
                     Err(error) => crate::log_error(format_args!(
                         "UMDF: skipping embedding for {}: {error}",
@@ -250,6 +292,7 @@ impl EmbeddingEngine {
                 }
             }
             if batch.is_empty() {
+                on_batch(start, chunk_out);
                 continue;
             }
             let n = batch.len();
@@ -263,6 +306,7 @@ impl EmbeddingEngine {
                 Ok(tensor) => tensor,
                 Err(error) => {
                     crate::log_error(format_args!("UMDF: embedding tensor error: {error}"));
+                    on_batch(start, chunk_out);
                     continue;
                 }
             };
@@ -271,6 +315,7 @@ impl EmbeddingEngine {
                 Ok(outputs) => outputs,
                 Err(error) => {
                     crate::log_error(format_args!("UMDF: embedding batch failed: {error}"));
+                    on_batch(start, chunk_out);
                     continue;
                 }
             };
@@ -278,6 +323,7 @@ impl EmbeddingEngine {
                 Ok(values) => values,
                 Err(error) => {
                     crate::log_error(format_args!("UMDF: embedding output error: {error}"));
+                    on_batch(start, chunk_out);
                     continue;
                 }
             };
@@ -286,17 +332,19 @@ impl EmbeddingEngine {
                 Ok(vectors) => vectors,
                 Err(error) => {
                     crate::log_error(format_args!("UMDF: embedding shape error: {error}"));
+                    on_batch(start, chunk_out);
                     continue;
                 }
             };
             for vector in &mut vectors {
                 l2_normalise(vector);
             }
-            for (slot, vector) in slots.into_iter().zip(vectors) {
-                out[slot] = Some(vector);
+            for (offset, vector) in offsets.into_iter().zip(vectors) {
+                chunk_out[offset] = Some(vector);
             }
+            on_batch(start, chunk_out);
         }
-        Ok(out)
+        Ok(())
     }
 }
 

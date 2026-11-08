@@ -4,6 +4,26 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.8] - 2026-11-09
+
+### Fixed
+
+- Semantic embeddings now report progress **per batch** instead of only at 0
+  and 100 %. The progress bar grows from left to right, the stage label shows
+  `done/total`, and the status bar shows the current percentage.
+- Embeddings are stored in `cache.db` as each batch finishes. Stopping during
+  the semantic phase no longer throws away all the work: already computed
+  vectors are kept and the next scan resumes from there.
+- Stop now interrupts the embedding loop after the current batch.
+- The UI shows the execution provider actually selected by ONNX Runtime:
+  `CUDA` or `CPU` in red when CUDA was requested but unavailable.
+- The elapsed time in the status bar updates live during a scan.
+
+### Changed
+
+- Progress weights: extraction 0–35 %, embeddings 35–75 %, hashing 75–80 %,
+  comparison 80–98 %.
+
 ## [0.3.7] - 2026-11-08
 
 ### Fixed

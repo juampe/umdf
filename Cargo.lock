@@ -5481,7 +5481,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-cli"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5492,7 +5492,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-core"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5510,7 +5510,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-ui"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "chrono",

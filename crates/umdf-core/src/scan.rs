@@ -22,6 +22,8 @@ pub enum Progress {
     Discovered { total: usize },
     Loaded { index: usize, total: usize, path: PathBuf },
     Embedding { done: usize, total: usize },
+    /// Which execution provider the semantic model actually uses.
+    EmbeddingDevice { cuda: bool },
     Hashing { done: usize, total: usize },
     Comparing { done: usize, total: usize },
     Grouped { groups: usize, duplicates: usize },
@@ -302,13 +304,6 @@ fn run_inner(
                 .map(|item| item.id)
                 .collect();
             if !ids.is_empty() {
-                emit(
-                    tx,
-                    Progress::Embedding {
-                        done: 0,
-                        total: ids.len(),
-                    },
-                );
                 // Include the model file metadata so replacing the .onnx at the
                 // same path invalidates the previously cached vectors.
                 let model_key = {
@@ -351,7 +346,16 @@ fn run_inner(
                 let missing: Vec<usize> = (0..ids.len())
                     .filter(|slot| vectors[*slot].is_none())
                     .collect();
-                stats.embeddings_from_cache += ids.len() - missing.len();
+                let cached_embeddings = ids.len() - missing.len();
+                stats.embeddings_from_cache += cached_embeddings;
+                emit(
+                    tx,
+                    Progress::Embedding {
+                        done: cached_embeddings,
+                        total: ids.len(),
+                    },
+                );
+
                 if !missing.is_empty() {
                     let paths: Vec<PathBuf> =
                         missing.iter().map(|slot| meta[*slot].0.clone()).collect();
@@ -370,36 +374,54 @@ fn run_inner(
                     };
                     if let Some(mut engine) = engine {
                         if engine.forced_cpu() {
-                            crate::log_error(format_args!("UMDF: semantic embeddings are running on the CPU"));
+                            crate::log_error(format_args!(
+                                "UMDF: semantic embeddings are running on the CPU"
+                            ));
                         }
-                        match engine.embed_paths(&paths) {
-                            Ok(computed) => {
-                                for (slot, maybe_vector) in missing.into_iter().zip(computed) {
-                                    match maybe_vector {
-                                        Some(vector) => {
-                                            stats.embeddings_computed += 1;
-                                            if let Some(cache) = cache {
-                                                let (path, size, modified) = &meta[slot];
-                                                cache.store_embedding(
-                                                    path,
-                                                    &model_key,
-                                                    *size,
-                                                    *modified,
-                                                    &vector,
-                                                );
-                                            }
-                                            vectors[slot] = Some(vector);
+                        emit(
+                            tx,
+                            Progress::EmbeddingDevice {
+                                cuda: engine.uses_cuda(),
+                            },
+                        );
+                        let computed_before = stats.embeddings_computed;
+                        let result = engine.embed_paths_incremental(&paths, cancel_ref, |start, batch| {
+                            let batch_len = batch.len();
+                            for (offset, maybe_vector) in batch.into_iter().enumerate() {
+                                let slot = missing[start + offset];
+                                match maybe_vector {
+                                    Some(vector) => {
+                                        stats.embeddings_computed += 1;
+                                        if let Some(cache) = cache {
+                                            let (path, size, modified) = &meta[slot];
+                                            cache.store_embedding(
+                                                path,
+                                                &model_key,
+                                                *size,
+                                                *modified,
+                                                &vector,
+                                            );
                                         }
-                                        None => stats.embedding_errors += 1,
+                                        vectors[slot] = Some(vector);
                                     }
+                                    None => stats.embedding_errors += 1,
                                 }
                             }
-                            Err(error) => {
-                                crate::log_error(format_args!(
-                                    "UMDF: semantic embeddings failed ({error}); continuing without them"
-                                ));
-                                stats.embedding_errors += paths.len();
-                            }
+                            let done = (cached_embeddings + start + batch_len).min(ids.len());
+                            emit(
+                                tx,
+                                Progress::Embedding {
+                                    done,
+                                    total: ids.len(),
+                                },
+                            );
+                        });
+                        if let Err(error) = result {
+                            crate::log_error(format_args!(
+                                "UMDF: semantic embeddings failed ({error}); continuing with the remaining files"
+                            ));
+                            let computed = stats.embeddings_computed - computed_before;
+                            stats.embedding_errors += paths.len().saturating_sub(computed);
                         }
                     }
                 }

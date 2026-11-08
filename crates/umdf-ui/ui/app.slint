@@ -440,6 +440,7 @@ export component AppWindow inherits Window {
     in-out property <string> stage: "Ready";
     in-out property <string> status: "Add a folder to begin.";
     in-out property <float> progress: 0;
+    in-out property <string> progress-label: "0 %";
     in-out property <int> lang-index: 0;
 
     in-out property <string> scanned-label: "Files scanned: 0";
@@ -465,6 +466,8 @@ export component AppWindow inherits Window {
     in-out property <int> semantic-preset: 0;
     in-out property <int> semantic-input-size: 224;
     in-out property <string> semantic-summary: "";
+    in-out property <string> semantic-runtime: "";
+    in-out property <bool> semantic-runtime-cpu: false;
     in-out property <float> semantic-threshold: 0.90;
     in-out property <string> semantic-threshold-label: "0.90";
     in-out property <[string]> keep-labels;
@@ -871,6 +874,11 @@ export component AppWindow inherits Window {
                                             clicked => { root.open-models(); }
                                         }
                                     }
+                                    if root.embeddings-supported && root.semantic-enabled && root.semantic-runtime != "" : Text {
+                                        text: root.semantic-runtime;
+                                        color: root.semantic-runtime-cpu ? Theme.danger : Theme.muted;
+                                        font-size: 9px;
+                                    }
                                 }
                                 if !root.semantic-enabled : HorizontalLayout {
                                     spacing: 6px;
@@ -1177,6 +1185,7 @@ export component AppWindow inherits Window {
                         horizontal-stretch: 1;
                         overflow: elide;
                     }
+                    Text { text: root.progress-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                     Text { text: root.scanned-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                     Text { text: root.found-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                     Text { text: root.space-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }

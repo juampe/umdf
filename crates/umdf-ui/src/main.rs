@@ -14,6 +14,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, Once};
+use std::time::Instant;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
 use umdf_core::config::{
@@ -282,6 +283,7 @@ fn main() -> anyhow::Result<()> {
         threads: auto_threads,
         ..Default::default()
     }));
+    let scan_started: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
     let thumbs: Arc<Mutex<HashMap<String, Option<ThumbData>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let thumb_gen = Arc::new(AtomicU64::new(0));
@@ -937,6 +939,7 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         let cache = cache.clone();
         let settings = settings.clone();
+        let scan_started = scan_started.clone();
         ui.on_start(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -1019,13 +1022,16 @@ fn main() -> anyhow::Result<()> {
             rows.set_vec(Vec::new());
             ui.set_selected_row(-1);
             ui.set_busy(true);
-            ui.set_progress(0.0);
+            set_progress(&ui, 0.0);
+            ui.set_semantic_runtime("".into());
+            ui.set_semantic_runtime_cpu(false);
             ui.set_stage(tr.stage_starting().into());
             ui.set_status(tr.status_scanning().into());
             ui.set_scanned_label(tr.files_scanned(0).into());
             ui.set_found_label(tr.duplicates_found(0).into());
             ui.set_space_label(tr.reclaimable(&human_bytes(0)).into());
             ui.set_elapsed_label(tr.elapsed(0.0, 0, auto_threads).into());
+            scan_started.set(Some(Instant::now()));
 
             let ptx = ptx.clone();
             let dtx = dtx.clone();
@@ -1067,6 +1073,7 @@ fn main() -> anyhow::Result<()> {
         let thumbs = thumbs.clone();
         let thumb_gen = thumb_gen.clone();
         let ui_stats = ui_stats.clone();
+        let scan_started = scan_started.clone();
         pump.start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(100),
@@ -1084,6 +1091,7 @@ fn main() -> anyhow::Result<()> {
 
                 let done = drx.borrow_mut().try_recv();
                 if let Ok(result) = done {
+                    scan_started.set(None);
                     ui.set_busy(false);
                     let stopped = cancel.load(Ordering::Relaxed);
                     match result {
@@ -1093,7 +1101,7 @@ fn main() -> anyhow::Result<()> {
                             if demo_select {
                                 ui.invoke_select_row(0);
                             }
-                            ui.set_progress(100.0);
+                            set_progress(&ui, 100.0);
                             let mut message = if stopped {
                                 ui.set_stage(tr.stage_stopped().into());
                                 if report.stats.files_scanned == 0 {
@@ -1132,6 +1140,12 @@ fn main() -> anyhow::Result<()> {
                             ui.set_status(tr.status_error(&error).into());
                         }
                     }
+                } else if let Some(started) = scan_started.get() {
+                    let stats = *ui_stats.borrow();
+                    ui.set_elapsed_label(
+                        tr.elapsed(started.elapsed().as_secs_f64(), stats.groups, stats.threads)
+                            .into(),
+                    );
                 }
             },
         );
@@ -1669,11 +1683,17 @@ fn detect_model(model: &UiModel) -> (u32, String) {
     (model.input_size, model.preset.clone())
 }
 
+fn set_progress(ui: &AppWindow, pct: f32) {
+    let pct = pct.clamp(0.0, 100.0);
+    ui.set_progress(pct);
+    ui.set_progress_label(format!("{:.0} %", pct).into());
+}
+
 fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
     match progress {
         Progress::Discovered { total } => {
             ui.set_stage(tr.stage_loading_total(total).into());
-            ui.set_progress(1.0);
+            set_progress(ui, 1.0);
         }
         Progress::Loaded {
             index,
@@ -1686,47 +1706,51 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
                 .unwrap_or_else(|| path.to_string_lossy().to_string());
             ui.set_stage(tr.stage_loading(&name).into());
             let pct = if total > 0 {
-                40.0 * index as f32 / total as f32
+                35.0 * index as f32 / total as f32
             } else {
                 0.0
             };
-            ui.set_progress(pct);
+            set_progress(ui, pct);
             ui.set_scanned_label(tr.files_scanned_progress(index, total).into());
         }
         Progress::Embedding { done, total } => {
             ui.set_stage(tr.stage_embedding(done, total).into());
             let pct = if total > 0 {
-                40.0 + 10.0 * done as f32 / total as f32
+                35.0 + 40.0 * done as f32 / total as f32
             } else {
-                50.0
+                75.0
             };
-            ui.set_progress(pct);
+            set_progress(ui, pct);
+        }
+        Progress::EmbeddingDevice { cuda } => {
+            ui.set_semantic_runtime(if cuda { "CUDA" } else { "CPU" }.into());
+            ui.set_semantic_runtime_cpu(!cuda);
         }
         Progress::Hashing { done, total } => {
             ui.set_stage(tr.stage_hashing(done, total).into());
             let pct = if total > 0 {
-                50.0 + 5.0 * done as f32 / total as f32
+                75.0 + 5.0 * done as f32 / total as f32
             } else {
-                55.0
+                80.0
             };
-            ui.set_progress(pct);
+            set_progress(ui, pct);
         }
         Progress::Comparing { done, total } => {
             ui.set_stage(tr.stage_comparing(done, total).into());
             let pct = if total > 0 {
-                55.0 + 43.0 * done as f32 / total as f32
+                80.0 + 18.0 * done as f32 / total as f32
             } else {
                 98.0
             };
-            ui.set_progress(pct);
+            set_progress(ui, pct);
         }
         Progress::Grouped { groups, duplicates } => {
             ui.set_stage(tr.stage_grouping().into());
-            ui.set_progress(98.0);
+            set_progress(ui, 98.0);
             ui.set_found_label(tr.duplicates_found_groups(duplicates, groups).into());
         }
         Progress::Finished => {
-            ui.set_progress(100.0);
+            set_progress(ui, 100.0);
             ui.set_stage(tr.stage_finished().into());
         }
     }
