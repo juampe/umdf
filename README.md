@@ -46,10 +46,12 @@ binaries:
 
 Notes:
 
-* Linux needs X11/Wayland, OpenGL, fontconfig and xkbcommon at runtime; most
-  desktop distributions already have them.
-* macOS binaries are not notarised. If Gatekeeper blocks the app, right-click →
-  **Open**, or run `xattr -d com.apple.quarantine umdf-ui`.
+* Linux binaries are built against **glibc 2.35** (Ubuntu 22.04) and need
+  X11/Wayland, OpenGL, fontconfig and xkbcommon at runtime; most desktop
+  distributions already have them.
+* macOS binaries target **macOS 11 or newer**. They are not notarised; if
+  Gatekeeper blocks the app, right-click → **Open**, or run
+  `xattr -d com.apple.quarantine umdf-ui`.
 * Release binaries are built **without** the optional `embeddings` feature, so
   they have no ONNX Runtime or CUDA dependency. Build from source with
   `--features embeddings` for semantic search.
