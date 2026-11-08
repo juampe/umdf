@@ -479,6 +479,15 @@ fn main() -> anyhow::Result<()> {
         ui.on_toggle_hidden(move |show| {
             let Some(ui) = ui_handle.upgrade() else { return };
             ui.set_show_hidden(show);
+            if ui.get_browser_drives() {
+                show_roots(
+                    &ui,
+                    &browser_model,
+                    &browser_path,
+                    &Tr::new(lang.get()),
+                );
+                return;
+            }
             let current = browser_path.borrow().clone();
             open_browser(
                 &ui,
