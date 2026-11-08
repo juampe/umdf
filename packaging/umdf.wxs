@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
-           Name="UMDF — Universal Media Duplicate Finder"
+           Name="UMDF - Universal Media Duplicate Finder"
            Language="1033"
            Version="$(var.Version)"
            Manufacturer="juampe"
@@ -13,7 +13,7 @@
     <Icon Id="UmdfIcon" SourceFile="$(var.BinDir)\icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="UmdfIcon" />
     <Property Id="ARPHELPLINK" Value="https://github.com/juampe/umdf" />
-    <Feature Id="MainFeature" Title="UMDF — Universal Media Duplicate Finder" Level="1">
+    <Feature Id="MainFeature" Title="UMDF - Universal Media Duplicate Finder" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
   </Product>
