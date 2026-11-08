@@ -164,7 +164,11 @@
     "keep_oldest": "Ältestes",
     "keep_name": "Name",
     "keep_path": "Pfad",
-    "auto_label": "Auto"
+    "auto_label": "Auto",
+    "help_about": "Über UMDF",
+    "help_version": "Version {version}",
+    "help_author": "Autor: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
+    "help_disclaimer": "Haftungsausschluss: UMDF wird „wie besehen“ ohne jegliche Gewährleistung bereitgestellt. Die Autoren haften nicht für Verluste, Schäden, Datenverlust oder sonstige Folgen, die sich aus der Nutzung dieser Software ergeben, einschließlich des Löschens, Verschiebens oder Änderns von Dateien. Erstellen Sie immer Sicherungskopien und prüfen Sie die Ergebnisse, bevor Sie Aktionen ausführen."
   },
   "help": [
     {

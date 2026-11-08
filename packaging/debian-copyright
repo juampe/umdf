@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: umdf
-Upstream-Contact: juampe <juampe@users.noreply.github.com>
+Upstream-Contact: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>
 Source: https://github.com/juampe/umdf
 
 Files: *
-Copyright: 2026 juampe and UMDF contributors
+Copyright: 2026 Juan Pedro Paredes Caballero
 License: GPL-3.0-only
  This program is free software: you can redistribute it and/or modify it under
  the terms of the GNU General Public License as published by the Free Software

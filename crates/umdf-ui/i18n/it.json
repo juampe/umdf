@@ -164,7 +164,11 @@
     "keep_oldest": "Più vecchio",
     "keep_name": "Nome",
     "keep_path": "Percorso",
-    "auto_label": "Auto"
+    "auto_label": "Auto",
+    "help_about": "Informazioni su UMDF",
+    "help_version": "Versione {version}",
+    "help_author": "Autore: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
+    "help_disclaimer": "Avviso legale: UMDF viene fornito «così com’è», senza garanzie di alcun tipo. Gli autori non sono responsabili per perdite, danni, perdita di dati o altre conseguenze derivanti dall’uso di questo software, inclusa l’eliminazione, lo spostamento o la modifica di file. Conserva sempre copie di backup e controlla i risultati prima di applicare azioni."
   },
   "help": [
     {

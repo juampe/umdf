@@ -20,7 +20,7 @@ cat > "$ROOT/DEBIAN/control" <<EOF
 Package: umdf
 Version: $VERSION
 Architecture: amd64
-Maintainer: juampe <juampe@users.noreply.github.com>
+Maintainer: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>
 Section: graphics
 Priority: optional
 Homepage: https://github.com/juampe/umdf

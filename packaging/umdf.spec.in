@@ -64,5 +64,5 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 %changelog
-* Sun Nov 08 2026 juampe <juampe@users.noreply.github.com> - @VERSION@-1
+* Sun Nov 08 2026 Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com> - @VERSION@-1
 - Release @VERSION@

@@ -49,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.3.1_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.3.1-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.3.1-x86_64.AppImage && ./umdf-0.3.1-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.2_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.2-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.2-x86_64.AppImage && ./umdf-0.3.2-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -310,7 +310,20 @@ umdf-ui --demo /path/to/folder --semantic-model models/resnet18.onnx  # needs --
 * Rotated photos: EXIF orientation is applied when decoding, so a photo with an
   orientation tag matches its physically rotated copy.
 
+## Disclaimer
+
+UMDF is provided **“as is”**, without warranty of any kind. The authors are not
+responsible for any loss, damage, data loss or other consequences resulting
+from the use of this software, including deleting, moving or modifying files.
+Always keep backups and review the results before applying actions.
+
+## Author
+
+Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>
+
 ## License
+
+Copyright (C) 2026 Juan Pedro Paredes Caballero.
 
 UMDF is free software: you can redistribute it and/or modify it under the terms
 of the **GNU General Public License, version 3 only** (`GPL-3.0-only`), as

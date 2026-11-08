@@ -7,11 +7,11 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 rust-version = "1.92"
 license = "GPL-3.0-only"
-authors = ["juampe and UMDF contributors"]
+authors = ["Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>"]
 repository = "https://github.com/juampe/umdf"
 homepage = "https://github.com/juampe/umdf"
 

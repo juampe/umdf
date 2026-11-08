@@ -1,5 +1,7 @@
 # Third-party notices
 
+Copyright (C) 2026 Juan Pedro Paredes Caballero.
+
 UMDF is distributed under the **GNU General Public License, version 3 only**
 (`GPL-3.0-only`). See [LICENSE](LICENSE).
 

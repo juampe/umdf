@@ -164,7 +164,11 @@
     "keep_oldest": "Oldest",
     "keep_name": "Name",
     "keep_path": "Path",
-    "auto_label": "Auto"
+    "auto_label": "Auto",
+    "help_about": "About UMDF",
+    "help_version": "Version {version}",
+    "help_author": "Author: Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
+    "help_disclaimer": "Disclaimer: UMDF is provided “as is”, without warranty of any kind. The authors are not responsible for any loss, damage, data loss or other consequences resulting from the use of this software, including deleting, moving or modifying files. Always keep backups and review the results before applying actions."
   },
   "help": [
     {

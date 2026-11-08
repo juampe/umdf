@@ -287,14 +287,36 @@ impl Tr {
 
     /// Formatted help content: 0 = heading, 1 = paragraph, 2 = bullet.
     pub fn help_lines(&self) -> Vec<HelpLine> {
-        catalog(self.lang)
+        let mut lines: Vec<HelpLine> = catalog(self.lang)
             .help
             .iter()
             .map(|line| HelpLine {
                 text: line.text.clone().into(),
                 kind: line.kind,
             })
-            .collect()
+            .collect();
+        lines.push(HelpLine {
+            text: self.phrase("help_about").into(),
+            kind: 0,
+        });
+        lines.push(HelpLine {
+            text: self
+                .fmt(
+                    "help_version",
+                    &[("version", env!("CARGO_PKG_VERSION").to_string())],
+                )
+                .into(),
+            kind: 1,
+        });
+        lines.push(HelpLine {
+            text: self.phrase("help_author").into(),
+            kind: 1,
+        });
+        lines.push(HelpLine {
+            text: self.phrase("help_disclaimer").into(),
+            kind: 1,
+        });
+        lines
     }
 
     fn phrase(&self, key: &'static str) -> &'static str {
@@ -713,6 +735,19 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn help_includes_about_version_author_and_disclaimer() {
+        let lines = Tr::new(Lang::En).help_lines();
+        let text = lines
+            .iter()
+            .map(|line| line.text.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains(env!("CARGO_PKG_VERSION")));
+        assert!(text.contains("Juan Pedro Paredes Caballero"));
+        assert!(text.to_lowercase().contains("disclaimer"));
     }
 
     #[test]

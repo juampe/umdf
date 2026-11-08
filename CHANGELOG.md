@@ -4,6 +4,17 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - 2026-11-08
+
+### Added
+
+- Help now shows the **version**, the author
+  (Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>) and a legal
+  disclaimer in all nine languages.
+- A fixed version/author line in the Help footer.
+- Author/copyright metadata updated across Cargo, Debian, RPM, MSI and the
+  Windows executable.
+
 ## [0.3.1] - 2026-11-08
 
 ### Fixed

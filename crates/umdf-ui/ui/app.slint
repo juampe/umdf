@@ -399,6 +399,7 @@ export component AppWindow inherits Window {
     in-out property <bool> options-open: true;
     in-out property <bool> browser-open: false;
     in-out property <bool> help-open: false;
+    in-out property <string> help-meta: "";
     in-out property <bool> show-hidden: false;
     in-out property <string> browser-path: "";
     in-out property <string> browser-status: "";
@@ -1440,6 +1441,13 @@ export component AppWindow inherits Window {
                                 wrap: word-wrap;
                             }
                         }
+                    }
+                    Text {
+                        text: root.help-meta;
+                        color: Theme.faint;
+                        font-size: 10px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
                     }
                     HorizontalLayout {
                         Rectangle { horizontal-stretch: 1; }

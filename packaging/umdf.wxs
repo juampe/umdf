@@ -4,7 +4,7 @@
            Name="UMDF - Universal Media Duplicate Finder"
            Language="1033"
            Version="$(var.Version)"
-           Manufacturer="juampe"
+           Manufacturer="Juan Pedro Paredes Caballero"
            UpgradeCode="038e1a20-e87a-4fa8-b6c3-dcdcee6b5d1f">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of UMDF is already installed." />

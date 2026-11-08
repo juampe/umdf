@@ -114,6 +114,13 @@ fn main() -> anyhow::Result<()> {
     ui.set_lang_index(boot_lang.index() as i32);
     ui.set_strings(boot.strings().into());
     ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
+    ui.set_help_meta(
+        format!(
+            "UMDF {} · Juan Pedro Paredes Caballero <juanpedro.paredes@gmail.com>",
+            env!("CARGO_PKG_VERSION")
+        )
+        .into(),
+    );
     set_combo_labels(&ui, &boot);
     ui.set_embeddings_supported(cfg!(feature = "embeddings"));
 
