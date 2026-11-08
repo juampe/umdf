@@ -26,17 +26,17 @@
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="UMDF">
           <Directory Id="LibFolder" Name="lib">
-            <Component Id="OrtDll" Guid="c79716a8-a517-4105-a962-87021b5c4436">
+            <Component Id="OrtDll" Guid="c79716a8-a517-4105-a962-87021b5c4436" Win64="yes">
               <File Id="OrtDllFile" Source="$(var.BinDir)\lib\onnxruntime.dll" KeyPath="yes" />
             </Component>
           </Directory>
-          <Component Id="UmdfCli" Guid="3193c1e5-e468-45c5-90d3-3445b429c959">
+          <Component Id="UmdfCli" Guid="3193c1e5-e468-45c5-90d3-3445b429c959" Win64="yes">
             <File Id="UmdfExe" Source="$(var.BinDir)\umdf.exe" KeyPath="yes" />
           </Component>
-          <Component Id="UmdfUi" Guid="49905319-7781-4ca1-b31b-b5bdef6b8510">
+          <Component Id="UmdfUi" Guid="49905319-7781-4ca1-b31b-b5bdef6b8510" Win64="yes">
             <File Id="UmdfUiExe" Source="$(var.BinDir)\umdf-ui.exe" KeyPath="yes" />
           </Component>
-          <Component Id="Docs" Guid="495c79be-fae9-406d-8fc0-300395ed1d59">
+          <Component Id="Docs" Guid="495c79be-fae9-406d-8fc0-300395ed1d59" Win64="yes">
             <File Id="Readme" Source="$(var.BinDir)\README.md" KeyPath="yes" />
             <File Id="License" Source="$(var.BinDir)\LICENSE" />
             <File Id="ThirdParty" Source="$(var.BinDir)\THIRD_PARTY.md" />
@@ -75,7 +75,7 @@
                   Target="[INSTALLFOLDER]umdf-ui.exe"
                   WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
-        <RegistryValue Root="HKMU" Key="Software\juampe\UMDF" Name="startmenu"
+        <RegistryValue Root="HKLM" Key="Software\juampe\UMDF" Name="startmenu"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
@@ -87,7 +87,7 @@
                   Description="Universal Media Duplicate Finder"
                   Target="[INSTALLFOLDER]umdf-ui.exe"
                   WorkingDirectory="INSTALLFOLDER" />
-        <RegistryValue Root="HKMU" Key="Software\juampe\UMDF" Name="desktop"
+        <RegistryValue Root="HKLM" Key="Software\juampe\UMDF" Name="desktop"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
