@@ -1,6 +1,7 @@
 //! Slint desktop front-end for the Universal Media Duplicate Finder.
 
 mod i18n;
+mod models;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -17,6 +18,7 @@ use umdf_core::config::{
 use umdf_core::{EmbeddingConfig, KeepPolicy, Metric, Progress, ScanConfig, ScanReport};
 
 use i18n::{human_bytes, Lang, Tr, Verb};
+use models::{Db, InstalledModel};
 
 slint::include_modules!();
 
@@ -52,6 +54,17 @@ const MAX_THUMBNAIL_ROWS: usize = 300;
 type ThumbData = (u32, u32, Vec<u8>);
 type PreviewData = (u32, u32, Vec<u8>, String);
 
+#[derive(Clone)]
+struct UiModel {
+    name: String,
+    path: PathBuf,
+    url: String,
+    capabilities: String,
+    preset: String,
+    input_size: u32,
+    threshold: f32,
+}
+
 /// Live counters shown in the status bar. Kept in sync with deletions so a
 /// language change does not restore stale values.
 #[derive(Clone, Copy, Default)]
@@ -77,6 +90,78 @@ fn main() -> anyhow::Result<()> {
     ui.set_strings(boot.strings().into());
     ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
     ui.set_embeddings_supported(cfg!(feature = "embeddings"));
+
+    // ---- persisted configuration / model catalogue --------------------------
+    let db: Arc<Mutex<Option<Db>>> = Arc::new(Mutex::new(match Db::open() {
+        Ok(db) => Some(db),
+        Err(error) => {
+            eprintln!("UMDF: could not open config.db: {error}");
+            None
+        }
+    }));
+    let ui_models: Arc<Mutex<Vec<UiModel>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut models_dir = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("models");
+    let mut hf_token = String::new();
+    let mut device = 0i32;
+    let mut threshold = 0.90f32;
+    let mut active_model = String::new();
+    if let Ok(guard) = db.lock() {
+        if let Some(database) = guard.as_ref() {
+            if let Some(value) = database.get("models_dir") {
+                models_dir = PathBuf::from(value);
+            }
+            if let Some(value) = database.get("hf_token") {
+                hf_token = value;
+            }
+            if let Some(value) = database.get("semantic_device") {
+                device = if value == "cpu" { 1 } else { 0 };
+            }
+            if let Some(value) = database.get("semantic_threshold") {
+                threshold = value.parse().unwrap_or(0.90);
+            }
+            active_model = database.get("active_model").unwrap_or_default();
+        }
+    }
+    let db_path = db
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|database| database.path.clone()));
+    ui.set_models_db(
+        db_path
+            .map(|path| format!("config.db: {}", path.display()))
+            .unwrap_or_else(|| "config.db unavailable".to_string())
+            .into(),
+    );
+    ui.set_models_dir(models_dir.to_string_lossy().to_string().into());
+    ui.set_hf_token(hf_token.into());
+    ui.set_semantic_device(device);
+    ui.set_semantic_threshold(threshold);
+    ui.set_semantic_threshold_label(format!("{threshold:.2}").into());
+
+    if !active_model.is_empty() && Path::new(&active_model).is_file() {
+        ui.set_semantic_enabled(true);
+        ui.set_semantic_model(active_model.clone().into());
+        if let Ok(guard) = db.lock() {
+            if let Some(database) = guard.as_ref() {
+                if let Ok(list) = database.models() {
+                    if let Some(found) = list
+                        .iter()
+                        .find(|model| model.path == PathBuf::from(&active_model))
+                    {
+                        ui.set_semantic_preset(if found.preset == "clip" { 1 } else { 0 });
+                        ui.set_semantic_input_size(found.input_size as i32);
+                        ui.set_semantic_threshold(found.threshold);
+                        ui.set_semantic_threshold_label(format!("{:.2}", found.threshold).into());
+                    }
+                }
+            }
+        }
+    }
+    refresh_models(&ui, &db, &ui_models);
+
     ui.set_preview_left_info(boot.no_picture().into());
     ui.set_preview_right_info(boot.no_picture().into());
     ui.set_folders_label(boot.folders_label(0).into());
@@ -202,6 +287,19 @@ fn main() -> anyhow::Result<()> {
         ui.on_open_browser(move |key| {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
+            if key == "models-dir" {
+                ui.set_browser_mode("models-dir".into());
+                let start = {
+                    let dir = PathBuf::from(ui.get_models_dir().to_string());
+                    if dir.is_dir() {
+                        dir
+                    } else {
+                        quick_location("home").unwrap_or_else(current_dir)
+                    }
+                };
+                open_browser(&ui, &browser_model, &browser_path, start, &tr);
+                return;
+            }
             if key == "destination" {
                 ui.set_browser_mode("destination".into());
                 let start = {
@@ -294,10 +392,26 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let folder_model = folder_model.clone();
         let lang = lang.clone();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
         ui.on_browse_select(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
             let path = browser_path.borrow().clone();
+            if ui.get_browser_mode() == "models-dir" {
+                if path.is_dir() {
+                    ui.set_models_dir(path.to_string_lossy().to_string().into());
+                    save_model_settings(&ui, &db);
+                    refresh_models(&ui, &db, &ui_models);
+                    ui.set_models_status(
+                        Tr::new(lang.get())
+                            .models_folder(&path.display().to_string())
+                            .into(),
+                    );
+                }
+                ui.set_browser_open(false);
+                return;
+            }
             if ui.get_browser_mode() == "destination" {
                 if path.is_dir() {
                     ui.set_move_dest(path.to_string_lossy().to_string().into());
@@ -335,6 +449,161 @@ fn main() -> anyhow::Result<()> {
                 current,
                 &Tr::new(lang.get()),
             );
+        });
+    }
+
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        ui.on_open_models(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            refresh_models(&ui, &db, &ui_models);
+            ui.set_models_open(true);
+        });
+    }
+
+    // ---- model manager ------------------------------------------------------
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        let lang = lang.clone();
+        ui.on_download_model(move |index| {
+            let tr = Tr::new(lang.get());
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            if model.url.is_empty() {
+                ui.set_models_status(tr.model_no_url().into());
+                return;
+            }
+            let token = ui.get_hf_token().to_string();
+            ui.set_models_status(tr.model_downloading(&model.name).into());
+            let ui_weak = ui_handle.clone();
+            let db = db.clone();
+            let ui_models = ui_models.clone();
+            std::thread::spawn(move || {
+                let result = models::download(&model.url, &token, &model.path);
+                let _ = slint::invoke_from_event_loop(move || {
+                    let Some(ui) = ui_weak.upgrade() else { return };
+                    match result {
+                        Ok(bytes) => {
+                            let (size, preset) = detect_model(&model);
+                            let installed = InstalledModel {
+                                name: model.name.clone(),
+                                path: model.path.clone(),
+                                capabilities: model.capabilities.clone(),
+                                preset,
+                                input_size: size,
+                                threshold: model.threshold,
+                            };
+                            if let Ok(guard) = db.lock() {
+                                if let Some(database) = guard.as_ref() {
+                                    let _ = database.upsert_model(&installed, &model.url);
+                                }
+                            }
+                            refresh_models(&ui, &db, &ui_models);
+                            ui.set_models_status(
+                                tr.model_downloaded(&model.name, bytes as f64 / 1_048_576.0)
+                                    .into(),
+                            );
+                        }
+                        Err(error) => {
+                            ui.set_models_status(tr.model_failed(&error.to_string()).into())
+                        }
+                    }
+                });
+            });
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        let lang = lang.clone();
+        ui.on_use_model(move |index| {
+            let tr = Tr::new(lang.get());
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            if !model.path.is_file() {
+                ui.set_models_status(tr.model_missing(&model.path.display().to_string()).into());
+                return;
+            }
+            if let Ok(guard) = db.lock() {
+                if let Some(database) = guard.as_ref() {
+                    let _ = database.set("active_model", &model.path.to_string_lossy());
+                    let _ = database.set(
+                        "semantic_device",
+                        if ui.get_semantic_device() == 0 { "cuda" } else { "cpu" },
+                    );
+                    let _ = database.set(
+                        "semantic_threshold",
+                        &format!("{:.2}", model.threshold),
+                    );
+                }
+            }
+            ui.set_semantic_enabled(true);
+            ui.set_semantic_model(model.path.to_string_lossy().to_string().into());
+            ui.set_semantic_preset(if model.preset == "clip" { 1 } else { 0 });
+            ui.set_semantic_input_size(model.input_size as i32);
+            ui.set_semantic_threshold(model.threshold);
+            ui.set_semantic_threshold_label(format!("{:.2}", model.threshold).into());
+            ui.set_models_status(tr.model_active(&model.name).into());
+            refresh_models(&ui, &db, &ui_models);
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        let lang = lang.clone();
+        ui.on_remove_model(move |index| {
+            let tr = Tr::new(lang.get());
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            let _ = std::fs::remove_file(&model.path);
+            let active = if let Ok(guard) = db.lock() {
+                if let Some(database) = guard.as_ref() {
+                    let _ = database.remove_model(&model.path);
+                    database.get("active_model").unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            if active == model.path.to_string_lossy() {
+                if let Ok(guard) = db.lock() {
+                    if let Some(database) = guard.as_ref() {
+                        let _ = database.set("active_model", "");
+                    }
+                }
+                ui.set_semantic_enabled(false);
+                ui.set_semantic_model("".into());
+            }
+            refresh_models(&ui, &db, &ui_models);
+            ui.set_models_status(tr.model_removed(&model.name).into());
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        ui.on_save_model_settings(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            save_model_settings(&ui, &db);
+            refresh_models(&ui, &db, &ui_models);
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let db = db.clone();
+        let ui_models = ui_models.clone();
+        ui.on_close_models(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            save_model_settings(&ui, &db);
+            refresh_models(&ui, &db, &ui_models);
+            ui.set_models_open(false);
         });
     }
 
@@ -503,15 +772,22 @@ fn main() -> anyhow::Result<()> {
             cfg.keep_policy = KEEP_POLICIES[ui.get_keep_index().clamp(0, 7) as usize];
             cfg.metric = METRICS[ui.get_metric_index().clamp(0, 4) as usize];
             cfg.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
+            if ui.get_semantic_enabled() && !cfg!(feature = "embeddings") {
+                ui.set_status(tr.no_embeddings_build().into());
+                return;
+            }
             if cfg!(feature = "embeddings") && ui.get_semantic_enabled() {
                 let model = PathBuf::from(ui.get_semantic_model().to_string());
-                if !model.as_os_str().is_empty() {
+                if model.as_os_str().is_empty() {
+                    ui.set_status(tr.model_select_first().into());
+                    return;
+                } else {
                     let clip = ui.get_semantic_preset() == 1;
                     cfg.embeddings = Some(EmbeddingConfig {
                         model_path: model,
-                        input_size: 224,
+                        input_size: ui.get_semantic_input_size().clamp(32, 1024) as u32,
                         batch_size: 32,
-                        threshold: 0.90,
+                        threshold: ui.get_semantic_threshold().clamp(0.0, 1.0),
                         use_cuda: ui.get_semantic_device() == 0,
                         mean: if clip {
                             [0.481_454_66, 0.457_827_5, 0.408_210_73]
@@ -866,6 +1142,31 @@ fn main() -> anyhow::Result<()> {
         if let Some(model) = args.get(pos + 1) {
             ui.set_semantic_enabled(true);
             ui.set_semantic_model(model.as_str().into());
+            ui.set_semantic_summary(
+                format!(
+                    "{} · CUDA · 224²",
+                    Path::new(model).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                )
+                .into(),
+            );
+        }
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--models-dir") {
+        if let Some(dir) = args.get(pos + 1) {
+            ui.set_models_dir(dir.as_str().into());
+            save_model_settings(&ui, &db);
+            refresh_models(&ui, &db, &ui_models);
+        }
+    }
+    if args.iter().any(|a| a == "--demo-models") {
+        refresh_models(&ui, &db, &ui_models);
+        ui.set_models_open(true);
+    }
+    if let Some(pos) = args.iter().position(|a| a == "--demo-use-model") {
+        if let Some(index) = args.get(pos + 1).and_then(|v| v.parse::<i32>().ok()) {
+            ui.set_models_open(true);
+            ui.invoke_use_model(index);
+            ui.set_models_open(false);
         }
     }
     if args.iter().any(|a| a == "--demo-help") {
@@ -931,6 +1232,136 @@ fn verb_for(kind: &str) -> Verb {
         "move" => Verb::Move,
         _ => Verb::Trash,
     }
+}
+
+fn save_model_settings(ui: &AppWindow, db: &Arc<Mutex<Option<Db>>>) {
+    if let Ok(guard) = db.lock() {
+        if let Some(database) = guard.as_ref() {
+            let _ = database.set("hf_token", &ui.get_hf_token().to_string());
+            let _ = database.set("models_dir", &ui.get_models_dir().to_string());
+            let _ = database.set(
+                "semantic_device",
+                if ui.get_semantic_device() == 0 { "cuda" } else { "cpu" },
+            );
+            let _ = database.set(
+                "semantic_threshold",
+                &format!("{:.2}", ui.get_semantic_threshold()),
+            );
+        }
+    }
+    ui.set_semantic_threshold_label(format!("{:.2}", ui.get_semantic_threshold()).into());
+}
+
+fn refresh_models(
+    ui: &AppWindow,
+    db: &Arc<Mutex<Option<Db>>>,
+    ui_models: &Arc<Mutex<Vec<UiModel>>>,
+) {
+    let dir = PathBuf::from(ui.get_models_dir().to_string());
+    let (active, installed) = if let Ok(guard) = db.lock() {
+        if let Some(database) = guard.as_ref() {
+            (
+                database.get("active_model").unwrap_or_default(),
+                database.models().unwrap_or_default(),
+            )
+        } else {
+            (String::new(), Vec::new())
+        }
+    } else {
+        (String::new(), Vec::new())
+    };
+
+    let mut rows: Vec<ModelRow> = Vec::new();
+    let mut entries: Vec<UiModel> = Vec::new();
+
+    for catalog in models::CATALOG {
+        let path = dir.join(format!("{}.onnx", catalog.id));
+        let is_active = !active.is_empty() && Path::new(&active) == path;
+        let state = if is_active {
+            2
+        } else if path.is_file() {
+            1
+        } else {
+            0
+        };
+        rows.push(ModelRow {
+            name: catalog.name.into(),
+            details: format!("{} · ~{} MB", catalog.capabilities, catalog.size_mb).into(),
+            path: path.to_string_lossy().to_string().into(),
+            state,
+        });
+        entries.push(UiModel {
+            name: catalog.name.to_string(),
+            path,
+            url: catalog.url.to_string(),
+            capabilities: catalog.capabilities.to_string(),
+            preset: catalog.preset.to_string(),
+            input_size: catalog.input_size,
+            threshold: catalog.threshold,
+        });
+    }
+
+    for model in installed {
+        if entries.iter().any(|entry| entry.path == model.path) {
+            continue;
+        }
+        let is_active = !active.is_empty() && Path::new(&active) == model.path;
+        rows.push(ModelRow {
+            name: model.name.clone().into(),
+            details: model.capabilities.clone().into(),
+            path: model.path.to_string_lossy().to_string().into(),
+            state: if is_active { 2 } else { 1 },
+        });
+        entries.push(UiModel {
+            name: model.name,
+            path: model.path,
+            url: String::new(),
+            capabilities: model.capabilities,
+            preset: model.preset,
+            input_size: model.input_size,
+            threshold: model.threshold,
+        });
+    }
+
+    ui.set_model_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+    if let Ok(mut guard) = ui_models.lock() {
+        *guard = entries;
+    }
+
+    let summary = if active.is_empty() {
+        "No model selected".to_string()
+    } else {
+        let name = Path::new(&active)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| active.clone());
+        let device = if ui.get_semantic_device() == 0 {
+            "CUDA"
+        } else {
+            "CPU"
+        };
+        format!("{name} · {device} · {}²", ui.get_semantic_input_size())
+    };
+    ui.set_semantic_summary(summary.into());
+}
+
+/// Read the model's input shape when the embeddings feature is enabled and
+/// suggest the matching preprocessing.
+fn detect_model(model: &UiModel) -> (u32, String) {
+    #[cfg(feature = "embeddings")]
+    {
+        if let Ok(info) = umdf_core::embeddings::inspect_model(&model.path) {
+            let path = model.path.to_string_lossy().to_ascii_lowercase();
+            let size = info.input_size.unwrap_or(model.input_size);
+            let preset = if path.contains("clip") || path.contains("siglip") || size >= 336 {
+                "clip".to_string()
+            } else {
+                "imagenet".to_string()
+            };
+            return (size, preset);
+        }
+    }
+    (model.input_size, model.preset.clone())
 }
 
 fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {

@@ -78,6 +78,19 @@ impl Tr {
                 opt_threads: "Hilos".into(),
                 opt_semantic: "Semántica (GPU)".into(),
                 semantic_model: "Ruta del modelo .onnx".into(),
+                models_manage: "Modelos…".into(),
+                models_title: "Modelos".into(),
+                models_help: "Descarga un modelo de embeddings de imagen desde Hugging Face. Se guardan en la carpeta indicada y se recuerdan en config.db.".into(),
+                models_token: "Token de Hugging Face (opcional)".into(),
+                models_folder: "Carpeta de modelos".into(),
+                models_capabilities: "Capacidades".into(),
+                models_download: "Descargar".into(),
+                models_use: "Usar".into(),
+                models_active: "Activo".into(),
+                models_remove: "Eliminar".into(),
+                models_accel: "Aceleración".into(),
+                models_threshold: "Similitud".into(),
+                models_none: "No hay modelos instalados. Descarga uno abajo.".into(),
                 opt_tolerance: "Tolerancia de gris".into(),
                 trash_all: "A la papelera".into(),
                 move_all: "Mover todos".into(),
@@ -140,6 +153,19 @@ impl Tr {
                 opt_threads: "Threads".into(),
                 opt_semantic: "Semantic (GPU)".into(),
                 semantic_model: "Path to the .onnx model".into(),
+                models_manage: "Models…".into(),
+                models_title: "Models".into(),
+                models_help: "Download an image-embedding model from Hugging Face. Models are stored in the folder below and remembered in config.db.".into(),
+                models_token: "Hugging Face token (optional)".into(),
+                models_folder: "Models folder".into(),
+                models_capabilities: "Capabilities".into(),
+                models_download: "Download".into(),
+                models_use: "Use".into(),
+                models_active: "Active".into(),
+                models_remove: "Remove".into(),
+                models_accel: "Acceleration".into(),
+                models_threshold: "Similarity".into(),
+                models_none: "No models installed yet. Download one below.".into(),
                 opt_tolerance: "Pixel tolerance".into(),
                 trash_all: "Trash all duplicates".into(),
                 move_all: "Move all".into(),
@@ -572,6 +598,48 @@ impl Tr {
             format!("{n} subcarpeta(s) — pulsa una para abrirla")
         } else {
             format!("{n} sub-folder(s) — click one to open it")
+        }
+    }
+    pub fn model_no_url(&self) -> String {
+        if self.es() { "Este modelo no tiene URL de descarga.".into() } else { "This model has no download URL.".into() }
+    }
+    pub fn model_downloading(&self, name: &str) -> String {
+        if self.es() { format!("Descargando {name}…") } else { format!("Downloading {name}…") }
+    }
+    pub fn model_downloaded(&self, name: &str, mb: f64) -> String {
+        if self.es() {
+            format!("{name} descargado ({mb:.0} MB). Pulsa Usar.")
+        } else {
+            format!("Downloaded {name} ({mb:.0} MB). Press Use.")
+        }
+    }
+    pub fn model_failed(&self, error: &str) -> String {
+        if self.es() { format!("Fallo en la descarga: {error}") } else { format!("Download failed: {error}") }
+    }
+    pub fn model_missing(&self, path: &str) -> String {
+        if self.es() { format!("No existe el archivo: {path}") } else { format!("Missing file: {path}") }
+    }
+    pub fn model_active(&self, name: &str) -> String {
+        if self.es() { format!("{name} es ahora el modelo activo.") } else { format!("{name} is now the active model.") }
+    }
+    pub fn model_removed(&self, name: &str) -> String {
+        if self.es() { format!("{name} eliminado.") } else { format!("Removed {name}.") }
+    }
+    pub fn models_folder(&self, path: &str) -> String {
+        if self.es() { format!("Carpeta de modelos: {path}") } else { format!("Models folder: {path}") }
+    }
+    pub fn no_embeddings_build(&self) -> String {
+        if self.es() {
+            "Esta compilación no incluye embeddings ONNX; recompila con --features embeddings.".into()
+        } else {
+            "This build has no ONNX embeddings support; rebuild with --features embeddings.".into()
+        }
+    }
+    pub fn model_select_first(&self) -> String {
+        if self.es() {
+            "Selecciona o descarga un modelo primero (Modelos…).".into()
+        } else {
+            "Select or download a model first (Models…).".into()
         }
     }
     pub fn browser_not_a_folder(&self, path: &Path) -> String {

@@ -17,6 +17,9 @@ anyhow.workspace = true
 chrono.workspace = true
 image.workspace = true
 rayon.workspace = true
+rusqlite = { version = "0.41", default-features = false, features = ["bundled"] }
+ureq = "2"
+dirs = "6"
 slint = "1.8"
 trash.workspace = true
 umdf-core = { path = "../umdf-core" }

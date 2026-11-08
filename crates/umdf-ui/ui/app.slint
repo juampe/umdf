@@ -74,6 +74,19 @@ export struct Strings {
     opt_threads: string,
     opt_semantic: string,
     semantic_model: string,
+    models_manage: string,
+    models_title: string,
+    models_help: string,
+    models_token: string,
+    models_folder: string,
+    models_capabilities: string,
+    models_download: string,
+    models_use: string,
+    models_active: string,
+    models_remove: string,
+    models_accel: string,
+    models_threshold: string,
+    models_none: string,
     opt_tolerance: string,
 
     trash_all: string,
@@ -111,6 +124,14 @@ export struct Strings {
 export struct FolderItem {
     name: string,
     path: string,
+}
+
+export struct ModelRow {
+    name: string,
+    details: string,
+    path: string,
+    /// 0 = available, 1 = installed, 2 = active
+    state: int,
 }
 
 export struct HelpLine {
@@ -321,6 +342,19 @@ export component AppWindow inherits Window {
         opt_threads: "Threads",
         opt_semantic: "Semantic (GPU)",
         semantic_model: "Path to the .onnx model",
+        models_manage: "Models…",
+        models_title: "Models",
+        models_help: "Download an image-embedding model from Hugging Face. Models are stored in the folder below and remembered in config.db.",
+        models_token: "Hugging Face token (optional)",
+        models_folder: "Models folder",
+        models_capabilities: "Capabilities",
+        models_download: "Download",
+        models_use: "Use",
+        models_active: "Active",
+        models_remove: "Remove",
+        models_accel: "Acceleration",
+        models_threshold: "Similarity",
+        models_none: "No models installed yet. Download one below.",
         opt_tolerance: "Pixel tolerance",
         trash_all: "Trash all duplicates",
         move_all: "Move all",
@@ -393,6 +427,16 @@ export component AppWindow inherits Window {
     in-out property <string> semantic-model: "";
     in-out property <int> semantic-device: 0;
     in-out property <int> semantic-preset: 0;
+    in-out property <int> semantic-input-size: 224;
+    in-out property <string> semantic-summary: "";
+    in-out property <float> semantic-threshold: 0.90;
+    in-out property <string> semantic-threshold-label: "0.90";
+    in-out property <bool> models-open: false;
+    in-out property <[ModelRow]> model-rows;
+    in-out property <string> models-status: "";
+    in-out property <string> models-db: "";
+    in-out property <string> hf-token: "";
+    in-out property <string> models-dir: "models";
     in-out property <string> move-dest: "";
 
     in-out property <bool> confirm-open: false;
@@ -424,6 +468,12 @@ export component AppWindow inherits Window {
     callback select-folder(int);
     callback select-row(int);
     callback move-selection(int);
+    callback download-model(int);
+    callback use-model(int);
+    callback remove-model(int);
+    callback save-model-settings();
+    callback close-models();
+    callback open-models();
     callback trash-row(int);
     callback move-row(int);
     callback delete-row(int);
@@ -707,7 +757,7 @@ export component AppWindow inherits Window {
                                 CheckBox { text: root.strings.opt_scan_subfolders; checked <=> root.recursive; }
                                 CheckBox { text: root.strings.opt_only_identical; checked <=> root.only-identical; }
                                 CheckBox { text: root.strings.opt_compare_media; checked <=> root.compare-media; }
-                                HorizontalLayout {
+                                if !root.semantic-enabled : HorizontalLayout {
                                     spacing: 6px;
                                     Text { text: root.strings.opt_similarity; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
                                     Slider {
@@ -724,45 +774,44 @@ export component AppWindow inherits Window {
                                     model: ["original", "dimensions", "filesize", "earlierdate", "earlierexifdate", "oldest", "name", "path"];
                                     current-index <=> root.keep-index;
                                 }
-                                Text { text: root.strings.opt_metric; font-size: 11px; color: Theme.text2; }
-                                ComboBox {
-                                    model: ["dpf", "ssim", "sign", "pearson", "legacy"];
-                                    current-index <=> root.metric-index;
+                                if !root.semantic-enabled : VerticalLayout {
+                                    spacing: 5px;
+                                    Text { text: root.strings.opt_metric; font-size: 11px; color: Theme.text2; }
+                                    ComboBox {
+                                        model: ["dpf", "ssim", "sign", "pearson", "legacy"];
+                                        current-index <=> root.metric-index;
+                                    }
                                 }
                                 Text { text: root.strings.opt_threads; font-size: 11px; color: Theme.text2; }
                                 ComboBox {
                                     model: ["Auto", "1", "2", "4", "8", "16", "32"];
                                     current-index <=> root.threads-index;
                                 }
-                                if root.embeddings-supported : VerticalLayout {
+                                VerticalLayout {
                                     spacing: 5px;
                                     CheckBox {
                                         text: root.strings.opt_semantic;
                                         checked <=> root.semantic-enabled;
                                     }
-                                    if root.semantic-enabled : VerticalLayout {
-                                        spacing: 5px;
-                                        LineEdit {
-                                            text <=> root.semantic-model;
-                                            placeholder-text: root.strings.semantic_model;
-                                            height: 30px;
+                                    if root.semantic-enabled : HorizontalLayout {
+                                        spacing: 6px;
+                                        Text {
+                                            text: root.semantic-summary;
+                                            color: Theme.muted;
+                                            font-size: 10px;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                            overflow: elide;
                                         }
-                                        HorizontalLayout {
-                                            spacing: 6px;
-                                            ComboBox {
-                                                model: ["CUDA", "CPU"];
-                                                current-index <=> root.semantic-device;
-                                                horizontal-stretch: 1;
-                                            }
-                                            ComboBox {
-                                                model: ["ImageNet", "CLIP"];
-                                                current-index <=> root.semantic-preset;
-                                                horizontal-stretch: 1;
-                                            }
+                                        FlatButton {
+                                            label: root.strings.models_manage;
+                                            minw: 92px;
+                                            bg: Theme.soft;
+                                            clicked => { root.open-models(); }
                                         }
                                     }
                                 }
-                                HorizontalLayout {
+                                if !root.semantic-enabled : HorizontalLayout {
                                     spacing: 6px;
                                     Text { text: root.strings.opt_tolerance; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
                                     Slider {
@@ -1176,6 +1225,176 @@ export component AppWindow inherits Window {
                             bg: Theme.accent;
                             hover: Theme.accent_hover;
                             clicked => { root.browse-select(); scope.focus(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.models-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Theme.backdrop;
+
+            models-card := Rectangle {
+                width: 820px;
+                height: 660px;
+                x: (parent.width - models-card.width) / 2;
+                y: (parent.height - models-card.height) / 2;
+                background: Theme.card;
+                border-radius: 12px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+                    Text { text: root.strings.models_title; color: Theme.text; font-size: 18px; font-weight: 700; }
+                    Text { text: root.strings.models_help; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 3px;
+                            Text { text: root.strings.models_token; color: Theme.text2; font-size: 10px; }
+                            LineEdit {
+                                text <=> root.hf-token;
+                                height: 30px;
+                                placeholder-text: "hf_…";
+                                edited => { root.save-model-settings(); }
+                            }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 3px;
+                            Text { text: root.strings.models_folder; color: Theme.text2; font-size: 10px; }
+                            HorizontalLayout {
+                                spacing: 6px;
+                                LineEdit {
+                                    text <=> root.models-dir;
+                                    height: 30px;
+                                    horizontal-stretch: 1;
+                                    edited => { root.save-model-settings(); }
+                                }
+                                FlatButton {
+                                    label: root.strings.browse;
+                                    minw: 84px;
+                                    bg: Theme.soft;
+                                    clicked => { root.open-browser("models-dir"); }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Text { text: root.strings.models_capabilities; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
+                    }
+
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            spacing: 2px;
+                            for row[i] in root.model-rows : Rectangle {
+                                height: 58px;
+                                background: row.state == 2
+                                    ? Theme.selected
+                                    : (Math.mod(i, 2) == 0 ? transparent : Theme.soft);
+                                HorizontalLayout {
+                                    padding: 6px;
+                                    spacing: 8px;
+                                    VerticalLayout {
+                                        width: 200px;
+                                        spacing: 2px;
+                                        Text { text: row.name; color: Theme.text; font-size: 12px; font-weight: 700; overflow: elide; }
+                                        Text { text: row.path; color: Theme.muted; font-size: 9px; overflow: elide; }
+                                    }
+                                    Text {
+                                        text: row.details;
+                                        color: Theme.text2;
+                                        font-size: 10px;
+                                        wrap: word-wrap;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                    }
+                                    FlatButton {
+                                        label: row.state == 0
+                                            ? root.strings.models_download
+                                            : (row.state == 1 ? root.strings.models_use : root.strings.models_active);
+                                        minw: 96px;
+                                        enabled: row.state != 2;
+                                        fg: row.state == 2 ? Theme.accent_text : Theme.text;
+                                        bg: row.state == 2 ? Theme.accent : Theme.soft;
+                                        clicked => {
+                                            if (row.state == 0) {
+                                                root.download-model(i);
+                                            } else if (row.state == 1) {
+                                                root.use-model(i);
+                                            }
+                                        }
+                                    }
+                                    if row.state != 0 : FlatButton {
+                                        label: root.strings.models_remove;
+                                        minw: 84px;
+                                        fg: Theme.danger;
+                                        bg: Theme.danger_bg;
+                                        hover: Theme.danger_hover;
+                                        clicked => { root.remove-model(i); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.model-rows.length == 0 : Text {
+                        text: root.strings.models_none;
+                        color: Theme.faint;
+                        font-size: 11px;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: root.strings.models_accel; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
+                        ComboBox {
+                            model: ["CUDA", "CPU"];
+                            current-index <=> root.semantic-device;
+                            width: 110px;
+                            selected => { root.save-model-settings(); }
+                        }
+                        Text { text: root.strings.models_threshold; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
+                        Slider {
+                            minimum: 0.5;
+                            maximum: 1.0;
+                            step: 0.01;
+                            value <=> root.semantic-threshold;
+                            horizontal-stretch: 1;
+                            changed(value) => { root.save-model-settings(); }
+                        }
+                        Text { text: root.semantic-threshold-label; color: Theme.text2; font-size: 11px; vertical-alignment: center; width: 40px; }
+                    }
+
+                    Text {
+                        text: root.models-status;
+                        color: Theme.muted;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                        height: 28px;
+                    }
+                    Text {
+                        text: root.models-db;
+                        color: Theme.faint;
+                        font-size: 10px;
+                        overflow: elide;
+                    }
+
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; }
+                        FlatButton {
+                            label: root.strings.close;
+                            minw: 96px;
+                            fg: Theme.accent_text;
+                            bg: Theme.accent;
+                            hover: Theme.accent_hover;
+                            clicked => { root.close-models(); }
                         }
                     }
                 }

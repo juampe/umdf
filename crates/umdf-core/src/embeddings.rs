@@ -11,15 +11,80 @@
 //! embeddings → cosine similarity.
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use image::imageops::FilterType;
 use ort::ep;
 use ort::session::Session;
+use ort::value::ValueType;
 use rayon::prelude::*;
 
 use crate::config::EmbeddingConfig;
 use crate::fingerprint;
+
+/// ONNX Runtime allows only one environment per process.
+static ENVIRONMENT: OnceLock<ort::environment::Environment> = OnceLock::new();
+
+fn environment() -> &'static ort::environment::Environment {
+    ENVIRONMENT.get_or_init(|| {
+        ort::environment::init()
+            .with_name("umdf-embeddings")
+            .build()
+            .expect("ONNX Runtime environment")
+    })
+}
+
+/// Facts discovered from the model's input tensor.
+#[derive(Debug, Clone)]
+pub struct ModelInfo {
+    pub input_name: String,
+    pub input_size: Option<u32>,
+    pub channels: Option<u32>,
+    pub output_dim: Option<usize>,
+}
+
+/// Load the model just enough to read its input/output shapes.
+pub fn inspect_model(path: &Path) -> Result<ModelInfo> {
+    let session = Session::builder(environment())
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .commit_from_file(path)
+        .map_err(|e| anyhow::anyhow!("could not load {}: {e}", path.display()))?;
+
+    let input = session
+        .inputs()
+        .first()
+        .context("the ONNX model has no inputs")?;
+    let (channels, input_size) = match input.dtype() {
+        ValueType::Tensor { shape, .. } => {
+            let dims: Vec<i64> = shape.iter().copied().collect();
+            let channels = dims.get(1).copied().filter(|v| *v > 0).map(|v| v as u32);
+            let height = dims.get(2).copied().filter(|v| *v > 0);
+            let width = dims.get(3).copied().filter(|v| *v > 0);
+            let size = match (height, width) {
+                (Some(h), Some(w)) if h == w => Some(h as u32),
+                _ => None,
+            };
+            (channels, size)
+        }
+        _ => (None, None),
+    };
+    let output_dim = session.outputs().first().and_then(|output| match output.dtype() {
+        ValueType::Tensor { shape, .. } => shape
+            .last()
+            .copied()
+            .filter(|v| *v > 0)
+            .map(|v| v as usize),
+        _ => None,
+    });
+
+    Ok(ModelInfo {
+        input_name: input.name().to_string(),
+        input_size,
+        channels,
+        output_dim,
+    })
+}
 
 pub struct EmbeddingEngine {
     session: Session,
@@ -28,17 +93,12 @@ pub struct EmbeddingEngine {
     batch_size: usize,
     mean: [f32; 3],
     std: [f32; 3],
-    /// Keep the environment alive for the session's lifetime.
-    _env: ort::environment::Environment,
     forced_cpu: bool,
 }
 
 impl EmbeddingEngine {
     pub fn new(cfg: &EmbeddingConfig) -> Result<Self> {
-        let env = ort::environment::init()
-            .with_name("umdf-embeddings")
-            .build()
-            .map_err(|e| anyhow::anyhow!("ONNX Runtime init failed: {e}"))?;
+        let env = environment();
 
         let mut forced_cpu = false;
         let session = if cfg.use_cuda {
@@ -69,7 +129,6 @@ impl EmbeddingEngine {
             batch_size: cfg.batch_size.max(1),
             mean: cfg.mean,
             std: cfg.std,
-            _env: env,
             forced_cpu,
         })
     }

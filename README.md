@@ -101,45 +101,64 @@ Exact duplicates always work (SHA-256). Content comparison needs
 * **audio** (and audio tracks inside video): 5 s of decoded PCM hashed, so
   re-muxed/retagged files match while re-encoded ones do not.
 
-## Semantic embeddings (optional, GPU)
+## Semantic embeddings and the models manager (optional, GPU)
 
 UMDF can compare images by their **content embedding** instead of (or in
 addition to) the pixel fingerprint. This helps with crops, brightness changes,
 recompression and different photos of the same scene. It is an opt-in cargo
 feature, so the default build has no ONNX Runtime dependency.
 
+### Models manager
+
+Open **Models…** from *Options → Semantic (AI)*. The manager shows a catalogue
+with the comparison each model enables:
+
+| Model | Size | Best for |
+|---|---:|---|
+| ResNet-18 | ~45 MB | general image similarity: resize, recompression, light edits |
+| ResNet-50 | ~98 MB | same, with a larger/higher-quality model |
+| CLIP ViT-B/32 (vision) | ~335 MB | semantic similarity: different shots of the same scene/person |
+| SigLIP base 16-224 (vision) | ~355 MB | semantic alternative to CLIP |
+
+* Downloads come from Hugging Face into the **models folder** (default
+  `./models`). An **access token** can be provided for gated models.
+* After a download the model is inspected (`session.inputs`) to discover the
+  input size and suggest the preprocessing (ImageNet vs CLIP).
+* **CUDA/CPU** and the similarity threshold are selectable; if the CUDA
+  execution provider cannot be created the engine falls back to CPU.
+* The token, models folder, device, threshold and active model are stored in
+  **SQLite** at `<config dir>/umdf/config.db` (Linux:
+  `~/.config/umdf/config.db`, Windows: `%APPDATA%\umdf\config.db`).
+* The token is stored as plain text in that local file; use a fine-grained,
+  read-only Hugging Face token. A future version can move it to the OS keyring.
+* Model files are not part of the repository (`/models/` and `*.onnx` are
+  ignored).
+
+### Build and run
+
 ```bash
-# 1. Build with the feature
+# Build with the feature (UI and/or CLI)
 cargo build --release -p umdf-cli --features embeddings
+cargo build --release -p umdf-ui  --features embeddings
 
-# 2. Provide a CUDA-enabled ONNX Runtime at runtime
-export ORT_DYLIB_PATH=/path/to/libonnxruntime.so   # e.g. from onnxruntime-gpu
+# Provide an ONNX Runtime at runtime (CUDA build for GPU)
+export ORT_DYLIB_PATH=/path/to/libonnxruntime.so   # e.g. onnxruntime-gpu
 
-# 3. Export any image-embedding model to ONNX (Hugging Face + optimum)
-optimum-cli export onnx --model microsoft/resnet-50 resnet50/
-# or: optimum-cli export onnx --model openai/clip-vit-base-patch32 --task feature-extraction clip/
-
-# 4. Scan
+# CLI: point it at a downloaded model
 umdf --folder ~/Pictures \
-     --embeddings-model resnet50/model.onnx \
+     --embeddings-model models/resnet18.onnx \
      --embeddings-device cuda \
      --embeddings-threshold 0.90
 ```
 
-* Preprocessing (EXIF-aware decode, 224×224 resize, per-channel normalisation)
-  runs on Rayon.
-* Images are sent to the model in batches (`--embeddings-batch`, default 32)
-  as `[N, 3, 224, 224]` tensors; embeddings are L2-normalised and compared by
-  cosine similarity.
-* If the CUDA execution provider cannot be created, the engine falls back to
-  the CPU automatically.
-* For CLIP/SigLIP set the matching normalisation:
-  `--embeddings-mean 0.48145466,0.4578275,0.40821073 --embeddings-std 0.26862954,0.26130258,0.27577711`
-  and usually a lower threshold (0.85).
-* Model files are not part of the repository (`models/` and `*.onnx` are
-  ignored).
-* The UI shows the **Semantic (GPU)** options only when built with
-  `cargo build -p umdf-ui --features embeddings`.
+Pipeline: EXIF-aware decode, 224×224 resize and per-channel normalisation run
+on Rayon; images go to the model in batches (`--embeddings-batch`, default 32)
+as `[N, 3, 224, 224]` tensors; embeddings are L2-normalised and compared by
+cosine similarity. For CLIP/SigLIP use
+`--embeddings-mean 0.48145466,0.4578275,0.40821073 --embeddings-std 0.26862954,0.26130258,0.27577711`
+and usually a lower threshold (0.85). The UI's **Models…** button hides the
+pixel metric/tolerance controls while semantic search is enabled and shows a
+compact summary (`resnet18.onnx · CUDA · 224²`).
 
 ## UI
 
