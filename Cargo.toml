@@ -9,8 +9,11 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
-authors = ["UMDF contributors"]
+rust-version = "1.92"
+license = "GPL-3.0-only"
+authors = ["juampe and UMDF contributors"]
+repository = "https://github.com/juampe/umdf"
+homepage = "https://github.com/juampe/umdf"
 
 [workspace.dependencies]
 anyhow = "1"

@@ -28,11 +28,37 @@ crates/umdf-cli    `umdf` headless CLI
 crates/umdf-ui     `umdf-ui` Slint desktop app
 ```
 
-## Build
+## Install (prebuilt binaries)
+
+Prebuilt archives for Windows, macOS and Linux are attached to each
+[release](https://github.com/juampe/umdf/releases). Every archive contains both
+binaries:
+
+- `umdf` — headless CLI.
+- `umdf-ui` — Slint desktop application.
+
+| Platform | Archive |
+|---|---|
+| Linux x86_64 | `umdf-vX.Y.Z-linux-x86_64.tar.gz` |
+| Windows x86_64 | `umdf-vX.Y.Z-windows-x86_64.zip` |
+| macOS Intel | `umdf-vX.Y.Z-macos-x86_64.tar.gz` |
+| macOS Apple Silicon | `umdf-vX.Y.Z-macos-aarch64.tar.gz` |
+
+Notes:
+
+* Linux needs X11/Wayland, OpenGL, fontconfig and xkbcommon at runtime; most
+  desktop distributions already have them.
+* macOS binaries are not notarised. If Gatekeeper blocks the app, right-click →
+  **Open**, or run `xattr -d com.apple.quarantine umdf-ui`.
+* Release binaries are built **without** the optional `embeddings` feature, so
+  they have no ONNX Runtime or CUDA dependency. Build from source with
+  `--features embeddings` for semantic search.
+
+## Build from source
 
 ```bash
 cargo build --workspace
-cargo test -p umdf-core
+cargo test --workspace
 ```
 
 ## CLI
@@ -250,4 +276,14 @@ umdf-ui --demo /path/to/folder --semantic-model models/resnet18.onnx  # needs --
 
 ## License
 
-MIT
+UMDF is free software: you can redistribute it and/or modify it under the terms
+of the **GNU General Public License, version 3 only** (`GPL-3.0-only`), as
+published by the Free Software Foundation. See [LICENSE](LICENSE).
+
+This program is distributed in the hope that it will be useful, but **without
+any warranty**; without even the implied warranty of merchantability or fitness
+for a particular purpose. See the GNU General Public License for details.
+
+The desktop UI uses [Slint](https://slint.dev) under its GPLv3 option, so the
+combined application is GPLv3. Third-party components and their licenses are
+listed in [THIRD_PARTY.md](THIRD_PARTY.md).

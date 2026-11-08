@@ -3,6 +3,9 @@ name = "umdf-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Headless CLI for the Universal Media Duplicate Finder"
 
 [[bin]]

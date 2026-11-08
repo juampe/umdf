@@ -10,6 +10,17 @@
 /models/
 *.onnx
 
+# Local configuration / cache (normally under ~/.config/umdf)
+/config.toml
+/config.db
+/config.db.bak
+/cache.db
+/cache.db-shm
+/cache.db-wal
+
+# Release packaging
+/dist/
+
 # Local logs and generated exports
 *.log
 *.tmp
