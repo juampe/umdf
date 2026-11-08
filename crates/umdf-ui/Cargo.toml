@@ -31,3 +31,6 @@ umdf-core = { path = "../umdf-core" }
 
 [build-dependencies]
 slint-build = "1.8"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

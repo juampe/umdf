@@ -2,9 +2,10 @@
 //!
 //! Enabled with the `embeddings` cargo feature. The runtime library is loaded
 //! dynamically (`load-dynamic`), so the default build has no ONNX Runtime
-//! dependency. Point `ORT_DYLIB_PATH` at an ONNX Runtime build with CUDA (or
-//! CPU) support and provide any image-embedding `.onnx` model (ResNet, CLIP,
-//! SigLIP…).
+//! dependency. A release package can bundle a CPU ONNX Runtime in `lib/` next
+//! to the executable; otherwise point `ORT_DYLIB_PATH` at an ONNX Runtime build
+//! with CUDA (or CPU) support. Provide any image-embedding `.onnx` model
+//! (ResNet, CLIP, SigLIP…).
 //!
 //! Pipeline: decode + EXIF orientation + resize to `input_size` + per-channel
 //! normalisation (Rayon) → batched `[N,3,S,S]` tensor on the GPU → L2-normalised
@@ -26,9 +27,67 @@ use crate::fingerprint;
 /// ONNX Runtime allows only one environment per process.
 static ENVIRONMENT: OnceLock<ort::environment::Environment> = OnceLock::new();
 
+/// Look for a bundled CPU runtime next to the executable (release packages put
+/// it in `lib/`). Falls back to `ORT_DYLIB_PATH` / the system loader when no
+/// bundled copy is present.
+fn bundled_runtime() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let mut candidates = vec![
+        dir.to_path_buf(),
+        dir.join("lib"),
+        dir.join("../lib/umdf/lib"),
+    ];
+    if let Some(contents) = dir.parent() {
+        candidates.push(contents.join("Frameworks"));
+        candidates.push(contents.join("Resources"));
+    }
+    candidates.iter().find_map(|candidate| runtime_in(candidate))
+}
+
+fn runtime_in(dir: &Path) -> Option<PathBuf> {
+    let mut fallback = None;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_ascii_lowercase()) else {
+            continue;
+        };
+        let preferred = name == "onnxruntime.dll"
+            || name == "libonnxruntime.so"
+            || name == "libonnxruntime.dylib";
+        let matches = preferred
+            || (name.starts_with("libonnxruntime")
+                && (name.ends_with(".dylib")
+                    || name.starts_with("libonnxruntime.so.")));
+        if preferred {
+            return Some(path);
+        }
+        if matches && fallback.is_none() {
+            fallback = Some(path);
+        }
+    }
+    fallback
+}
+
 fn environment() -> &'static ort::environment::Environment {
     ENVIRONMENT.get_or_init(|| {
-        ort::environment::init()
+        let builder = match bundled_runtime() {
+            Some(path) => match ort::init_from(&path) {
+                Ok(builder) => builder,
+                Err(error) => {
+                    eprintln!(
+                        "UMDF: could not load bundled ONNX Runtime at {}: {error}",
+                        path.display()
+                    );
+                    ort::environment::init()
+                }
+            },
+            None => ort::environment::init(),
+        };
+        builder
             .with_name("umdf-embeddings")
             .build()
             .expect("ONNX Runtime environment")

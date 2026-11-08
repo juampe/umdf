@@ -1,0 +1,67 @@
+Name: umdf
+Version: @VERSION@
+Release: 1
+Summary: Find duplicate and visually similar media
+License: GPL-3.0-only
+URL: https://github.com/juampe/umdf
+BuildArch: x86_64
+AutoReqProv: no
+Requires: glibc >= 2.35
+Requires: libfontconfig.so.1()(64bit)
+Requires: libfreetype.so.6()(64bit)
+Requires: libGL.so.1()(64bit)
+Requires: libEGL.so.1()(64bit)
+Requires: libX11.so.6()(64bit)
+Requires: libXcursor.so.1()(64bit)
+Requires: libXi.so.6()(64bit)
+Requires: libXrandr.so.2()(64bit)
+Requires: libxkbcommon.so.0()(64bit)
+Requires: libxkbcommon-x11.so.0()(64bit)
+Requires: libwayland-client.so.0()(64bit)
+Recommends: ffmpeg
+
+%description
+UMDF compares exact file contents and perceptual/semantic fingerprints to find
+duplicate photos, videos and audio. It includes a CLI (umdf) and a Slint
+desktop application (umdf-ui).
+
+%install
+cp -a %{_sourcedir}/root/. %{buildroot}/
+
+%files
+/usr/bin/umdf
+/usr/bin/umdf-ui
+/usr/lib/umdf
+/usr/share/applications/umdf.desktop
+/usr/share/icons/hicolor/256x256/apps/umdf.png
+/usr/share/icons/hicolor/512x512/apps/umdf.png
+%license /usr/share/doc/umdf/LICENSE
+%license /usr/share/doc/umdf/ONNXRUNTIME-LICENSE
+%license /usr/share/doc/umdf/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt
+%doc /usr/share/doc/umdf/README.md
+%doc /usr/share/doc/umdf/THIRD_PARTY.md
+%doc /usr/share/doc/umdf/THIRD_PARTY_LICENSES.md
+%doc /usr/share/doc/umdf/CHANGELOG.md
+%doc /usr/share/doc/umdf/SOURCE.txt
+%doc /usr/share/doc/umdf/copyright
+%doc /usr/share/doc/umdf/ONNXRUNTIME-PRIVACY.md
+
+%post
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || :
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || :
+fi
+
+%postun
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || :
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || :
+fi
+
+%changelog
+* Sun Nov 08 2026 juampe <juampe@users.noreply.github.com> - @VERSION@-1
+- Release @VERSION@

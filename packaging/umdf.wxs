@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="UMDF"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="juampe"
+           UpgradeCode="038e1a20-e87a-4fa8-b6c3-dcdcee6b5d1f">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of UMDF is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="UmdfIcon" SourceFile="$(var.BinDir)\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="UmdfIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/juampe/umdf" />
+    <Property Id="WixUILicenseRtf" Value="$(var.BinDir)\LICENSE.rtf" />
+    <Feature Id="MainFeature" Title="UMDF" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <UIRef Id="WixUI_Minimal" />
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="UMDF">
+          <Directory Id="LibFolder" Name="lib" />
+          <Component Id="MainExecutables" Guid="*">
+            <File Id="UmdfExe" Source="$(var.BinDir)\umdf.exe" KeyPath="yes" />
+            <File Id="UmdfUiExe" Source="$(var.BinDir)\umdf-ui.exe" />
+            <File Id="Readme" Source="$(var.BinDir)\README.md" />
+            <File Id="License" Source="$(var.BinDir)\LICENSE" />
+            <File Id="ThirdParty" Source="$(var.BinDir)\THIRD_PARTY.md" />
+            <File Id="ThirdPartyLicenses" Source="$(var.BinDir)\THIRD_PARTY_LICENSES.md" />
+            <File Id="Changelog" Source="$(var.BinDir)\CHANGELOG.md" />
+            <File Id="OrtLicense" Source="$(var.BinDir)\ONNXRUNTIME-LICENSE" />
+            <File Id="OrtThirdParty" Source="$(var.BinDir)\ONNXRUNTIME-THIRD-PARTY-NOTICES.txt" />
+            <File Id="OrtPrivacy" Source="$(var.BinDir)\ONNXRUNTIME-PRIVACY.md" />
+            <File Id="SourceNotice" Source="$(var.BinDir)\SOURCE.txt" />
+          </Component>
+          <Component Id="OrtDll" Guid="*" Directory="LibFolder">
+            <File Id="OrtDllFile" Source="$(var.BinDir)\lib\onnxruntime.dll" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="UMDF" />
+      </Directory>
+      <Directory Id="DesktopFolder" />
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents">
+      <ComponentRef Id="MainExecutables" />
+      <ComponentRef Id="OrtDll" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </ComponentGroup>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcut" Guid="*">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="UMDF"
+                  Description="Universal Media Duplicate Finder"
+                  Target="[INSTALLFOLDER]umdf-ui.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKMU" Key="Software\juampe\UMDF" Name="startmenu"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="*">
+        <Shortcut Id="DesktopShortcutLink"
+                  Name="UMDF"
+                  Description="Universal Media Duplicate Finder"
+                  Target="[INSTALLFOLDER]umdf-ui.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKMU" Key="Software\juampe\UMDF" Name="desktop"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

@@ -1,5 +1,7 @@
 # UMDF — Universal Media Duplicate Finder
 
+<p align="center"><img src="assets/icon-256.png" width="128" alt="UMDF icon"></p>
+
 [![CI](https://github.com/juampe/umdf/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juampe/umdf/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/juampe/umdf)](https://github.com/juampe/umdf/releases)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
@@ -34,31 +36,50 @@ crates/umdf-ui     `umdf-ui` Slint desktop app
 
 ## Install (prebuilt binaries)
 
-Prebuilt archives for Windows, macOS and Linux are attached to each
-[release](https://github.com/juampe/umdf/releases). Every archive contains both
-binaries:
+Every [release](https://github.com/juampe/umdf/releases) ships:
 
-- `umdf` — headless CLI.
-- `umdf-ui` — Slint desktop application.
+- **Standard archives** — small, no ONNX Runtime; pixel metrics only.
+- **AI archives / installers** — include a bundled **CPU ONNX Runtime 1.31.1**
+  and the `embeddings` feature, so semantic search and the Models manager work
+  out of the box.
 
-| Platform | Archive |
-|---|---|
-| Linux x86_64 | `umdf-vX.Y.Z-linux-x86_64.tar.gz` |
-| Windows x86_64 | `umdf-vX.Y.Z-windows-x86_64.zip` |
-| macOS Intel | `umdf-vX.Y.Z-macos-x86_64.tar.gz` |
-| macOS Apple Silicon | `umdf-vX.Y.Z-macos-aarch64.tar.gz` |
+### Linux
 
-Notes:
+| Format | AI | Command |
+|---|:---:|---|
+| `.deb` | yes | `sudo apt install ./umdf_0.2.0_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.2.0-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.2.0-x86_64.AppImage && ./umdf-0.2.0-x86_64.AppImage` |
+| `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
-* Linux binaries are built against **glibc 2.35** (Ubuntu 22.04) and need
-  X11/Wayland, OpenGL, fontconfig and xkbcommon at runtime; most desktop
-  distributions already have them.
-* macOS binaries target **macOS 11 or newer**. They are not notarised; if
-  Gatekeeper blocks the app, right-click → **Open**, or run
-  `xattr -d com.apple.quarantine umdf-ui`.
-* Release binaries are built **without** the optional `embeddings` feature, so
-  they have no ONNX Runtime or CUDA dependency. Build from source with
-  `--features embeddings` for semantic search.
+The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
+licenses. They are built against **glibc 2.35** (Ubuntu 22.04); the RPM targets
+Fedora 36+. The AppImage bundles its non-graphics libraries but uses the host
+OpenGL drivers.
+
+### Windows
+
+| Format | AI | Notes |
+|---|:---:|---|
+| `.msi` | yes | Start Menu + Desktop shortcuts, includes `onnxruntime.dll` |
+| `.zip` | optional | portable; the `-ai` archive includes `lib\onnxruntime.dll` |
+
+### macOS
+
+| Format | AI | Notes |
+|---|:---:|---|
+| `.tar.gz` (Intel) | no | `UMDF.app` + `umdf`, macOS 11+ |
+| `.tar.gz` (Apple Silicon) | optional | `-ai` archive bundles ONNX Runtime; macOS 14+ |
+
+The macOS builds are not notarised. If Gatekeeper blocks the app, right-click →
+**Open**, or run `xattr -d com.apple.quarantine UMDF.app`.
+
+### AI and CUDA
+
+The bundled runtime is **CPU-only**; it works on every supported platform and
+needs no installation. Semantic search falls back to CPU automatically. To use
+an NVIDIA GPU, point `ORT_DYLIB_PATH` at a CUDA-enabled ONNX Runtime and select
+**CUDA** in the Models manager.
 
 ## Build from source
 
@@ -170,8 +191,10 @@ with the comparison each model enables:
   needed**.
 * After a download the model is inspected (`session.inputs`) to discover the
   input size and suggest the preprocessing (ImageNet vs CLIP).
-* **CUDA/CPU** and the similarity threshold are selectable; if the CUDA
-  execution provider cannot be created the engine falls back to CPU.
+* **CUDA/CPU** and the similarity threshold are selectable. AI packages bundle
+  a CPU ONNX Runtime and default to CPU; selecting CUDA with a CPU-only runtime
+  falls back to CPU automatically. Point `ORT_DYLIB_PATH` at a CUDA-enabled
+  runtime to use the GPU.
 * Activating a model sets its **recommended threshold** automatically:
   **0.90** for ResNet-18/50 and **0.83** for CLIP/SigLIP. The slider can still
   be adjusted afterwards.
@@ -202,7 +225,8 @@ with the comparison each model enables:
 cargo build --release -p umdf-cli --features embeddings
 cargo build --release -p umdf-ui  --features embeddings
 
-# Provide an ONNX Runtime at runtime (CUDA build for GPU)
+# A dynamic ONNX Runtime is required unless the release package bundles it.
+# For CUDA, provide a GPU build:
 export ORT_DYLIB_PATH=/path/to/libonnxruntime.so   # e.g. onnxruntime-gpu
 
 # CLI: point it at a downloaded model
@@ -292,4 +316,12 @@ for a particular purpose. See the GNU General Public License for details.
 
 The desktop UI uses [Slint](https://slint.dev) under its GPLv3 option, so the
 combined application is GPLv3. Third-party components and their licenses are
-listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+listed in [THIRD_PARTY.md](THIRD_PARTY.md); the generated
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) contains the full license
+texts of the Rust dependencies.
+
+The AI installers bundle the CPU ONNX Runtime (MIT). Its license and
+`ThirdPartyNotices.txt` are included in every AI package as
+`ONNXRUNTIME-LICENSE` and `ONNXRUNTIME-THIRD-PARTY-NOTICES.txt`. Every package
+also contains `SOURCE.txt` with the exact source tag, satisfying the GPLv3
+source-availability requirement.

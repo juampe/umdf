@@ -1,0 +1,21 @@
+# Third-party licenses
+
+UMDF is distributed under GPL-3.0-only. The Rust dependencies below keep their
+own licenses; their texts are reproduced here to satisfy the attribution
+requirements of MIT, Apache-2.0, BSD, ISC, MPL-2.0 and similar licenses.
+
+This file is generated with `cargo about generate about.hbs` from `Cargo.lock`.
+
+{{#each licenses}}
+## {{name}}
+
+Used by:
+
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+```text
+{{{text}}}
+```
+{{/each}}

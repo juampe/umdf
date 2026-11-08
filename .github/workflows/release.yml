@@ -6,15 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (for example v0.1.0)"
+        description: "Tag to release (for example v0.2.0)"
         required: true
-        default: "v0.1.0"
+        default: "v0.2.0"
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  ORT_VERSION: "1.31.1"
+  ORT_BASE: https://github.com/microsoft/onnxruntime/releases/download
 
 jobs:
   build:
@@ -81,11 +83,23 @@ jobs:
           mkdir -p "dist/${out}"
           if [ "${RUNNER_OS}" = "Windows" ]; then ext=".exe"; else ext=""; fi
           cp "target/${TARGET}/release/umdf${ext}" "dist/${out}/"
-          cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
-          cp README.md LICENSE THIRD_PARTY.md CHANGELOG.md "dist/${out}/"
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            bash packaging/build-macos-app.sh "target/${TARGET}/release" "dist/${out}/UMDF.app" "${TAG#v}"
+          else
+            cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
+          fi
+          cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
+          cat > "dist/${out}/SOURCE.txt" <<EOF
+          UMDF ${TAG}
+          Corresponding source code:
+          https://github.com/juampe/umdf/tree/${TAG}
+          EOF
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            cp packaging/umdf.desktop assets/icon-256.png "dist/${out}/"
+          fi
           cd dist
           if [ "${ARCHIVE}" = "zip" ]; then
-            powershell -NoProfile -Command "Compress-Archive -Path '${out}' -DestinationPath '${out}.zip' -Force"
+            7z a "${out}.zip" "${out}" >/dev/null
           else
             tar -czf "${out}.tar.gz" "${out}"
           fi
@@ -100,9 +114,261 @@ jobs:
             dist/*.zip
           if-no-files-found: error
 
+  build-ai:
+    name: Build AI (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            name: linux-x86_64-ai
+            archive: tar.gz
+            ort_archive: onnxruntime-linux-x64-1.31.1.tgz
+            ort_root: onnxruntime-linux-x64-1.31.1
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x86_64-ai
+            archive: zip
+            ort_archive: onnxruntime-win-x64-1.31.1.zip
+            ort_root: onnxruntime-win-x64-1.31.1
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: macos-aarch64-ai
+            archive: tar.gz
+            ort_archive: onnxruntime-osx-arm64-1.31.1.tgz
+            ort_root: onnxruntime-osx-arm64-1.31.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev libgl1-mesa-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev
+
+      - name: Build release binaries with embeddings
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: cargo build --release --workspace --target ${{ matrix.target }} --features embeddings
+
+      - name: Download CPU ONNX Runtime
+        shell: bash
+        env:
+          ORT_ARCHIVE: ${{ matrix.ort_archive }}
+          ORT_ROOT: ${{ matrix.ort_root }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$RUNNER_TEMP/onnxruntime.archive"
+          mkdir -p "$RUNNER_TEMP/ort"
+          case "${ORT_ARCHIVE}" in
+            *.zip)
+              powershell -NoProfile -Command "Expand-Archive -LiteralPath '$RUNNER_TEMP/onnxruntime.archive' -DestinationPath '$RUNNER_TEMP/ort' -Force"
+              ;;
+            *)
+              tar -xzf "$RUNNER_TEMP/onnxruntime.archive" -C "$RUNNER_TEMP/ort"
+              ;;
+          esac
+          test -d "$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
+
+      - name: Package AI build
+        shell: bash
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          TARGET: ${{ matrix.target }}
+          NAME: ${{ matrix.name }}
+          ARCHIVE: ${{ matrix.archive }}
+          ORT_ROOT: ${{ matrix.ort_root }}
+        run: |
+          set -euo pipefail
+          out="umdf-${TAG}-${NAME}"
+          ort="$RUNNER_TEMP/ort/${ORT_ROOT}"
+          mkdir -p "dist/${out}"
+          if [ "${RUNNER_OS}" = "Windows" ]; then ext=".exe"; else ext=""; fi
+          cp "target/${TARGET}/release/umdf${ext}" "dist/${out}/"
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            bash packaging/build-macos-app.sh "target/${TARGET}/release" "dist/${out}/UMDF.app" "${TAG#v}" "$ort/lib"
+          else
+            cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
+            mkdir -p "dist/${out}/lib"
+            if [ "${RUNNER_OS}" = "Windows" ]; then
+              cp "$ort/lib/onnxruntime.dll" "dist/${out}/lib/"
+            else
+              find "$ort/lib" -maxdepth 1 \
+                \( -name 'libonnxruntime*.so*' -o -name 'libonnxruntime*.dylib' \) \
+                -exec cp -a {} "dist/${out}/lib/" \;
+            fi
+          fi
+          [ -f "$ort/LICENSE" ] && cp "$ort/LICENSE" "dist/${out}/ONNXRUNTIME-LICENSE"
+          [ -f "$ort/ThirdPartyNotices.txt" ] && cp "$ort/ThirdPartyNotices.txt" "dist/${out}/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt"
+          [ -f "$ort/Privacy.md" ] && cp "$ort/Privacy.md" "dist/${out}/ONNXRUNTIME-PRIVACY.md"
+          cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
+          cat > "dist/${out}/SOURCE.txt" <<EOF
+          UMDF ${TAG}
+          Corresponding source code:
+          https://github.com/juampe/umdf/tree/${TAG}
+          EOF
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            cp packaging/umdf.desktop assets/icon-256.png "dist/${out}/"
+          fi
+          cd dist
+          if [ "${ARCHIVE}" = "zip" ]; then
+            7z a "${out}.zip" "${out}" >/dev/null
+          else
+            tar -czf "${out}.tar.gz" "${out}"
+          fi
+          ls -lh
+
+      - name: Upload AI archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: umdf-${{ matrix.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  linux-packages:
+    name: Linux installers (deb, rpm, AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-packages
+
+      - name: Linux build and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config patchelf file xdg-utils rpm squashfs-tools \
+            libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxi-dev libxrandr-dev
+
+      - name: Build binaries with embeddings
+        run: cargo build --release --workspace --features embeddings
+
+      - name: Download CPU ONNX Runtime
+        env:
+          ORT_ARCHIVE: onnxruntime-linux-x64-1.31.1.tgz
+          ORT_ROOT: onnxruntime-linux-x64-1.31.1
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$RUNNER_TEMP/onnxruntime.tgz"
+          mkdir -p "$RUNNER_TEMP/ort"
+          tar -xzf "$RUNNER_TEMP/onnxruntime.tgz" -C "$RUNNER_TEMP/ort"
+          test -d "$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
+
+      - name: Build DEB, RPM and AppImage
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          ORT_ROOT: onnxruntime-linux-x64-1.31.1
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          ORT_LIB="$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
+          packaging/build-deb.sh target/release "$ORT_LIB" dist "$VERSION"
+          packaging/build-rpm.sh target/release "$ORT_LIB" dist "$VERSION"
+          packaging/build-appimage.sh target/release "$ORT_LIB" dist "$VERSION"
+          ls -lh dist
+
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: umdf-linux-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+          if-no-files-found: error
+
+  msi:
+    name: Windows MSI
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-msi
+
+      - name: Build binaries with embeddings
+        run: cargo build --release --workspace --features embeddings
+
+      - name: Download CPU ONNX Runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:RUNNER_TEMP "onnxruntime.zip"
+          Invoke-WebRequest -Uri "$env:ORT_BASE/v$env:ORT_VERSION/onnxruntime-win-x64-1.31.1.zip" -OutFile $archive -MaximumRetryCount 5 -RetryIntervalSec 2
+          Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $env:RUNNER_TEMP "ort") -Force
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ github.event.inputs.tag || github.ref_name }}".TrimStart("v")
+          $stage = Join-Path $env:RUNNER_TEMP "msi-stage"
+          New-Item -ItemType Directory -Force -Path (Join-Path $stage "lib") | Out-Null
+          Copy-Item target\release\umdf.exe, target\release\umdf-ui.exe $stage
+          Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\lib\onnxruntime.dll" (Join-Path $stage "lib")
+          Copy-Item README.md, LICENSE, THIRD_PARTY.md, THIRD_PARTY_LICENSES.md, CHANGELOG.md $stage
+          Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\LICENSE" (Join-Path $stage "ONNXRUNTIME-LICENSE")
+          Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\ThirdPartyNotices.txt" (Join-Path $stage "ONNXRUNTIME-THIRD-PARTY-NOTICES.txt")
+          Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\Privacy.md" (Join-Path $stage "ONNXRUNTIME-PRIVACY.md")
+          @"
+          UMDF $version
+          Corresponding source code:
+          https://github.com/juampe/umdf/tree/v$version
+          "@ | Set-Content -Encoding utf8 (Join-Path $stage "SOURCE.txt")
+          Copy-Item assets\icon.ico $stage
+          Copy-Item packaging\license.rtf (Join-Path $stage "LICENSE.rtf")
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & packaging\build-msi.ps1 -Version $version -BinDir $stage -OutDir (Join-Path $PWD "dist")
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: umdf-msi
+          path: dist/*.msi
+          if-no-files-found: error
+
   release:
     name: Publish GitHub release
-    needs: build
+    needs: [build, build-ai, linux-packages, msi]
     runs-on: ubuntu-latest
     steps:
       - name: Download archives
@@ -114,7 +380,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+          sha256sum *.tar.gz *.zip *.deb *.rpm *.AppImage *.msi > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create release
@@ -127,4 +393,8 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/*.msi
             dist/SHA256SUMS.txt

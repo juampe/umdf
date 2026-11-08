@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=UMDF
+GenericName=Media Duplicate Finder
+Comment=Find duplicate and visually similar photos, videos and audio
+Exec=umdf-ui
+Icon=umdf
+Terminal=false
+Categories=Graphics;Utility;
+MimeType=image/*;video/*;audio/*;
+Keywords=duplicate;photo;video;audio;similar;deduplicate;
+StartupWMClass=umdf-ui

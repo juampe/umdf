@@ -4,6 +4,27 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-08
+
+### Added
+
+- App icon and desktop integration (Linux `.desktop`, Windows executable icon,
+  macOS `.app` bundle).
+- Linux installers: `.deb`, `.rpm` and `.AppImage`.
+- Windows `.msi` installer with Start Menu and Desktop shortcuts.
+- AI variants of the Linux/Windows/macOS ARM packages with a bundled CPU
+  **ONNX Runtime 1.31.1**, so semantic search works without extra setup.
+- Automatic discovery of a bundled `libonnxruntime` next to the executable.
+- Generated `THIRD_PARTY_LICENSES.md`, ONNX Runtime license/notices and
+  `SOURCE.txt` in every package.
+- `bundled_runtime` fallback search for AppImage and `.app` layouts.
+
+### Changed
+
+- New installations default to the CPU execution provider; CUDA remains
+  selectable when a GPU ONNX Runtime is supplied.
+- Version bumped to 0.2.0.
+
 ## [0.1.0] - 2026-11-08
 
 Initial public release.

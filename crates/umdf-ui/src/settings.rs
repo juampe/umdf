@@ -34,7 +34,9 @@ impl Default for Settings {
             .join("models");
         Self {
             models_dir,
-            device: "cuda".to_string(),
+            // Release packages bundle a CPU ONNX Runtime; CUDA requires a
+            // GPU-enabled runtime and an explicit opt-in.
+            device: "cpu".to_string(),
             similarity: 0.90,
             active_model: String::new(),
             models: Vec::new(),
@@ -213,7 +215,7 @@ mod tests {
     #[test]
     fn defaults_are_sane() {
         let settings = Settings::default();
-        assert_eq!(settings.device, "cuda");
+        assert_eq!(settings.device, "cpu");
         assert!((settings.similarity - 0.90).abs() < f32::EPSILON);
         assert!(settings.models_dir.ends_with("models"));
     }
