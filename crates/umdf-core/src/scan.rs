@@ -45,6 +45,10 @@ pub struct Stats {
     /// Worker threads used by this scan.
     pub threads: usize,
     pub embeddings: usize,
+    /// Files that could not be decoded during extraction.
+    pub extract_errors: usize,
+    /// Images whose semantic embedding failed (the scan continued).
+    pub embedding_errors: usize,
     pub extract_ms: u128,
     pub hash_ms: u128,
     pub compare_ms: u128,
@@ -250,9 +254,16 @@ fn run_inner(
     #[cfg(feature = "embeddings")]
     if !cfg.only_identical {
         if let Some(ecfg) = &cfg.embeddings {
+            // Only images that decoded during extraction are eligible. This
+            // prevents a corrupt image from failing a second time in the
+            // semantic stage and aborting the whole scan.
             let ids: Vec<usize> = items
                 .iter()
-                .filter(|item| item.kind == MediaKind::Image)
+                .filter(|item| {
+                    item.kind == MediaKind::Image
+                        && item.fingerprint.is_some()
+                        && item.extract_error.is_none()
+                })
                 .map(|item| item.id)
                 .collect();
             if !ids.is_empty() {
@@ -313,18 +324,23 @@ fn run_inner(
                         crate::log_error(format_args!("UMDF: semantic embeddings are running on the CPU"));
                     }
                     let computed = engine.embed_paths(&paths)?;
-                    for (slot, vector) in missing.into_iter().zip(computed) {
-                        if let Some(cache) = cache {
-                            let (path, size, modified) = &meta[slot];
-                            cache.store_embedding(
-                                path,
-                                &model_key,
-                                *size,
-                                *modified,
-                                &vector,
-                            );
+                    for (slot, maybe_vector) in missing.into_iter().zip(computed) {
+                        match maybe_vector {
+                            Some(vector) => {
+                                if let Some(cache) = cache {
+                                    let (path, size, modified) = &meta[slot];
+                                    cache.store_embedding(
+                                        path,
+                                        &model_key,
+                                        *size,
+                                        *modified,
+                                        &vector,
+                                    );
+                                }
+                                vectors[slot] = Some(vector);
+                            }
+                            None => stats.embedding_errors += 1,
                         }
-                        vectors[slot] = Some(vector);
                     }
                 }
                 for (slot, id) in ids.iter().enumerate() {
@@ -605,6 +621,10 @@ fn run_inner(
         None
     };
 
+    stats.extract_errors = items
+        .iter()
+        .filter(|item| item.extract_error.is_some())
+        .count();
     emit(tx, Progress::Finished);
 
     Ok(ScanReport {

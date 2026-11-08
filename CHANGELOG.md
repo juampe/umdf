@@ -4,6 +4,20 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.4] - 2026-11-08
+
+### Fixed
+
+- A corrupt or undecodable image no longer aborts a semantic scan. Failed
+  images are skipped and counted; batch-level embedding errors are logged and
+  skipped.
+- Images that failed extraction are excluded from the embeddings stage.
+- JPEG files with a zero-filled/corrupt header are recovered by locating an
+  embedded SOI marker (`FF D8 FF`) and decoding from there.
+- The final status reports the number of skipped files (`N file(s) skipped`).
+- Error messages no longer show the Windows `\\?\` prefix.
+- Added tests for JPEG header recovery and diagnostic path cleaning.
+
 ## [0.3.3] - 2026-11-08
 
 ### Fixed

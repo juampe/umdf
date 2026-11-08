@@ -49,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.3.3_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.3.3-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.3.3-x86_64.AppImage && ./umdf-0.3.3-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.4_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.4-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.4-x86_64.AppImage && ./umdf-0.3.4-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the

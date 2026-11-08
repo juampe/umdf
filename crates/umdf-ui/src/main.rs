@@ -967,7 +967,20 @@ fn main() -> anyhow::Result<()> {
                                 }
                             } else {
                                 ui.set_stage(tr.stage_finished().into());
-                                tr.status_finished(report.stats.groups, report.stats.duplicates_found)
+                                let skipped = report.stats.extract_errors
+                                    + report.stats.embedding_errors;
+                                if skipped > 0 {
+                                    tr.status_finished_skipped(
+                                        report.stats.groups,
+                                        report.stats.duplicates_found,
+                                        skipped,
+                                    )
+                                } else {
+                                    tr.status_finished(
+                                        report.stats.groups,
+                                        report.stats.duplicates_found,
+                                    )
+                                }
                             };
                             ui.set_status(message.into());
                         }

@@ -21,6 +21,11 @@ pub fn clean_path(path: &Path) -> PathBuf {
     PathBuf::from(display_path(path))
 }
 
+/// Remove extended-length prefixes from free-form diagnostic text.
+pub fn clean_text(text: &str) -> String {
+    text.replace(r"\\?\UNC\", r"\\").replace(r"\\?\", "")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -38,6 +43,14 @@ mod tests {
         assert_eq!(
             display_path(Path::new(r"\\?\UNC\server\share\photos")),
             r"\\server\share\photos"
+        );
+    }
+
+    #[test]
+    fn cleans_paths_inside_diagnostics() {
+        assert_eq!(
+            clean_text(r"decoding \\?\B:\ownCloud\x.jpg"),
+            r"decoding B:\ownCloud\x.jpg"
         );
     }
 

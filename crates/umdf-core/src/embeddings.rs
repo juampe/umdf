@@ -214,44 +214,81 @@ impl EmbeddingEngine {
         self.forced_cpu
     }
 
-    /// Embed every image, in batches, returning L2-normalised vectors.
-    pub fn embed_paths(&mut self, paths: &[PathBuf]) -> Result<Vec<Vec<f32>>> {
-        let mut out = Vec::with_capacity(paths.len());
+    /// Embed every image in batches. Files that cannot be decoded are skipped
+    /// (their slot is `None`), so a single corrupt image never aborts a scan.
+    /// A batch-level model/inference error is logged and skipped as well.
+    pub fn embed_paths(&mut self, paths: &[PathBuf]) -> Result<Vec<Option<Vec<f32>>>> {
+        let mut out: Vec<Option<Vec<f32>>> = vec![None; paths.len()];
         let size = self.input_size;
         let mean = self.mean;
         let std = self.std;
+        let batch_size = self.batch_size.max(1);
 
-        for chunk in paths.chunks(self.batch_size) {
-            let batch: Vec<Vec<f32>> = chunk
+        for (chunk_index, chunk) in paths.chunks(batch_size).enumerate() {
+            let prepared: Vec<Result<Vec<f32>>> = chunk
                 .par_iter()
                 .map(|path| preprocess(path, size, mean, std))
-                .collect::<Result<Vec<_>>>()?;
-            let n = batch.len();
-            if n == 0 {
+                .collect();
+            let mut batch = Vec::with_capacity(prepared.len());
+            let mut slots = Vec::with_capacity(prepared.len());
+            for (offset, result) in prepared.into_iter().enumerate() {
+                match result {
+                    Ok(tensor) => {
+                        batch.push(tensor);
+                        slots.push(chunk_index * batch_size + offset);
+                    }
+                    Err(error) => crate::log_error(format_args!(
+                        "UMDF: skipping embedding for {}: {error}",
+                        chunk[offset].display()
+                    )),
+                }
+            }
+            if batch.is_empty() {
                 continue;
             }
+            let n = batch.len();
             let s = size as usize;
             let mut data = Vec::with_capacity(n * 3 * s * s);
             for tensor in batch {
                 data.extend_from_slice(&tensor);
             }
             let shape = [n as i64, 3, s as i64, s as i64];
-            let tensor = ort::value::Tensor::from_array((shape, data))
-                .map_err(|e| anyhow::anyhow!("tensor: {e}"))?;
+            let tensor = match ort::value::Tensor::from_array((shape, data)) {
+                Ok(tensor) => tensor,
+                Err(error) => {
+                    crate::log_error(format_args!("UMDF: embedding tensor error: {error}"));
+                    continue;
+                }
+            };
             let name = self.input_name.clone();
-            let outputs = self
-                .session
-                .run(ort::inputs![name.as_str() => tensor])
-                .map_err(|e| anyhow::anyhow!("inference: {e}"))?;
-            let (shape, values) = outputs[0]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| anyhow::anyhow!("output: {e}"))?;
+            let outputs = match self.session.run(ort::inputs![name.as_str() => tensor]) {
+                Ok(outputs) => outputs,
+                Err(error) => {
+                    crate::log_error(format_args!("UMDF: embedding batch failed: {error}"));
+                    continue;
+                }
+            };
+            let (shape, values) = match outputs[0].try_extract_tensor::<f32>() {
+                Ok(values) => values,
+                Err(error) => {
+                    crate::log_error(format_args!("UMDF: embedding output error: {error}"));
+                    continue;
+                }
+            };
             let dims: Vec<usize> = shape.iter().map(|&d| d.max(0) as usize).collect();
-            let mut vectors = split_output(&dims, values, n)?;
+            let mut vectors = match split_output(&dims, values, n) {
+                Ok(vectors) => vectors,
+                Err(error) => {
+                    crate::log_error(format_args!("UMDF: embedding shape error: {error}"));
+                    continue;
+                }
+            };
             for vector in &mut vectors {
                 l2_normalise(vector);
             }
-            out.extend(vectors);
+            for (slot, vector) in slots.into_iter().zip(vectors) {
+                out[slot] = Some(vector);
+            }
         }
         Ok(out)
     }

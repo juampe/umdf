@@ -11,6 +11,7 @@
 //! The legacy sign metric is kept as `LegacySignAgreement` for comparison;
 //! the default metric is `PixelTolerance`.
 
+use std::io::Cursor;
 use std::path::Path;
 
 use image::imageops::FilterType;
@@ -30,6 +31,22 @@ pub const LEGACY_ASPECT_TOLERANCE: f64 = 1.5;
 /// the EXIF tag. Without this step a tagged photo and its physically rotated
 /// copy produce different fingerprints.
 pub fn load_oriented(path: &Path) -> anyhow::Result<DynamicImage> {
+    match load_oriented_direct(path) {
+        Ok(image) => Ok(image),
+        Err(primary) => match load_oriented_recovered_jpeg(path) {
+            Ok(image) => {
+                crate::log_error(format_args!(
+                    "UMDF: recovered JPEG with a corrupt header: {}",
+                    path.display()
+                ));
+                Ok(image)
+            }
+            Err(_) => Err(primary),
+        },
+    }
+}
+
+fn load_oriented_direct(path: &Path) -> anyhow::Result<DynamicImage> {
     let reader = ImageReader::open(path)?.with_guessed_format()?;
     let mut decoder = reader.into_decoder()?;
     let orientation = decoder
@@ -38,6 +55,29 @@ pub fn load_oriented(path: &Path) -> anyhow::Result<DynamicImage> {
     let mut img = DynamicImage::from_decoder(decoder)?;
     img.apply_orientation(orientation);
     Ok(img)
+}
+
+/// Some synced files keep a valid JPEG stream but have a zero-filled/corrupt
+/// header. Try to decode from the first embedded SOI marker (`FF D8 FF`).
+fn load_oriented_recovered_jpeg(path: &Path) -> anyhow::Result<DynamicImage> {
+    let bytes = std::fs::read(path)?;
+    let start = find_jpeg_start(&bytes)
+        .filter(|start| *start > 0)
+        .ok_or_else(|| anyhow::anyhow!("no embedded JPEG start marker"))?;
+    let reader = ImageReader::new(Cursor::new(&bytes[start..])).with_guessed_format()?;
+    let mut decoder = reader.into_decoder()?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img = DynamicImage::from_decoder(decoder)?;
+    img.apply_orientation(orientation);
+    Ok(img)
+}
+
+fn find_jpeg_start(bytes: &[u8]) -> Option<usize> {
+    bytes.windows(3).position(|window| {
+        window[0] == 0xFF && window[1] == 0xD8 && window[2] == 0xFF
+    })
 }
 
 pub fn load_fingerprint(path: &Path, grid: u32) -> anyhow::Result<Fingerprint> {

@@ -496,7 +496,10 @@ impl Tr {
     }
 
     pub fn status_error(&self, error: &str) -> String {
-        self.fmt("status_error", &[("error", error.to_string())])
+        self.fmt(
+            "status_error",
+            &[("error", crate::paths::clean_text(error))],
+        )
     }
 
     pub fn confirm_bulk(&self, verb: Verb, count: usize, destination: Option<&Path>) -> String {
@@ -610,6 +613,22 @@ impl Tr {
         )
     }
 
+    pub fn status_finished_skipped(
+        &self,
+        groups: usize,
+        duplicates: usize,
+        skipped: usize,
+    ) -> String {
+        self.fmt(
+            "status_finished_skipped",
+            &[
+                ("groups", groups.to_string()),
+                ("duplicates", duplicates.to_string()),
+                ("skipped", skipped.to_string()),
+            ],
+        )
+    }
+
     pub fn browser_folders(&self, n: usize) -> String {
         self.fmt("browser_folders", &[("n", n.to_string())])
     }
@@ -638,7 +657,10 @@ impl Tr {
     }
 
     pub fn model_failed(&self, error: &str) -> String {
-        self.fmt("model_failed", &[("error", error.to_string())])
+        self.fmt(
+            "model_failed",
+            &[("error", crate::paths::clean_text(error))],
+        )
     }
 
     pub fn model_missing(&self, path: &str) -> String {
@@ -736,7 +758,7 @@ mod tests {
             let catalog = catalog(lang);
             assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
             assert!(catalog.help.len() > 10, "{}", lang.code());
-            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original"] {
+            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped"] {
                 assert!(
                     catalog.phrases.contains_key(key),
                     "{} missing {key}",
