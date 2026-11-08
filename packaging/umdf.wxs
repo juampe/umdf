@@ -26,14 +26,18 @@
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="UMDF">
           <Directory Id="LibFolder" Name="lib">
-            <Component Id="OrtDll" Guid="*">
+            <Component Id="OrtDll" Guid="c79716a8-a517-4105-a962-87021b5c4436">
               <File Id="OrtDllFile" Source="$(var.BinDir)\lib\onnxruntime.dll" KeyPath="yes" />
             </Component>
           </Directory>
-          <Component Id="MainExecutables" Guid="*">
+          <Component Id="UmdfCli" Guid="3193c1e5-e468-45c5-90d3-3445b429c959">
             <File Id="UmdfExe" Source="$(var.BinDir)\umdf.exe" KeyPath="yes" />
-            <File Id="UmdfUiExe" Source="$(var.BinDir)\umdf-ui.exe" />
-            <File Id="Readme" Source="$(var.BinDir)\README.md" />
+          </Component>
+          <Component Id="UmdfUi" Guid="49905319-7781-4ca1-b31b-b5bdef6b8510">
+            <File Id="UmdfUiExe" Source="$(var.BinDir)\umdf-ui.exe" KeyPath="yes" />
+          </Component>
+          <Component Id="Docs" Guid="495c79be-fae9-406d-8fc0-300395ed1d59">
+            <File Id="Readme" Source="$(var.BinDir)\README.md" KeyPath="yes" />
             <File Id="License" Source="$(var.BinDir)\LICENSE" />
             <File Id="ThirdParty" Source="$(var.BinDir)\THIRD_PARTY.md" />
             <File Id="ThirdPartyLicenses" Source="$(var.BinDir)\THIRD_PARTY_LICENSES.md" />
@@ -55,14 +59,16 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents">
-      <ComponentRef Id="MainExecutables" />
+      <ComponentRef Id="UmdfCli" />
+      <ComponentRef Id="UmdfUi" />
+      <ComponentRef Id="Docs" />
       <ComponentRef Id="OrtDll" />
       <ComponentRef Id="ApplicationShortcut" />
       <ComponentRef Id="DesktopShortcut" />
     </ComponentGroup>
 
     <DirectoryRef Id="ApplicationProgramsFolder">
-      <Component Id="ApplicationShortcut" Guid="*">
+      <Component Id="ApplicationShortcut" Guid="2f2a4939-a5f0-4241-b354-7b460b8f56e4">
         <Shortcut Id="StartMenuShortcut"
                   Name="UMDF"
                   Description="Universal Media Duplicate Finder"
@@ -75,7 +81,7 @@
     </DirectoryRef>
 
     <DirectoryRef Id="DesktopFolder">
-      <Component Id="DesktopShortcut" Guid="*">
+      <Component Id="DesktopShortcut" Guid="294fd20c-4025-4123-8150-8c7c10d263af">
         <Shortcut Id="DesktopShortcutLink"
                   Name="UMDF"
                   Description="Universal Media Duplicate Finder"
