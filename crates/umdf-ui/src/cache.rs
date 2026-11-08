@@ -66,51 +66,58 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
     }
 
     fn plan(
-        rows: Vec<(i64, String, String)>,
+        rows: Vec<(i64, String, String, String)>,
+        include_model: bool,
     ) -> (Vec<i64>, Vec<(i64, String)>) {
         use std::collections::HashMap;
-        let mut kept: HashMap<String, (i64, String)> = HashMap::new();
+        let mut kept: HashMap<String, (i64, String, String)> = HashMap::new();
         let mut delete = Vec::new();
-        for (rowid, path, created) in rows {
-            let key = normalize_key(&path, true);
+        for (rowid, path, model, created) in rows {
+            let normalized = normalize_key(&path, true);
+            // Embeddings are keyed by (path, model); keep each model's entry.
+            let key = if include_model {
+                format!("{normalized}\u{0}{model}")
+            } else {
+                normalized.clone()
+            };
             match kept.get(&key) {
-                Some((_, existing)) if existing >= &created => delete.push(rowid),
-                Some((old_rowid, _)) => {
+                Some((_, existing, _)) if existing >= &created => delete.push(rowid),
+                Some((old_rowid, _, _)) => {
                     delete.push(*old_rowid);
-                    kept.insert(key, (rowid, created));
+                    kept.insert(key, (rowid, created, normalized));
                 }
                 None => {
-                    kept.insert(key, (rowid, created));
+                    kept.insert(key, (rowid, created, normalized));
                 }
             }
         }
         let updates = kept
-            .into_iter()
-            .map(|(key, (rowid, _))| (rowid, key))
+            .into_values()
+            .map(|(rowid, _, normalized)| (rowid, normalized))
             .collect();
         (delete, updates)
     }
 
-    let fingerprint_rows: Vec<(i64, String, String)> = {
+    let fingerprint_rows: Vec<(i64, String, String, String)> = {
         let mut stmt =
             conn.prepare("SELECT rowid, path, created_at FROM fingerprint_cache")?;
         let rows = stmt.query_map([], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok((row.get(0)?, row.get(1)?, String::new(), row.get(2)?))
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     };
-    let embedding_rows: Vec<(i64, String, String)> = {
+    let embedding_rows: Vec<(i64, String, String, String)> = {
         let mut stmt = conn.prepare(
-            "SELECT rowid, path, created_at FROM embedding_cache",
+            "SELECT rowid, path, model, created_at FROM embedding_cache",
         )?;
         let rows = stmt.query_map([], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     };
 
-    let (fingerprint_delete, fingerprint_update) = plan(fingerprint_rows);
-    let (embedding_delete, embedding_update) = plan(embedding_rows);
+    let (fingerprint_delete, fingerprint_update) = plan(fingerprint_rows, false);
+    let (embedding_delete, embedding_update) = plan(embedding_rows, true);
 
     let tx = conn.unchecked_transaction()?;
     {
@@ -549,6 +556,21 @@ mod tests {
                 params![r"B:/Photos/a.jpg", data],
             )
             .unwrap();
+            // Same file under two spellings for two different embedding
+            // models: the path duplicates must merge, the models must not.
+            let blob = encode_f32(&[0.1, 0.2]);
+            for (path, model, created) in [
+                (r"\\?\B:\Photos\A.JPG", "model-a", "2026-01-01 00:00:00"),
+                (r"B:/Photos/a.jpg", "model-a", "2026-01-02 00:00:00"),
+                (r"B:\Photos\a.jpg", "model-b", "2026-01-01 00:00:00"),
+            ] {
+                conn.execute(
+                    "INSERT INTO embedding_cache(path, model, size, modified, dims, data, created_at)
+                     VALUES(?1, ?2, 10, 100, 2, ?3, ?4)",
+                    params![path, model, blob, created],
+                )
+                .unwrap();
+            }
             // `open_at` already migrated the empty database on Windows and
             // set user_version = 1; reset it so the test exercises the merge.
             conn.pragma_update(None, "user_version", 0).unwrap();
@@ -561,6 +583,22 @@ mod tests {
                 .query_row("SELECT path FROM fingerprint_cache", [], |row| row.get(0))
                 .unwrap();
             assert_eq!(stored, r"b:\photos\a.jpg");
+            let embeddings: i64 = conn
+                .query_row("SELECT COUNT(*) FROM embedding_cache", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(embeddings, 2);
+            let models: Vec<String> = {
+                let mut stmt = conn
+                    .prepare("SELECT model FROM embedding_cache ORDER BY model")
+                    .unwrap();
+                let rows = stmt
+                    .query_map([], |row| row.get(0))
+                    .unwrap()
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .unwrap();
+                rows
+            };
+            assert_eq!(models, vec!["model-a", "model-b"]);
             let version: i64 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
