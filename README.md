@@ -1,5 +1,9 @@
 # UMDF — Universal Media Duplicate Finder
 
+[![CI](https://github.com/juampe/umdf/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juampe/umdf/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/juampe/umdf)](https://github.com/juampe/umdf/releases)
+[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+
 UMDF finds duplicate and visually similar **photos, videos, audio and files**.
 It combines exact byte comparison with perceptual fingerprints, groups the
 matches, and proposes which copy to keep using an explainable
