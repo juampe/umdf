@@ -18,6 +18,9 @@ All notable changes to UMDF are documented here. The format follows
 - Generated `THIRD_PARTY_LICENSES.md`, ONNX Runtime license/notices and
   `SOURCE.txt` in every package.
 - `bundled_runtime` fallback search for AppImage and `.app` layouts.
+- Help text now documents the real limitations (heuristic originality, aspect
+  gate, crops/rotations, one-frame video, lossy audio, CPU/GPU runtime, model
+  licenses and destructive actions).
 
 ### Changed
 
