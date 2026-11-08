@@ -206,15 +206,37 @@ fn run_inner(
                 if cfg.is_cancelled() {
                     return None;
                 }
-                extract_item(
-                    base + k,
-                    cand,
-                    cfg,
-                    cancel_ref,
-                    ffprobe_bin.as_deref(),
-                    ffmpeg_bin.as_deref(),
-                    cache,
-                )
+                // A malformed file must never abort the whole scan: decoders
+                // normally return an error, but a panic in a third-party codec
+                // would unwind through Rayon and stop everything.
+                let extracted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    extract_item(
+                        base + k,
+                        cand,
+                        cfg,
+                        cancel_ref,
+                        ffprobe_bin.as_deref(),
+                        ffmpeg_bin.as_deref(),
+                        cache,
+                    )
+                }));
+                match extracted {
+                    Ok(item) => item,
+                    Err(_) => {
+                        crate::log_error(format_args!(
+                            "UMDF: decoder panicked while reading {}; skipping it",
+                            cand.path.display()
+                        ));
+                        let mut item = MediaItem::new(
+                            base + k,
+                            cand.path.clone(),
+                            classify(&cand.extension),
+                            cand.size,
+                        );
+                        item.extract_error = Some("decoder panic".to_string());
+                        Some(item)
+                    }
+                }
             })
             .collect();
 
@@ -319,27 +341,50 @@ fn run_inner(
                 if !missing.is_empty() {
                     let paths: Vec<PathBuf> =
                         missing.iter().map(|slot| meta[*slot].0.clone()).collect();
-                    let mut engine = crate::embeddings::EmbeddingEngine::new(ecfg)?;
-                    if engine.forced_cpu() {
-                        crate::log_error(format_args!("UMDF: semantic embeddings are running on the CPU"));
-                    }
-                    let computed = engine.embed_paths(&paths)?;
-                    for (slot, maybe_vector) in missing.into_iter().zip(computed) {
-                        match maybe_vector {
-                            Some(vector) => {
-                                if let Some(cache) = cache {
-                                    let (path, size, modified) = &meta[slot];
-                                    cache.store_embedding(
-                                        path,
-                                        &model_key,
-                                        *size,
-                                        *modified,
-                                        &vector,
-                                    );
+                    // Semantic matching is an optional enhancement: if the
+                    // model cannot be loaded or inference fails, keep scanning
+                    // with the perceptual fingerprints instead of aborting.
+                    let engine = match crate::embeddings::EmbeddingEngine::new(ecfg) {
+                        Ok(engine) => Some(engine),
+                        Err(error) => {
+                            crate::log_error(format_args!(
+                                "UMDF: semantic model unavailable ({error}); continuing without embeddings"
+                            ));
+                            stats.embedding_errors += paths.len();
+                            None
+                        }
+                    };
+                    if let Some(mut engine) = engine {
+                        if engine.forced_cpu() {
+                            crate::log_error(format_args!("UMDF: semantic embeddings are running on the CPU"));
+                        }
+                        match engine.embed_paths(&paths) {
+                            Ok(computed) => {
+                                for (slot, maybe_vector) in missing.into_iter().zip(computed) {
+                                    match maybe_vector {
+                                        Some(vector) => {
+                                            if let Some(cache) = cache {
+                                                let (path, size, modified) = &meta[slot];
+                                                cache.store_embedding(
+                                                    path,
+                                                    &model_key,
+                                                    *size,
+                                                    *modified,
+                                                    &vector,
+                                                );
+                                            }
+                                            vectors[slot] = Some(vector);
+                                        }
+                                        None => stats.embedding_errors += 1,
+                                    }
                                 }
-                                vectors[slot] = Some(vector);
                             }
-                            None => stats.embedding_errors += 1,
+                            Err(error) => {
+                                crate::log_error(format_args!(
+                                    "UMDF: semantic embeddings failed ({error}); continuing without them"
+                                ));
+                                stats.embedding_errors += paths.len();
+                            }
                         }
                     }
                 }
@@ -793,5 +838,45 @@ fn video_frame_fingerprint(
 fn emit(tx: Option<&Sender<Progress>>, p: Progress) {
     if let Some(tx) = tx {
         let _ = tx.send(p);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_image(path: &Path) {
+        let image = image::RgbImage::from_fn(32, 32, |x, y| {
+            image::Rgb([(x * 8) as u8, (y * 8) as u8, 120])
+        });
+        image.save(path).unwrap();
+    }
+
+    #[test]
+    fn corrupt_image_is_skipped_and_the_scan_continues() {
+        let root =
+            std::env::temp_dir().join(format!("umdf-scan-skip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        valid_image(&root.join("a.png"));
+        valid_image(&root.join("b.png"));
+        // High-entropy bytes with a .jpg extension and no JPEG markers: the
+        // kind of file that used to abort the whole scan.
+        let junk: Vec<u8> = (0..4096u32)
+            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+            .collect();
+        std::fs::write(root.join("broken.jpg"), junk).unwrap();
+
+        let mut cfg = ScanConfig::default();
+        cfg.folders = vec![root.clone()];
+        cfg.extensions = vec!["png".into(), "jpg".into()];
+        let report = run(&cfg).expect("a corrupt image must not abort the scan");
+
+        assert_eq!(report.stats.files_scanned, 3);
+        assert_eq!(report.stats.extract_errors, 1);
+        assert_eq!(report.stats.files_fingerprinted, 2);
+        assert_eq!(report.stats.groups, 1);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

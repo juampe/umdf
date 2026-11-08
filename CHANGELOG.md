@@ -4,6 +4,23 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.6] - 2026-11-08
+
+### Fixed
+
+- A decoder panic in a third-party codec can no longer abort a scan: the file
+  is skipped and reported like any other undecodable file.
+- If the semantic model cannot be loaded or inference fails, the scan continues
+  with perceptual fingerprints instead of stopping. The skipped embeddings are
+  counted in the final status.
+- Added regression tests for high-entropy/corrupt `.jpg` files and for JPEG
+  recovery behind a zero-filled header.
+
+### Added
+
+- The application version is shown next to the title, so reports always
+  identify the build in use.
+
 ## [0.3.5] - 2026-11-08
 
 ### Added

@@ -131,6 +131,7 @@ struct UiStats {
 
 fn main() -> anyhow::Result<()> {
     let ui = AppWindow::new()?;
+    ui.set_app_version(format!("v{}", env!("CARGO_PKG_VERSION")).into());
     register_bundled_fonts();
     // Initial size set once; the window stays resizable/maximizable because the
     // size is not bound in the .slint file.

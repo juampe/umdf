@@ -227,7 +227,13 @@ impl EmbeddingEngine {
         for (chunk_index, chunk) in paths.chunks(batch_size).enumerate() {
             let prepared: Vec<Result<Vec<f32>>> = chunk
                 .par_iter()
-                .map(|path| preprocess(path, size, mean, std))
+                .map(|path| {
+                    // A panic inside an image decoder must skip only this file.
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        preprocess(path, size, mean, std)
+                    }))
+                    .unwrap_or_else(|_| Err(anyhow::anyhow!("decoder panic")))
+                })
                 .collect();
             let mut batch = Vec::with_capacity(prepared.len());
             let mut slots = Vec::with_capacity(prepared.len());

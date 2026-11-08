@@ -380,6 +380,31 @@ mod tests {
     }
 
     #[test]
+    fn recovers_jpeg_with_a_zero_filled_header() {
+        let root = std::env::temp_dir().join(format!("umdf-jpeg-recover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let image = image::RgbImage::from_fn(16, 16, |x, y| {
+            image::Rgb([(x * 12) as u8, (y * 12) as u8, 90])
+        });
+        let mut jpeg = Vec::new();
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(&mut Cursor::new(&mut jpeg), image::ImageFormat::Jpeg)
+            .unwrap();
+        // A synced file can keep a valid JPEG stream behind a corrupt header.
+        let mut corrupt = vec![0u8; 64];
+        corrupt.extend_from_slice(&jpeg);
+        let path = root.join("zero-header.jpg");
+        std::fs::write(&path, &corrupt).unwrap();
+
+        let fp = load_fingerprint(&path, 8).expect("embedded JPEG should be recovered");
+        assert_eq!(fp.size, 8);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn legacy_metric_has_a_high_floor() {
         // Documents the observed behaviour: unrelated sign patterns still
         // score far above zero with the legacy formula.
