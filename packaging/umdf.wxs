@@ -16,13 +16,7 @@
     <Feature Id="MainFeature" Title="UMDF — Universal Media Duplicate Finder" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
-
-    <UIRef Id="WixUI_Minimal" />
   </Product>
-
-  <Fragment>
-    <WixVariable Id="WixUILicenseRtf" Value="$(var.BinDir)\LICENSE.rtf" />
-  </Fragment>
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
