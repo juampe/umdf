@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
 
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
 use umdf_core::config::{
@@ -83,17 +83,13 @@ struct UiStats {
 
 fn main() -> anyhow::Result<()> {
     let ui = AppWindow::new()?;
+    register_bundled_fonts();
     // Initial size set once; the window stays resizable/maximizable because the
     // size is not bound in the .slint file.
     ui.window()
         .set_size(slint::LogicalSize::new(1280.0, 820.0));
 
-    let lang = Rc::new(Cell::new(Lang::En));
     let auto_threads = umdf_core::scan::effective_threads(&ScanConfig::default());
-    let boot = Tr::new(Lang::En);
-    ui.set_strings(boot.strings().into());
-    ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
-    ui.set_embeddings_supported(cfg!(feature = "embeddings"));
 
     // ---- persisted configuration (config.toml) + cache (cache.db) -----------
     let settings: Arc<Mutex<Settings>> = Arc::new(Mutex::new(Settings::load()));
@@ -106,6 +102,19 @@ fn main() -> anyhow::Result<()> {
         }
     });
     let ui_models: Arc<Mutex<Vec<UiModel>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let boot_lang = settings
+        .lock()
+        .ok()
+        .and_then(|guard| Lang::from_code(&guard.language))
+        .unwrap_or(Lang::En);
+    let lang = Rc::new(Cell::new(boot_lang));
+    let boot = Tr::new(boot_lang);
+    ui.set_lang_index(boot_lang.index() as i32);
+    ui.set_strings(boot.strings().into());
+    ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
+    set_combo_labels(&ui, &boot);
+    ui.set_embeddings_supported(cfg!(feature = "embeddings"));
 
     let (models_dir, device, threshold, active_model, installed) = {
         let guard = settings.lock().expect("settings lock");
@@ -140,7 +149,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_semantic_threshold_label(format!("{:.2}", found.threshold).into());
         }
     }
-    refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+    refresh_models(&ui, &settings, &ui_models, lang.get());
 
     ui.set_preview_left_info(boot.no_picture().into());
     ui.set_preview_right_info(boot.no_picture().into());
@@ -192,8 +201,13 @@ fn main() -> anyhow::Result<()> {
             let tr = Tr::new(new_lang);
             ui.set_strings(tr.strings());
             ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(tr.help_lines()))));
+            set_combo_labels(&ui, &tr);
             ui.set_folders_label(tr.folders_label(folders.borrow().len()).into());
-            refresh_models(&ui, &settings, &ui_models, new_lang == Lang::Es);
+            if let Ok(mut guard) = settings.lock() {
+                guard.language = new_lang.code().to_string();
+                let _ = guard.save();
+            }
+            refresh_models(&ui, &settings, &ui_models, new_lang);
 
             // Counters come from the live state (deletions included), not from
             // the original report.
@@ -245,6 +259,9 @@ fn main() -> anyhow::Result<()> {
                     ui.set_preview_left_info(row_original_info(&row));
                     ui.set_preview_right_info(row_duplicate_info(&row));
                 }
+            } else {
+                ui.set_preview_left_info(tr.no_picture().into());
+                ui.set_preview_right_info(tr.no_picture().into());
             }
         });
     }
@@ -385,7 +402,7 @@ fn main() -> anyhow::Result<()> {
                 if path.is_dir() {
                     ui.set_models_dir(path.to_string_lossy().to_string().into());
                     save_model_settings(&ui, &settings);
-                    refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+                    refresh_models(&ui, &settings, &ui_models, lang.get());
                     ui.set_models_status(
                         Tr::new(lang.get())
                             .models_folder(&path.display().to_string())
@@ -443,7 +460,7 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         ui.on_open_models(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
             update_cache_label(&ui, &cache);
             ui.set_models_open(true);
         });
@@ -482,7 +499,7 @@ fn main() -> anyhow::Result<()> {
                 return;
             }
             ui.set_models_status(tr.model_downloading(&model.name).into());
-            let lang_es = lang.get() == Lang::Es;
+            let ui_lang = lang.get();
             let ui_weak = ui_handle.clone();
             let settings = settings.clone();
             let ui_models = ui_models.clone();
@@ -506,7 +523,7 @@ fn main() -> anyhow::Result<()> {
                                 guard.upsert_model(installed);
                                 let _ = guard.save();
                             }
-                            refresh_models(&ui, &settings, &ui_models, lang_es);
+                            refresh_models(&ui, &settings, &ui_models, ui_lang);
                             ui.set_models_status(
                                 tr.model_downloaded(&model.name, bytes as f64 / 1_048_576.0)
                                     .into(),
@@ -555,7 +572,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_semantic_threshold(model.threshold);
             ui.set_semantic_threshold_label(format!("{:.2}", model.threshold).into());
             ui.set_models_status(tr.model_active(&model.name).into());
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
         });
     }
     {
@@ -580,7 +597,7 @@ fn main() -> anyhow::Result<()> {
                 ui.set_semantic_enabled(false);
                 ui.set_semantic_model("".into());
             }
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
             ui.set_models_status(tr.model_removed(&model.name).into());
         });
     }
@@ -592,7 +609,7 @@ fn main() -> anyhow::Result<()> {
         ui.on_save_model_settings(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             save_model_settings(&ui, &settings);
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
         });
     }
     {
@@ -603,7 +620,7 @@ fn main() -> anyhow::Result<()> {
         ui.on_close_models(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             save_model_settings(&ui, &settings);
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
             ui.set_models_open(false);
         });
     }
@@ -1158,11 +1175,11 @@ fn main() -> anyhow::Result<()> {
         if let Some(dir) = args.get(pos + 1) {
             ui.set_models_dir(dir.as_str().into());
             save_model_settings(&ui, &settings);
-            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            refresh_models(&ui, &settings, &ui_models, lang.get());
         }
     }
     if args.iter().any(|a| a == "--demo-models") {
-        refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+        refresh_models(&ui, &settings, &ui_models, lang.get());
         ui.set_models_open(true);
     }
     if let Some(pos) = args.iter().position(|a| a == "--demo-use-model") {
@@ -1215,7 +1232,8 @@ fn main() -> anyhow::Result<()> {
     }
     if let Some(pos) = args.iter().position(|a| a == "--demo-lang") {
         if let Some(code) = args.get(pos + 1) {
-            let index = if code.eq_ignore_ascii_case("es") { 1 } else { 0 };
+            let selected = Lang::from_code(code).unwrap_or(Lang::En);
+            let index = selected.index() as i32;
             ui.set_lang_index(index);
             ui.invoke_set_lang(index);
         }
@@ -1228,6 +1246,33 @@ fn main() -> anyhow::Result<()> {
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+/// Register the bundled CJK fallback font. Slint's default Latin font stays in
+/// place; Chinese, Japanese and Korean text falls back to Noto Sans CJK.
+fn set_combo_labels(ui: &AppWindow, tr: &Tr) {
+    let keep: Vec<slint::SharedString> = tr.keep_labels().into_iter().map(Into::into).collect();
+    ui.set_keep_labels(ModelRc::from(Rc::new(VecModel::from(keep))));
+    let threads: Vec<slint::SharedString> =
+        tr.thread_labels().into_iter().map(Into::into).collect();
+    ui.set_thread_labels(ModelRc::from(Rc::new(VecModel::from(threads))));
+}
+
+fn register_bundled_fonts() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        use slint::fontique_011::fontique;
+        let data = include_bytes!("../../../assets/fonts/NotoSansCJK-Regular.ttc");
+        let blob = fontique::Blob::new(std::sync::Arc::new(data.to_vec()));
+        let mut collection = slint::fontique_011::shared_collection();
+        let fonts = collection.register_fonts(blob, None);
+        for script in [*b"Hani", *b"Hira", *b"Kana", *b"Hang"] {
+            collection.append_fallbacks(
+                fontique::FallbackKey::new(fontique::Script::from_bytes(script), None),
+                fonts.iter().map(|font| font.0),
+            );
+        }
+    });
+}
 
 fn verb_for(kind: &str) -> Verb {
     match kind {
@@ -1278,8 +1323,9 @@ fn refresh_models(
     ui: &AppWindow,
     settings: &Arc<Mutex<Settings>>,
     ui_models: &Arc<Mutex<Vec<UiModel>>>,
-    es: bool,
+    lang: Lang,
 ) {
+    let tr = Tr::new(lang);
     let dir = PathBuf::from(ui.get_models_dir().to_string());
     let (active, installed) = if let Ok(guard) = settings.lock() {
         (guard.active_model.clone(), guard.models.clone())
@@ -1300,14 +1346,20 @@ fn refresh_models(
         } else {
             0
         };
+        let name = tr
+            .model_name(catalog.id)
+            .unwrap_or_else(|| catalog.name.to_string());
+        let capabilities = {
+            let localized = tr.model_capabilities(catalog.id);
+            if localized.is_empty() {
+                catalog.capabilities.to_string()
+            } else {
+                localized
+            }
+        };
         rows.push(ModelRow {
-            name: catalog.name(es).into(),
-            details: format!(
-                "{} · ~{} MB",
-                catalog.capabilities(es),
-                catalog.size_mb
-            )
-            .into(),
+            name: name.into(),
+            details: format!("{capabilities} · ~{} MB", catalog.size_mb).into(),
             path: path.to_string_lossy().to_string().into(),
             state,
         });
@@ -1350,11 +1402,7 @@ fn refresh_models(
     }
 
     let summary = if active.is_empty() {
-        if es {
-            "Ningún modelo seleccionado".to_string()
-        } else {
-            "No model selected".to_string()
-        }
+        tr.no_model_selected()
     } else {
         let name = Path::new(&active)
             .file_name()

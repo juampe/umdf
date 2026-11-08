@@ -1,9 +1,14 @@
-//! Tiny, dependency-free i18n for the UI (English / Spanish).
+//! Tiny catalog-based i18n for the UI.
 //!
-//! The Slint side receives a `Strings` struct with every static label; dynamic
-//! messages (stage, status, counters) are built here with `format!`.
+//! Static labels, dynamic phrases and the Help text live in
+//! `crates/umdf-ui/i18n/<lang>.json`. Adding a language means adding its JSON
+//! file and one entry to `Lang`/`CATALOG_TEXTS`.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::OnceLock;
+
+use serde::Deserialize;
 
 use crate::{HelpLine, Strings};
 
@@ -11,15 +16,57 @@ use crate::{HelpLine, Strings};
 pub enum Lang {
     En,
     Es,
+    Fr,
+    De,
+    Pt,
+    It,
+    Zh,
+    Ja,
+    Ko,
 }
 
 impl Lang {
+    pub const ALL: [Lang; 9] = [
+        Lang::En,
+        Lang::Es,
+        Lang::Fr,
+        Lang::De,
+        Lang::Pt,
+        Lang::It,
+        Lang::Zh,
+        Lang::Ja,
+        Lang::Ko,
+    ];
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
     pub fn from_index(index: i32) -> Self {
-        if index == 1 {
-            Lang::Es
-        } else {
-            Lang::En
+        Self::ALL
+            .get(index.max(0) as usize)
+            .copied()
+            .unwrap_or(Lang::En)
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::En => "en",
+            Lang::Es => "es",
+            Lang::Fr => "fr",
+            Lang::De => "de",
+            Lang::Pt => "pt",
+            Lang::It => "it",
+            Lang::Zh => "zh",
+            Lang::Ja => "ja",
+            Lang::Ko => "ko",
         }
+    }
+
+    pub fn from_code(code: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|lang| lang.code().eq_ignore_ascii_case(code))
     }
 }
 
@@ -35,772 +82,645 @@ pub struct Tr {
     pub lang: Lang,
 }
 
+const CATALOG_TEXTS: [&str; 9] = [
+    include_str!("../i18n/en.json"),
+    include_str!("../i18n/es.json"),
+    include_str!("../i18n/fr.json"),
+    include_str!("../i18n/de.json"),
+    include_str!("../i18n/pt.json"),
+    include_str!("../i18n/it.json"),
+    include_str!("../i18n/zh.json"),
+    include_str!("../i18n/ja.json"),
+    include_str!("../i18n/ko.json"),
+];
+
+static CATALOGS: [OnceLock<Catalog>; 9] = [const { OnceLock::new() }; 9];
+
+fn catalog(lang: Lang) -> &'static Catalog {
+    CATALOGS[lang.index()].get_or_init(|| {
+        serde_json::from_str(CATALOG_TEXTS[lang.index()]).unwrap_or_else(|error| {
+            panic!("invalid i18n catalog for {}: {error}", lang.code())
+        })
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct Catalog {
+    strings: StringsRaw,
+    phrases: HashMap<String, String>,
+    help: Vec<HelpRaw>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HelpRaw {
+    text: String,
+    kind: i32,
+}
+
+#[derive(Debug, Deserialize)]
+struct StringsRaw {
+    title: String,
+    add_folder: String,
+    remove: String,
+    clear: String,
+    options: String,
+    start: String,
+    scanning: String,
+    stop: String,
+    dark: String,
+    light: String,
+    language: String,
+    help: String,
+    help_title: String,
+    close: String,
+    locations: String,
+    pictures: String,
+    documents: String,
+    home: String,
+    computer: String,
+    folders_none: String,
+    remove_selected: String,
+    clear_all: String,
+    opt_scan_subfolders: String,
+    opt_only_identical: String,
+    opt_compare_media: String,
+    opt_similarity: String,
+    opt_keep: String,
+    opt_metric: String,
+    opt_threads: String,
+    opt_semantic: String,
+    semantic_model: String,
+    models_manage: String,
+    models_title: String,
+    models_help: String,
+    models_folder: String,
+    models_capabilities: String,
+    models_download: String,
+    models_use: String,
+    models_active: String,
+    models_remove: String,
+    models_accel: String,
+    models_threshold: String,
+    models_none: String,
+    models_clear_cache: String,
+    semantic_unavailable: String,
+    opt_tolerance: String,
+    trash_all: String,
+    move_all: String,
+    delete_all: String,
+    keeps_best: String,
+    cancel: String,
+    confirm: String,
+    match_list: String,
+    col_group: String,
+    col_original: String,
+    col_duplicate: String,
+    col_similarity: String,
+    col_size: String,
+    empty_list: String,
+    preview: String,
+    original: String,
+    duplicate: String,
+    move_destination: String,
+    move_placeholder: String,
+    browse: String,
+    trash: String,
+    #[serde(rename = "move")]
+    r#move: String,
+    delete: String,
+    select_folder: String,
+    up: String,
+    go: String,
+    select_this_folder: String,
+    show_hidden: String,
+}
+
+impl StringsRaw {
+    fn to_slint(&self) -> Strings {
+        Strings {
+            title: self.title.clone().into(),
+            add_folder: self.add_folder.clone().into(),
+            remove: self.remove.clone().into(),
+            clear: self.clear.clone().into(),
+            options: self.options.clone().into(),
+            start: self.start.clone().into(),
+            scanning: self.scanning.clone().into(),
+            stop: self.stop.clone().into(),
+            dark: self.dark.clone().into(),
+            light: self.light.clone().into(),
+            language: self.language.clone().into(),
+            help: self.help.clone().into(),
+            help_title: self.help_title.clone().into(),
+            close: self.close.clone().into(),
+            locations: self.locations.clone().into(),
+            pictures: self.pictures.clone().into(),
+            documents: self.documents.clone().into(),
+            home: self.home.clone().into(),
+            computer: self.computer.clone().into(),
+            folders_none: self.folders_none.clone().into(),
+            remove_selected: self.remove_selected.clone().into(),
+            clear_all: self.clear_all.clone().into(),
+            opt_scan_subfolders: self.opt_scan_subfolders.clone().into(),
+            opt_only_identical: self.opt_only_identical.clone().into(),
+            opt_compare_media: self.opt_compare_media.clone().into(),
+            opt_similarity: self.opt_similarity.clone().into(),
+            opt_keep: self.opt_keep.clone().into(),
+            opt_metric: self.opt_metric.clone().into(),
+            opt_threads: self.opt_threads.clone().into(),
+            opt_semantic: self.opt_semantic.clone().into(),
+            semantic_model: self.semantic_model.clone().into(),
+            models_manage: self.models_manage.clone().into(),
+            models_title: self.models_title.clone().into(),
+            models_help: self.models_help.clone().into(),
+            models_folder: self.models_folder.clone().into(),
+            models_capabilities: self.models_capabilities.clone().into(),
+            models_download: self.models_download.clone().into(),
+            models_use: self.models_use.clone().into(),
+            models_active: self.models_active.clone().into(),
+            models_remove: self.models_remove.clone().into(),
+            models_accel: self.models_accel.clone().into(),
+            models_threshold: self.models_threshold.clone().into(),
+            models_none: self.models_none.clone().into(),
+            models_clear_cache: self.models_clear_cache.clone().into(),
+            semantic_unavailable: self.semantic_unavailable.clone().into(),
+            opt_tolerance: self.opt_tolerance.clone().into(),
+            trash_all: self.trash_all.clone().into(),
+            move_all: self.move_all.clone().into(),
+            delete_all: self.delete_all.clone().into(),
+            keeps_best: self.keeps_best.clone().into(),
+            cancel: self.cancel.clone().into(),
+            confirm: self.confirm.clone().into(),
+            match_list: self.match_list.clone().into(),
+            col_group: self.col_group.clone().into(),
+            col_original: self.col_original.clone().into(),
+            col_duplicate: self.col_duplicate.clone().into(),
+            col_similarity: self.col_similarity.clone().into(),
+            col_size: self.col_size.clone().into(),
+            empty_list: self.empty_list.clone().into(),
+            preview: self.preview.clone().into(),
+            original: self.original.clone().into(),
+            duplicate: self.duplicate.clone().into(),
+            move_destination: self.move_destination.clone().into(),
+            move_placeholder: self.move_placeholder.clone().into(),
+            browse: self.browse.clone().into(),
+            trash: self.trash.clone().into(),
+            r#move: self.r#move.clone().into(),
+            delete: self.delete.clone().into(),
+            select_folder: self.select_folder.clone().into(),
+            up: self.up.clone().into(),
+            go: self.go.clone().into(),
+            select_this_folder: self.select_this_folder.clone().into(),
+            show_hidden: self.show_hidden.clone().into(),
+        }
+    }
+}
+
+
 impl Tr {
     pub fn new(lang: Lang) -> Self {
         Self { lang }
     }
 
-    fn es(&self) -> bool {
-        self.lang == Lang::Es
+    pub fn strings(&self) -> Strings {
+        catalog(self.lang).strings.to_slint()
     }
 
-    pub fn strings(&self) -> Strings {
-        if self.es() {
-            Strings {
-                title: "Universal Media Duplicate Finder".into(),
-                add_folder: "Añadir carpeta…".into(),
-                remove: "Quitar".into(),
-                clear: "Limpiar".into(),
-                options: "Opciones".into(),
-                start: "Buscar".into(),
-                scanning: "Buscando…".into(),
-                stop: "Parar".into(),
-                dark: "Oscuro".into(),
-                light: "Claro".into(),
-                language: "Idioma".into(),
-                help: "Ayuda".into(),
-                help_title: "Ayuda".into(),
-                close: "Cerrar".into(),
-                locations: "Ubicaciones".into(),
-                pictures: "Imágenes".into(),
-                documents: "Documentos".into(),
-                home: "Inicio".into(),
-                computer: "Equipo".into(),
-                folders_none: "Carpetas a escanear (ninguna)".into(),
-                remove_selected: "Quitar seleccionada".into(),
-                clear_all: "Quitar todas".into(),
-                opt_scan_subfolders: "Incluir subcarpetas".into(),
-                opt_only_identical: "Solo 100 % idénticos".into(),
-                opt_compare_media: "Comparar contenido multimedia".into(),
-                opt_similarity: "Similitud".into(),
-                opt_keep: "Conservar".into(),
-                opt_metric: "Métrica".into(),
-                opt_threads: "Hilos".into(),
-                opt_semantic: "Semántica (GPU)".into(),
-                semantic_model: "Ruta del modelo .onnx".into(),
-                models_manage: "Modelos…".into(),
-                models_title: "Modelos".into(),
-                models_help: "Descarga un modelo de embeddings de imagen desde Hugging Face. La carpeta y el modelo activo se guardan en config.toml; los datos derivados se cachean en cache.db.".into(),
-                models_folder: "Carpeta de modelos".into(),
-                models_capabilities: "Capacidades".into(),
-                models_download: "Descargar".into(),
-                models_use: "Usar".into(),
-                models_active: "Activo".into(),
-                models_remove: "Eliminar".into(),
-                models_accel: "Aceleración".into(),
-                models_threshold: "Similitud".into(),
-                models_none: "No hay modelos instalados. Descarga uno abajo.".into(),
-                models_clear_cache: "Vaciar caché".into(),
-                semantic_unavailable: "Esta compilación no incluye búsqueda semántica. Compila con --features embeddings y ONNX Runtime.".into(),
-                opt_tolerance: "Tolerancia de gris".into(),
-                trash_all: "A la papelera".into(),
-                move_all: "Mover todos".into(),
-                delete_all: "Borrar todos".into(),
-                keeps_best: "conserva el original de cada grupo".into(),
-                cancel: "Cancelar".into(),
-                confirm: "Confirmar".into(),
-                match_list: "Lista de coincidencias".into(),
-                col_group: "Grupo".into(),
-                col_original: "Original".into(),
-                col_duplicate: "Duplicado".into(),
-                col_similarity: "Similitud".into(),
-                col_size: "Tamaño".into(),
-                empty_list: "La lista de coincidencias está vacía.".into(),
-                preview: "Vista previa".into(),
-                original: "Original".into(),
-                duplicate: "Duplicado".into(),
-                move_destination: "Carpeta de destino".into(),
-                move_placeholder: "/ruta/para/duplicados".into(),
-                browse: "Examinar…".into(),
-                trash: "Papelera".into(),
-                r#move: "Mover".into(),
-                delete: "Borrar".into(),
-                select_folder: "Selecciona una carpeta".into(),
-                up: "Subir".into(),
-                go: "Ir".into(),
-                select_this_folder: "Usar esta carpeta".into(),
-                show_hidden: "Mostrar ocultas".into(),
-            }
-        } else {
-            Strings {
-                title: "Universal Media Duplicate Finder".into(),
-                add_folder: "Add folder…".into(),
-                remove: "Remove".into(),
-                clear: "Clear".into(),
-                options: "Options".into(),
-                start: "Start".into(),
-                scanning: "Scanning…".into(),
-                stop: "Stop".into(),
-                dark: "Dark".into(),
-                light: "Light".into(),
-                language: "Language".into(),
-                help: "Help".into(),
-                help_title: "Help".into(),
-                close: "Close".into(),
-                locations: "Locations".into(),
-                pictures: "Pictures".into(),
-                documents: "Documents".into(),
-                home: "Home".into(),
-                computer: "Computer".into(),
-                folders_none: "Folders to scan (none)".into(),
-                remove_selected: "Remove selected".into(),
-                clear_all: "Clear all".into(),
-                opt_scan_subfolders: "Scan subfolders".into(),
-                opt_only_identical: "Only 100% identical".into(),
-                opt_compare_media: "Compare media content".into(),
-                opt_similarity: "Similarity".into(),
-                opt_keep: "Keep".into(),
-                opt_metric: "Metric".into(),
-                opt_threads: "Threads".into(),
-                opt_semantic: "Semantic (GPU)".into(),
-                semantic_model: "Path to the .onnx model".into(),
-                models_manage: "Models…".into(),
-                models_title: "Models".into(),
-                models_help: "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.".into(),
-                models_folder: "Models folder".into(),
-                models_capabilities: "Capabilities".into(),
-                models_download: "Download".into(),
-                models_use: "Use".into(),
-                models_active: "Active".into(),
-                models_remove: "Remove".into(),
-                models_accel: "Acceleration".into(),
-                models_threshold: "Similarity".into(),
-                models_none: "No models installed yet. Download one below.".into(),
-                models_clear_cache: "Clear cache".into(),
-                semantic_unavailable: "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.".into(),
-                opt_tolerance: "Pixel tolerance".into(),
-                trash_all: "Trash all duplicates".into(),
-                move_all: "Move all".into(),
-                delete_all: "Delete all".into(),
-                keeps_best: "keeps the original of each group".into(),
-                cancel: "Cancel".into(),
-                confirm: "Confirm".into(),
-                match_list: "Match list".into(),
-                col_group: "Group".into(),
-                col_original: "Original".into(),
-                col_duplicate: "Duplicate".into(),
-                col_similarity: "Similarity".into(),
-                col_size: "Size".into(),
-                empty_list: "The match list is empty.".into(),
-                preview: "Preview".into(),
-                original: "Original".into(),
-                duplicate: "Duplicate".into(),
-                move_destination: "Move destination".into(),
-                move_placeholder: "/path/for/duplicates".into(),
-                browse: "Browse…".into(),
-                trash: "Trash".into(),
-                r#move: "Move".into(),
-                delete: "Delete".into(),
-                select_folder: "Select a folder".into(),
-                up: "Up".into(),
-                go: "Go".into(),
-                select_this_folder: "Select this folder".into(),
-                show_hidden: "Show hidden".into(),
-            }
+    /// Formatted help content: 0 = heading, 1 = paragraph, 2 = bullet.
+    pub fn help_lines(&self) -> Vec<HelpLine> {
+        catalog(self.lang)
+            .help
+            .iter()
+            .map(|line| HelpLine {
+                text: line.text.clone().into(),
+                kind: line.kind,
+            })
+            .collect()
+    }
+
+    fn phrase(&self, key: &'static str) -> &'static str {
+        catalog(self.lang)
+            .phrases
+            .get(key)
+            .or_else(|| catalog(Lang::En).phrases.get(key))
+            .map(|value| value.as_str())
+            .unwrap_or(key)
+    }
+
+    fn fmt(&self, key: &'static str, args: &[(&str, String)]) -> String {
+        let mut text = self.phrase(key).to_string();
+        for (name, value) in args {
+            text = text.replace(&format!("{{{name}}}"), value);
         }
+        text
+    }
+
+    fn verb_label(&self, verb: Verb) -> String {
+        self.phrase(match verb {
+            Verb::Trash => "verb_trash",
+            Verb::Move => "verb_move",
+            Verb::Delete => "verb_delete",
+        })
+        .to_string()
     }
 
     pub fn folders_label(&self, n: usize) -> String {
-        if n == 0 {
-            self.strings().folders_none.to_string()
-        } else if self.es() {
-            format!("Carpetas a escanear ({n})")
-        } else {
-            format!("Folders to scan ({n})")
-        }
+        self.fmt("folders_label", &[("n", n.to_string())])
     }
 
-    // ---- stage -----------------------------------------------------------
     pub fn stage_ready(&self) -> String {
-        if self.es() { "Listo".into() } else { "Ready".into() }
-    }
-    pub fn stage_starting(&self) -> String {
-        if self.es() { "Iniciando…".into() } else { "Starting…".into() }
-    }
-    pub fn stage_loading_total(&self, total: usize) -> String {
-        if self.es() {
-            format!("Etapa 1 de 2 — Cargando (0 / {total})")
-        } else {
-            format!("Stage 1 of 2 — Loading (0 / {total})")
-        }
-    }
-    pub fn stage_loading(&self, name: &str) -> String {
-        if self.es() {
-            format!("Etapa 1 de 2 — Cargando: {name}")
-        } else {
-            format!("Stage 1 of 2 — Loading: {name}")
-        }
-    }
-    pub fn stage_embedding(&self, done: usize, total: usize) -> String {
-        if self.es() {
-            format!("Embebiendo {done} / {total}")
-        } else {
-            format!("Embedding {done} / {total}")
-        }
-    }
-    pub fn stage_hashing(&self, done: usize, total: usize) -> String {
-        if self.es() {
-            format!("Etapa 1 de 2 — Huellas {done} / {total}")
-        } else {
-            format!("Stage 1 of 2 — Hashing {done} / {total}")
-        }
-    }
-    pub fn stage_comparing(&self, done: usize, total: usize) -> String {
-        if self.es() {
-            format!("Etapa 2 de 2 — Comparando {done} / {total}")
-        } else {
-            format!("Stage 2 of 2 — Comparing {done} / {total}")
-        }
-    }
-    pub fn stage_grouping(&self) -> String {
-        if self.es() {
-            "Creando grupos…".into()
-        } else {
-            "Creating matching groups…".into()
-        }
-    }
-    pub fn stage_finished(&self) -> String {
-        if self.es() { "Terminado".into() } else { "Finished".into() }
-    }
-    pub fn stage_stopping(&self) -> String {
-        if self.es() {
-            "Deteniendo…".into()
-        } else {
-            "Stopping…".into()
-        }
-    }
-    pub fn stage_stopped(&self) -> String {
-        if self.es() { "Detenido".into() } else { "Stopped".into() }
-    }
-    pub fn stage_error(&self) -> String {
-        if self.es() { "Error".into() } else { "Error".into() }
-    }
-    pub fn stage_no_folders(&self) -> String {
-        if self.es() {
-            "Ninguna carpeta seleccionada".into()
-        } else {
-            "No folders selected".into()
-        }
+        self.phrase("stage_ready").into()
     }
 
-    // ---- status ----------------------------------------------------------
+    pub fn stage_starting(&self) -> String {
+        self.phrase("stage_starting").into()
+    }
+
+    pub fn stage_loading_total(&self, total: usize) -> String {
+        self.fmt("stage_loading_total", &[("total", total.to_string())])
+    }
+
+    pub fn stage_loading(&self, name: &str) -> String {
+        self.fmt("stage_loading", &[("name", name.to_string())])
+    }
+
+    pub fn stage_embedding(&self, done: usize, total: usize) -> String {
+        self.fmt(
+            "stage_embedding",
+            &[("done", done.to_string()), ("total", total.to_string())],
+        )
+    }
+
+    pub fn stage_hashing(&self, done: usize, total: usize) -> String {
+        self.fmt(
+            "stage_hashing",
+            &[("done", done.to_string()), ("total", total.to_string())],
+        )
+    }
+
+    pub fn stage_comparing(&self, done: usize, total: usize) -> String {
+        self.fmt(
+            "stage_comparing",
+            &[("done", done.to_string()), ("total", total.to_string())],
+        )
+    }
+
+    pub fn stage_grouping(&self) -> String {
+        self.phrase("stage_grouping").into()
+    }
+
+    pub fn stage_finished(&self) -> String {
+        self.phrase("stage_finished").into()
+    }
+
+    pub fn stage_stopping(&self) -> String {
+        self.phrase("stage_stopping").into()
+    }
+
+    pub fn stage_stopped(&self) -> String {
+        self.phrase("stage_stopped").into()
+    }
+
+    pub fn stage_error(&self) -> String {
+        self.phrase("stage_error").into()
+    }
+
+    pub fn stage_no_folders(&self) -> String {
+        self.phrase("stage_no_folders").into()
+    }
+
     pub fn status_ready(&self) -> String {
-        if self.es() {
-            "Añade una carpeta para empezar.".into()
-        } else {
-            "Add a folder to begin.".into()
-        }
+        self.phrase("status_ready").into()
     }
+
     pub fn status_scanning(&self) -> String {
-        if self.es() {
-            "Escaneando — la interfaz sigue respondiendo.".into()
-        } else {
-            "Scanning — the interface stays responsive.".into()
-        }
+        self.phrase("status_scanning").into()
     }
+
     pub fn status_busy(&self) -> String {
-        if self.es() {
-            "Ya hay un escaneo en curso — pulsa Parar primero.".into()
-        } else {
-            "A scan is already running — press Stop first.".into()
-        }
+        self.phrase("status_busy").into()
     }
+
     pub fn status_no_folders(&self) -> String {
-        if self.es() {
-            "Añade al menos una carpeta con «Añadir carpeta…».".into()
-        } else {
-            "Add at least one folder with “Add folder…”.".into()
-        }
+        self.phrase("status_no_folders").into()
     }
+
     pub fn status_stopping(&self) -> String {
-        if self.es() {
-            "Deteniendo…".into()
-        } else {
-            "Stopping…".into()
-        }
+        self.phrase("status_stopping").into()
     }
+
     pub fn status_ffmpeg_missing(&self) -> String {
-        if self.es() {
-            "No se encontró ffmpeg/ffprobe: comparación de contenido multimedia desactivada."
-                .into()
-        } else {
-            "ffmpeg/ffprobe not found — video/audio content comparison disabled.".into()
-        }
+        self.phrase("status_ffmpeg_missing").into()
     }
+
     pub fn status_folder_added(&self, path: &Path) -> String {
-        if self.es() {
-            format!("Añadida: {}", path.display())
-        } else {
-            format!("Added: {}", path.display())
-        }
+        self.fmt("status_folder_added", &[("path", path.display().to_string())])
     }
+
     pub fn status_folder_exists(&self) -> String {
-        if self.es() {
-            "Esa carpeta ya está en la lista.".into()
-        } else {
-            "That folder is already in the list.".into()
-        }
+        self.phrase("status_folder_exists").into()
     }
+
     pub fn status_not_a_folder(&self, path: &Path) -> String {
-        if self.es() {
-            format!("No es una carpeta: {}", path.display())
-        } else {
-            format!("Not a folder: {}", path.display())
-        }
+        self.fmt("status_not_a_folder", &[("path", path.display().to_string())])
     }
+
     pub fn status_folder_removed(&self) -> String {
-        if self.es() {
-            "Carpeta quitada.".into()
-        } else {
-            "Folder removed.".into()
-        }
+        self.phrase("status_folder_removed").into()
     }
+
     pub fn status_folders_cleared(&self) -> String {
-        if self.es() {
-            "Lista de carpetas vaciada.".into()
-        } else {
-            "Folder list cleared.".into()
-        }
+        self.phrase("status_folders_cleared").into()
     }
+
     pub fn status_move_dest_missing(&self) -> String {
-        if self.es() {
-            "Configura primero la carpeta de destino.".into()
-        } else {
-            "Set a move destination first.".into()
-        }
+        self.phrase("status_move_dest_missing").into()
     }
+
     pub fn status_nothing_to_apply(&self) -> String {
-        if self.es() {
-            "No hay nada que aplicar.".into()
-        } else {
-            "There is nothing to apply.".into()
-        }
+        self.phrase("status_nothing_to_apply").into()
     }
+
     pub fn status_confirm_bulk(&self) -> String {
-        if self.es() {
-            "Confirma la acción masiva en la barra naranja.".into()
-        } else {
-            "Confirm the bulk action in the yellow bar.".into()
-        }
+        self.phrase("status_confirm_bulk").into()
     }
+
     pub fn status_bulk_cancelled(&self) -> String {
-        if self.es() {
-            "Acción masiva cancelada.".into()
-        } else {
-            "Bulk action cancelled.".into()
-        }
+        self.phrase("status_bulk_cancelled").into()
     }
+
     pub fn status_trashed(&self, path: &Path) -> String {
-        if self.es() {
-            format!("A la papelera: {}", path.display())
-        } else {
-            format!("Moved to trash: {}", path.display())
-        }
+        self.fmt("status_trashed", &[("path", path.display().to_string())])
     }
+
     pub fn status_trash_failed(&self, path: &Path) -> String {
-        if self.es() {
-            format!("No se pudo enviar a la papelera: {}", path.display())
-        } else {
-            format!("Could not trash: {}", path.display())
-        }
+        self.fmt("status_trash_failed", &[("path", path.display().to_string())])
     }
+
     pub fn status_deleted(&self, path: &Path) -> String {
-        if self.es() {
-            format!("Borrado: {}", path.display())
-        } else {
-            format!("Deleted: {}", path.display())
-        }
+        self.fmt("status_deleted", &[("path", path.display().to_string())])
     }
+
     pub fn status_delete_failed(&self, path: &Path) -> String {
-        if self.es() {
-            format!("No se pudo borrar: {}", path.display())
-        } else {
-            format!("Could not delete: {}", path.display())
-        }
+        self.fmt("status_delete_failed", &[("path", path.display().to_string())])
     }
+
     pub fn status_moved(&self, path: &Path) -> String {
-        if self.es() {
-            format!("Movido a: {}", path.display())
-        } else {
-            format!("Moved to: {}", path.display())
-        }
+        self.fmt("status_moved", &[("path", path.display().to_string())])
     }
+
     pub fn status_move_failed(&self, path: &Path) -> String {
-        if self.es() {
-            format!("No se pudo mover: {}", path.display())
-        } else {
-            format!("Could not move: {}", path.display())
-        }
+        self.fmt("status_move_failed", &[("path", path.display().to_string())])
     }
+
     pub fn status_error(&self, error: &str) -> String {
-        if self.es() {
-            format!("Error: {error}")
-        } else {
-            format!("Error: {error}")
-        }
+        self.fmt("status_error", &[("error", error.to_string())])
     }
 
     pub fn confirm_bulk(&self, verb: Verb, count: usize, destination: Option<&Path>) -> String {
-        let dest = destination
-            .map(|p| format!(" → {}", p.display()))
-            .unwrap_or_default();
-        match (self.es(), verb) {
-            (false, Verb::Trash) => format!(
-                "This will move {count} duplicate file(s){dest} to the trash, keeping the most likely original of every group."
+        let verb = self.verb_label(verb);
+        let count = count.to_string();
+        match destination {
+            Some(destination) => self.fmt(
+                "confirm_bulk_dest",
+                &[
+                    ("verb", verb),
+                    ("count", count),
+                    ("destination", destination.display().to_string()),
+                ],
             ),
-            (false, Verb::Move) => format!(
-                "This will move {count} duplicate file(s){dest}, keeping the most likely original of every group."
-            ),
-            (false, Verb::Delete) => format!(
-                "This will permanently delete {count} duplicate file(s), keeping the most likely original of every group. This cannot be undone."
-            ),
-            (true, Verb::Trash) => format!(
-                "Se enviarán {count} archivo(s) duplicado(s){dest} a la papelera, conservando el original más probable de cada grupo."
-            ),
-            (true, Verb::Move) => format!(
-                "Se moverán {count} archivo(s) duplicado(s){dest}, conservando el original más probable de cada grupo."
-            ),
-            (true, Verb::Delete) => format!(
-                "Se borrarán definitivamente {count} archivo(s) duplicado(s), conservando el original más probable de cada grupo. Esta acción no se puede deshacer."
-            ),
+            None => self.fmt("confirm_bulk", &[("verb", verb), ("count", count)]),
         }
     }
 
     pub fn bulk_done(&self, done: usize, verb: Verb, bytes: &str, failed: usize) -> String {
-        match (self.es(), verb) {
-            (false, Verb::Trash) => {
-                format!("Bulk action finished: {done} file(s) trashed ({bytes}), {failed} failed.")
-            }
-            (false, Verb::Move) => {
-                format!("Bulk action finished: {done} file(s) moved ({bytes}), {failed} failed.")
-            }
-            (false, Verb::Delete) => {
-                format!("Bulk action finished: {done} file(s) deleted ({bytes}), {failed} failed.")
-            }
-            (true, Verb::Trash) => format!(
-                "Acción masiva terminada: {done} archivo(s) a la papelera ({bytes}), {failed} con error."
-            ),
-            (true, Verb::Move) => format!(
-                "Acción masiva terminada: {done} archivo(s) movidos ({bytes}), {failed} con error."
-            ),
-            (true, Verb::Delete) => format!(
-                "Acción masiva terminada: {done} archivo(s) borrados ({bytes}), {failed} con error."
-            ),
-        }
+        let verb = self.verb_label(verb);
+        self.fmt(
+            "bulk_done",
+            &[
+                ("verb", verb),
+                ("done", done.to_string()),
+                ("bytes", bytes.to_string()),
+                ("failed", failed.to_string()),
+            ],
+        )
     }
 
-    // ---- counters --------------------------------------------------------
     pub fn files_scanned(&self, n: usize) -> String {
-        if self.es() {
-            format!("Archivos escaneados: {n}")
-        } else {
-            format!("Files scanned: {n}")
-        }
+        self.fmt("files_scanned", &[("n", n.to_string())])
     }
+
     pub fn files_scanned_progress(&self, index: usize, total: usize) -> String {
-        if self.es() {
-            format!("Archivos escaneados: {index} / {total}")
-        } else {
-            format!("Files scanned: {index} / {total}")
-        }
+        self.fmt(
+            "files_scanned_progress",
+            &[("index", index.to_string()), ("total", total.to_string())],
+        )
     }
+
     pub fn duplicates_found(&self, n: usize) -> String {
-        if self.es() {
-            format!("Duplicados encontrados: {n}")
-        } else {
-            format!("Duplicates found: {n}")
-        }
+        self.fmt("duplicates_found", &[("n", n.to_string())])
     }
+
     pub fn duplicates_found_groups(&self, n: usize, groups: usize) -> String {
-        if self.es() {
-            format!("Duplicados encontrados: {n} ({groups} grupos)")
-        } else {
-            format!("Duplicates found: {n} ({groups} groups)")
-        }
+        self.fmt(
+            "duplicates_found_groups",
+            &[("n", n.to_string()), ("groups", groups.to_string())],
+        )
     }
+
     pub fn reclaimable(&self, human: &str) -> String {
-        if self.es() {
-            format!("Recuperable: {human}")
-        } else {
-            format!("Reclaimable: {human}")
-        }
+        self.fmt("reclaimable", &[("human", human.to_string())])
     }
+
     pub fn elapsed(&self, secs: f64, groups: usize, threads: usize) -> String {
-        if self.es() {
-            format!("Tiempo: {secs:.2}s · {threads} hilos · {groups} grupo(s)")
-        } else {
-            format!("Elapsed: {secs:.2}s · {threads} threads · {groups} group(s)")
-        }
+        self.fmt(
+            "elapsed",
+            &[
+                ("secs", format!("{secs:.1}")),
+                ("groups", groups.to_string()),
+                ("threads", threads.to_string()),
+            ],
+        )
     }
 
     pub fn original_likely(&self, pct: f32) -> String {
-        if self.es() {
-            format!("Original · {pct:.0}% probable")
-        } else {
-            format!("Original · {pct:.0}% likely")
-        }
+        self.fmt("original_likely", &[("pct", format!("{pct:.0}"))])
     }
 
     pub fn reason_labels(&self, codes: &[String]) -> String {
-        let labels: Vec<&'static str> = codes
+        codes
             .iter()
-            .map(|code| match (self.es(), code.as_str()) {
-                (false, "resolution") => "higher resolution",
-                (false, "quality") => "better quality per pixel/bitrate",
-                (false, "age") => "older file date",
-                (false, "metadata") => "camera EXIF metadata",
-                (false, "name") => "name without copy markers",
-                (false, "location") => "typical original location",
-                (false, _) => "most consistent signal set",
-                (true, "resolution") => "mayor resolución",
-                (true, "quality") => "mejor calidad por píxel/bitrate",
-                (true, "age") => "fecha de archivo más antigua",
-                (true, "metadata") => "metadatos EXIF de cámara",
-                (true, "name") => "nombre sin marcas de copia",
-                (true, "location") => "ubicación típica de originales",
-                (true, _) => "conjunto de señales más consistente",
+            .map(|code| {
+                let key = match code.as_str() {
+                    "resolution" => "reason_resolution",
+                    "quality" => "reason_quality",
+                    "age" => "reason_age",
+                    "metadata" => "reason_metadata",
+                    "name" => "reason_name",
+                    "location" => "reason_location",
+                    _ => "reason_other",
+                };
+                self.phrase(key)
             })
-            .collect();
-        labels.join(", ")
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     pub fn no_picture(&self) -> String {
-        if self.es() {
-            "Sin imagen seleccionada".into()
-        } else {
-            "No picture selected".into()
-        }
+        self.phrase("no_picture").into()
     }
 
     pub fn status_stopped_partial(&self, n: usize) -> String {
-        if self.es() {
-            format!("Detenido tras {n} archivo(s) — resultados parciales conservados. Puedes volver a buscar.")
-        } else {
-            format!(
-                "Stopped after {n} file(s) — partial results kept. You can start again."
-            )
-        }
+        self.fmt("status_stopped_partial", &[("n", n.to_string())])
     }
+
     pub fn status_stopped_zero(&self) -> String {
-        if self.es() {
-            "Detenido antes de procesar ningún archivo. Puedes volver a buscar.".into()
-        } else {
-            "Stopped before processing any file. You can start again.".into()
-        }
+        self.phrase("status_stopped_zero").into()
     }
+
     pub fn status_finished(&self, groups: usize, duplicates: usize) -> String {
-        if self.es() {
-            format!("Terminado: {groups} grupo(s), {duplicates} duplicado(s).")
-        } else {
-            format!("Finished: {groups} group(s), {duplicates} duplicate(s).")
-        }
+        self.fmt(
+            "status_finished",
+            &[
+                ("groups", groups.to_string()),
+                ("duplicates", duplicates.to_string()),
+            ],
+        )
     }
+
     pub fn browser_folders(&self, n: usize) -> String {
-        if self.es() {
-            format!("{n} subcarpeta(s) — pulsa una para abrirla")
-        } else {
-            format!("{n} sub-folder(s) — click one to open it")
-        }
+        self.fmt("browser_folders", &[("n", n.to_string())])
     }
+
     pub fn model_no_url(&self) -> String {
-        if self.es() { "Este modelo no tiene URL de descarga.".into() } else { "This model has no download URL.".into() }
+        self.phrase("model_no_url").into()
     }
+
     pub fn model_downloading(&self, name: &str) -> String {
-        if self.es() { format!("Descargando {name}…") } else { format!("Downloading {name}…") }
+        self.fmt("model_downloading", &[("name", name.to_string())])
     }
+
     pub fn model_downloaded(&self, name: &str, mb: f64) -> String {
-        if self.es() {
-            format!("{name} descargado ({mb:.0} MB). Pulsa Usar.")
-        } else {
-            format!("Downloaded {name} ({mb:.0} MB). Press Use.")
-        }
+        self.fmt(
+            "model_downloaded",
+            &[("name", name.to_string()), ("mb", format!("{mb:.0}"))],
+        )
     }
+
     pub fn model_failed(&self, error: &str) -> String {
-        if self.es() { format!("Fallo en la descarga: {error}") } else { format!("Download failed: {error}") }
+        self.fmt("model_failed", &[("error", error.to_string())])
     }
+
     pub fn model_missing(&self, path: &str) -> String {
-        if self.es() { format!("No existe el archivo: {path}") } else { format!("Missing file: {path}") }
+        self.fmt("model_missing", &[("path", path.to_string())])
     }
+
     pub fn model_active(&self, name: &str) -> String {
-        if self.es() { format!("{name} es ahora el modelo activo.") } else { format!("{name} is now the active model.") }
+        self.fmt("model_active", &[("name", name.to_string())])
     }
+
     pub fn model_removed(&self, name: &str) -> String {
-        if self.es() { format!("{name} eliminado.") } else { format!("Removed {name}.") }
+        self.fmt("model_removed", &[("name", name.to_string())])
     }
+
     pub fn models_folder(&self, path: &str) -> String {
-        if self.es() { format!("Carpeta de modelos: {path}") } else { format!("Models folder: {path}") }
+        self.fmt("models_folder", &[("path", path.to_string())])
     }
+
     pub fn cache_cleared(&self) -> String {
-        if self.es() {
-            "Caché vaciada; el próximo escaneo recalculará fingerprints y embeddings.".into()
-        } else {
-            "Cache cleared; the next scan will recompute fingerprints and embeddings.".into()
-        }
+        self.phrase("cache_cleared").into()
     }
+
     pub fn no_embeddings_build(&self) -> String {
-        if self.es() {
-            "Esta compilación no incluye embeddings ONNX; recompila con --features embeddings.".into()
-        } else {
-            "This build has no ONNX embeddings support; rebuild with --features embeddings.".into()
-        }
+        self.phrase("no_embeddings_build").into()
     }
+
     pub fn model_select_first(&self) -> String {
-        if self.es() {
-            "Selecciona o descarga un modelo primero (Modelos…).".into()
-        } else {
-            "Select or download a model first (Models…).".into()
-        }
+        self.phrase("model_select_first").into()
     }
+
     pub fn browser_not_a_folder(&self, path: &Path) -> String {
-        if self.es() {
-            format!("No es una carpeta: {}", path.display())
-        } else {
-            format!("Not a folder: {}", path.display())
+        self.fmt(
+            "browser_not_a_folder",
+            &[("path", path.display().to_string())],
+        )
+    }
+
+    pub fn browser_destination(&self) -> String {
+        self.phrase("browser_destination").into()
+    }
+
+    pub fn model_name(&self, id: &str) -> Option<String> {
+        match id {
+            "clip" => Some(self.phrase("model_clip_name").to_string()),
+            "siglip" => Some(self.phrase("model_siglip_name").to_string()),
+            _ => None,
         }
     }
-    pub fn browser_destination(&self) -> String {
-        if self.es() {
-            "Elige la carpeta de destino y pulsa «Usar esta carpeta».".into()
-        } else {
-            "Choose the destination folder and press “Select this folder”.".into()
-        }
+
+    pub fn model_capabilities(&self, id: &str) -> String {
+        let key = match id {
+            "resnet18" => "model_resnet18_caps",
+            "resnet50" => "model_resnet50_caps",
+            "clip" => "model_clip_caps",
+            "siglip" => "model_siglip_caps",
+            _ => return String::new(),
+        };
+        self.phrase(key).to_string()
+    }
+
+    pub fn no_model_selected(&self) -> String {
+        self.phrase("no_model_selected").into()
+    }
+
+    pub fn keep_labels(&self) -> Vec<String> {
+        [
+            "keep_original",
+            "keep_dimensions",
+            "keep_filesize",
+            "keep_earlierdate",
+            "keep_earlierexifdate",
+            "keep_oldest",
+            "keep_name",
+            "keep_path",
+        ]
+        .into_iter()
+        .map(|key| self.phrase(key).to_string())
+        .collect()
+    }
+
+    pub fn thread_labels(&self) -> Vec<String> {
+        let mut labels = vec![self.phrase("auto_label").to_string()];
+        labels.extend(["1", "2", "4", "8", "16", "32"].into_iter().map(str::to_string));
+        labels
     }
 }
 
-impl Tr {
-    /// Formatted help content: 0 = heading, 1 = paragraph, 2 = bullet.
-    pub fn help_lines(&self) -> Vec<HelpLine> {
-        let raw: Vec<(&str, i32)> = if self.es() {
-            vec![
-                ("Qué hace UMDF", 0),
-                ("UMDF busca fotos, vídeos, audio y archivos duplicados. Combina comparación exacta byte a byte con huellas perceptuales y puntúa qué copia es más probable que sea el original.", 1),
-                ("Cómo funciona la detección", 0),
-                ("• Exacto: mismo tamaño + SHA-256 (o comparación completa) → 100 %.", 2),
-                ("• Perceptual: la imagen se reescala a 75×75 en gris; «dpf» cuenta los píxeles dentro de la tolerancia de gris.", 2),
-                ("• Vídeo: ffprobe + un fotograma en «Frame position», con la misma huella de imagen.", 2),
-                ("• Audio: se hashean 5 s de PCM decodificado; re-muxear o re-etiquetar conserva la coincidencia; recodificar con pérdida no.", 2),
-                ("Tolerancia de gris (pixel tolerance)", 0),
-                ("Diferencia máxima de nivel de gris (0–255) para que dos píxeles cuenten como iguales. 0 = estricto; 10 (defecto) tolera recompresión JPEG; 14–18 puede tolerar retoques locales; por encima de ~24 aumentan los falsos positivos. No corrige recortes ni desplazamientos grandes.", 1),
-                ("Si se escapan copias editadas, súbela poco a poco y revisa los resultados. Para archivos exactos, bájala.", 1),
-                ("Métricas", 0),
-                ("• dpf (defecto): tolerancia de píxel; suele tolerar reescalado, compresión y pequeños retoques, pero no recortes grandes.", 2),
-                ("• ssim: similitud estructural global; puede tolerar mejor retoques locales, pero no garantiza coincidencia.", 2),
-                ("• sign: acuerdo de signo de la rejilla normalizada.", 2),
-                ("• pearson: correlación de las rejillas; más estricta con la estructura.", 2),
-                ("• legacy: métrica de signo heredada, solo para comparación; su escala es muy permisiva y no es fiable para decidir duplicados.", 2),
-                ("• Semántica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por coseno. En builds estándar está desactivada; los paquetes AI ya la incluyen.", 2),
-                ("Modelos semánticos (IA)", 0),
-                ("En un paquete AI, activa «Semántica (IA)», pulsa «Modelos…», descarga un modelo y pulsa «Usar». El escaneo compara por embedding con similitud coseno; «Similitud» fija el umbral.", 1),
-                ("ResNet-18/50: similitud general y rápida; para fotos redimensionadas, recomprimidas o con retoques ligeros.", 2),
-                ("CLIP/SigLIP: similitud semántica de escena/contenido; no son reconocimiento facial ni identifican personas. El umbral ~0.83 es un punto de partida dependiente del modelo.", 2),
-                ("Al activar un modelo, «Similitud» toma su valor recomendado (0.90 ResNet, 0.83 CLIP/SigLIP); ajústalo con tus propias fotos.", 2),
-                ("Los modelos públicos se descargan sin token en la carpeta de modelos (por defecto ./models). La configuración vive en config.toml y la caché en cache.db.", 2),
-                ("Los paquetes AI incluyen un ONNX Runtime CPU y usan CPU por defecto. Para CUDA, apunta ORT_DYLIB_PATH a un runtime GPU y selecciona CUDA; si falla, se usa CPU.", 2),
-                ("Recomendaciones por caso", 0),
-                ("Duplicados exactos: SHA-256; no hace falta modelo.", 2),
-                ("Redimensionadas o recomprimidas: dpf (defecto) o embeddings ResNet.", 2),
-                ("Recortes o encuadres distintos: CLIP/SigLIP puede ayudar, pero la puerta de relación de aspecto (≤1.5) puede excluirlos antes de comparar.", 2),
-                ("Misma escena o contenido en tomas distintas: CLIP/SigLIP con umbral de partida ~0.83; revisa los falsos positivos.", 2),
-                ("Rotadas: la orientación EXIF se aplica; una rotación «horneada» sin EXIF puede escaparse incluso con modelos semánticos. Revísala a mano.", 2),
-                ("Ojos rojos o retoques locales: prueba dpf con tolerancia 14–18 o ssim; si no, revisa a mano. Subir la tolerancia aumenta los falsos positivos.", 2),
-                ("Vídeo: un fotograma en «Frame position»; audio: 5 s de PCM. Requiere ffmpeg y ffprobe en PATH.", 2),
-                ("Fotos rotadas y editadas", 0),
-                ("• Se aplica la orientación EXIF al decodificar: una foto etiquetada coincide con su copia rotada físicamente.", 2),
-                ("• Una rotación aplicada a los píxeles sin EXIF puede no detectarse; no hay garantía, revísala manualmente.", 2),
-                ("• La corrección de ojos rojos cambia un área pequeña; dpf/ssim pueden seguir coincidiendo, pero no es seguro. Ajusta tolerancia o umbral y verifica.", 2),
-                ("Qué copia se conserva", 0),
-                ("La política «original» calcula una puntuación heurística con resolución, bytes por píxel, antigüedad, riqueza EXIF, marcas en el nombre y ubicación. No es una probabilidad ni garantiza el original; la vista previa muestra la puntuación y los motivos.", 1),
-                ("Acciones seguras", 0),
-                ("• Papelera/Mover/Borrar actúan sobre un duplicado; los botones masivos piden confirmación.", 2),
-                ("• Papelera depende del escritorio y del sistema de archivos; Borrar es permanente e irreversible.", 2),
-                ("• Tras borrar, la fila siguiente queda seleccionada para comparar y borrar en cadena.", 2),
-                ("• Teclado: ↑/↓ seleccionan, Supr/Delete borra.", 2),
-                ("Rendimiento", 0),
-                ("La decodificación, el hash y la comparación usan todas las CPU por defecto; ajusta «Threads» o --threads. La comparación perceptual es O(n²) en el peor caso y las imágenes grandes consumen memoria.", 1),
-                ("Limitaciones", 0),
-                ("• La puntuación «original» es heurística: ordena candidatos, no garantiza cuál es el original.", 2),
-                ("• La rejilla de 75×75 en gris puede fallar en imágenes muy oscuras, de bajo contraste o con grandes zonas uniformes.", 2),
-                ("• La puerta de relación de aspecto (máx/mín ≤ 1.5) puede descartar recortes o encuadres muy distintos.", 2),
-                ("• dpf tolera recompresión y cambios pequeños, no recortes grandes ni rotaciones «horneadas»; subir la tolerancia aumenta los falsos positivos.", 2),
-                ("• CLIP/SigLIP comparan contenido global, no caras ni identidad; personas distintas en escenas parecidas pueden coincidir.", 2),
-                ("• Los umbrales 0.90/0.83 son puntos de partida dependientes del modelo y de la colección.", 2),
-                ("• Vídeo: un solo fotograma; otro fotograma, corte o duración puede no detectarse.", 2),
-                ("• Audio: re-muxear/re-etiquetar coincide; recodificar con pérdida no.", 2),
-                ("• Sin ffmpeg/ffprobe solo se comparan imágenes y archivos exactos.", 2),
-                ("• Archivos corruptos, no soportados o enormes pueden omitirse o consumir mucha memoria.", 2),
-                ("• Papelera/Mover dependen del sistema; Borrar es irreversible.", 2),
-                ("• Builds estándar sin embeddings; paquetes AI con runtime CPU. CUDA requiere ONNX Runtime GPU externo (ORT_DYLIB_PATH).", 2),
-                ("• Los modelos descargados no se incluyen en el instalador y conservan la licencia de su repositorio de origen.", 2),
-            ]
-        } else {
-            vec![
-                ("What UMDF does", 0),
-                ("UMDF scans folders for duplicate photos, videos, audio and files. It combines exact byte comparison with perceptual fingerprints and scores which copy is most likely to be the original.", 1),
-                ("How detection works", 0),
-                ("• Exact: same size + SHA-256 (or full-file comparison) → 100%.", 2),
-                ("• Perceptual: the image is resampled to 75×75 grayscale; 'dpf' counts pixels within the gray tolerance.", 2),
-                ("• Video: ffprobe + one frame at 'Frame position', fingerprinted as an image.", 2),
-                ("• Audio: 5 s of decoded PCM hashed; re-muxed or retagged files match; lossy re-encoding does not.", 2),
-                ("Pixel tolerance (gray tolerance)", 0),
-                ("Maximum difference in gray level (0–255) for two pixels to count as equal. 0 = strict; 10 (default) tolerates JPEG recompression; 14–18 may tolerate local retouching; above ~24 false positives increase. It does not correct large crops or shifts.", 1),
-                ("If edited copies are missed, raise it gradually and review the results. For exact archives, lower it.", 1),
-                ("Metrics", 0),
-                ("• dpf (default): pixel tolerance; usually tolerates resize, compression and small retouching, but not large crops.", 2),
-                ("• ssim: global structural similarity; may tolerate local retouching better, but does not guarantee a match.", 2),
-                ("• sign: sign agreement of the normalised grid.", 2),
-                ("• pearson: correlation of the grids; stricter about structure.", 2),
-                ("• legacy: legacy sign-agreement metric kept for comparison; its scale is very permissive and it is not reliable for duplicate decisions.", 2),
-                ("• Semantic (optional): ONNX embeddings (ResNet/CLIP/SigLIP) compared by cosine. Disabled in standard builds; AI packages include it.", 2),
-                ("Semantic models (AI)", 0),
-                ("In an AI package, enable 'Semantic (AI)', press 'Models…', download a model and press 'Use'. The scan compares by embedding with cosine similarity; 'Similarity' sets the threshold.", 1),
-                ("ResNet-18/50: fast, general similarity for resized, recompressed or lightly edited photos.", 2),
-                ("CLIP/SigLIP: semantic scene/content similarity; they are not face recognition and do not identify people. The ~0.83 threshold is a model-dependent starting point.", 2),
-                ("Activating a model sets 'Similarity' to its recommended value (0.90 ResNet, 0.83 CLIP/SigLIP); tune it with your own photos.", 2),
-                ("Public models download without a token into the models folder (default ./models). Configuration lives in config.toml and the cache in cache.db.", 2),
-                ("AI packages bundle a CPU ONNX Runtime and default to CPU. For CUDA, point ORT_DYLIB_PATH at a GPU runtime and select CUDA; if it fails, CPU is used.", 2),
-                ("Recommended by case", 0),
-                ("Exact duplicates: SHA-256; no model needed.", 2),
-                ("Resized or recompressed: dpf (default) or ResNet embeddings.", 2),
-                ("Crops or different framing: CLIP/SigLIP may help, but the aspect-ratio gate (≤1.5) can exclude very different crops before comparison.", 2),
-                ("Same scene or content in different shots: CLIP/SigLIP with a ~0.83 starting threshold; review false positives.", 2),
-                ("Rotated: EXIF orientation is applied; a rotation baked into the pixels without EXIF can be missed even by semantic models. Review it manually.", 2),
-                ("Red-eye or local retouching: try dpf with tolerance 14–18 or ssim; otherwise review manually. Raising the tolerance increases false positives.", 2),
-                ("Video: one frame at 'Frame position'; audio: 5 s of PCM. Requires ffmpeg and ffprobe on PATH.", 2),
-                ("Rotated and edited photos", 0),
-                ("• EXIF orientation is applied when decoding: a tagged photo matches its physically rotated copy.", 2),
-                ("• A rotation applied to the pixels without EXIF may not be detected; there is no guarantee, so review it manually.", 2),
-                ("• Red-eye correction changes a small area; dpf/ssim may still match, but it is not guaranteed. Adjust tolerance or threshold and verify.", 2),
-                ("Which copy is kept?", 0),
-                ("The 'original' policy computes a heuristic score from resolution, bytes per pixel, age, EXIF richness, name markers and location. It is not a probability and does not guarantee the original; the preview shows the score and reasons.", 1),
-                ("Safe actions", 0),
-                ("• Trash/Move/Delete act on one duplicate; bulk buttons ask for confirmation.", 2),
-                ("• Trash depends on the desktop and filesystem; Delete is permanent and irreversible.", 2),
-                ("• After deleting, the next row stays selected to compare and delete repeatedly.", 2),
-                ("• Keyboard: ↑/↓ select, Del/Delete removes.", 2),
-                ("Performance", 0),
-                ("Decoding, hashing and comparison use all CPUs by default; adjust 'Threads' or --threads. Perceptual comparison is O(n²) in the worst case and large images consume memory.", 1),
-                ("Limitations", 0),
-                ("• The 'original' score is heuristic: it ranks candidates, it does not guarantee which copy is the original.", 2),
-                ("• The 75×75 grayscale grid can fail on very dark, low-contrast or mostly uniform images.", 2),
-                ("• The aspect-ratio gate (max/min ≤ 1.5) can discard very different crops or framings.", 2),
-                ("• dpf tolerates recompression and small changes, not large crops or baked-in rotations; raising the tolerance increases false positives.", 2),
-                ("• CLIP/SigLIP compare global content, not faces or identity; different people in similar scenes can match.", 2),
-                ("• The 0.90/0.83 thresholds are starting points that depend on the model and the collection.", 2),
-                ("• Video: a single frame; a different frame, cut or duration may not be detected.", 2),
-                ("• Audio: re-muxing/retagging matches; lossy re-encoding does not.", 2),
-                ("• Without ffmpeg/ffprobe only images and exact files are compared.", 2),
-                ("• Corrupt, unsupported or very large files may be skipped or consume a lot of memory.", 2),
-                ("• Trash/Move depend on the system; Delete is irreversible.", 2),
-                ("• Standard builds have no embeddings; AI packages bundle a CPU runtime. CUDA requires an external GPU ONNX Runtime (ORT_DYLIB_PATH).", 2),
-                ("• Downloaded models are not included in the installer and keep the license of their upstream repository.", 2),
-            ]
-        };
-        raw.into_iter()
-            .map(|(text, kind)| HelpLine {
-                text: text.into(),
-                kind,
-            })
-            .collect()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_catalog_parses_and_has_content() {
+        for lang in Lang::ALL {
+            let catalog = catalog(lang);
+            assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
+            assert!(catalog.help.len() > 10, "{}", lang.code());
+            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original"] {
+                assert!(
+                    catalog.phrases.contains_key(key),
+                    "{} missing {key}",
+                    lang.code()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn language_codes_round_trip() {
+        for lang in Lang::ALL {
+            assert_eq!(Lang::from_code(lang.code()), Some(lang));
+            assert_eq!(Lang::from_index(lang.index() as i32), lang);
+        }
     }
 }
 

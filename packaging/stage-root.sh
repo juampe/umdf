@@ -38,6 +38,7 @@ install -m 0644 packaging/umdf.desktop "$ROOT/usr/share/applications/umdf.deskto
 install -m 0644 assets/icon-256.png "$ROOT/usr/share/icons/hicolor/256x256/apps/umdf.png"
 install -m 0644 assets/icon-512.png "$ROOT/usr/share/icons/hicolor/512x512/apps/umdf.png"
 install -m 0644 README.md CHANGELOG.md THIRD_PARTY.md THIRD_PARTY_LICENSES.md LICENSE "$ROOT/usr/share/doc/umdf/"
+install -m 0644 assets/fonts/NOTO-COPYRIGHT.txt "$ROOT/usr/share/doc/umdf/NOTO-COPYRIGHT.txt"
 install -m 0644 packaging/debian-copyright "$ROOT/usr/share/doc/umdf/copyright"
 
 if [ -n "$VERSION" ]; then

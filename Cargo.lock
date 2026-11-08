@@ -5481,7 +5481,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5492,7 +5492,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5510,7 +5510,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-ui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5519,6 +5519,7 @@ dependencies = [
  "rayon",
  "rusqlite",
  "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "toml 1.2.1+spec-1.1.0",

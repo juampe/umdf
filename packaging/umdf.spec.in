@@ -41,6 +41,7 @@ cp -a %{_sourcedir}/root/. %{buildroot}/
 %doc /usr/share/doc/umdf/README.md
 %doc /usr/share/doc/umdf/THIRD_PARTY.md
 %doc /usr/share/doc/umdf/THIRD_PARTY_LICENSES.md
+%license /usr/share/doc/umdf/NOTO-COPYRIGHT.txt
 %doc /usr/share/doc/umdf/CHANGELOG.md
 %doc /usr/share/doc/umdf/SOURCE.txt
 %doc /usr/share/doc/umdf/copyright

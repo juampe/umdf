@@ -433,6 +433,8 @@ export component AppWindow inherits Window {
     in-out property <string> semantic-summary: "";
     in-out property <float> semantic-threshold: 0.90;
     in-out property <string> semantic-threshold-label: "0.90";
+    in-out property <[string]> keep-labels;
+    in-out property <[string]> thread-labels;
     in-out property <bool> models-open: false;
     in-out property <[ModelRow]> model-rows;
     in-out property <string> models-status: "";
@@ -619,10 +621,10 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-theme(); }
                             }
                             ComboBox {
-                                model: ["English", "Español"];
+                                model: ["English", "Español", "Français", "Deutsch", "Português", "Italiano", "中文", "日本語", "한국어"];
                                 current-index <=> root.lang-index;
                                 selected => { root.set-lang(root.lang-index); }
-                                width: 112px;
+                                width: 154px;
                                 height: 34px;
                             }
                         }
@@ -773,7 +775,7 @@ export component AppWindow inherits Window {
                                 }
                                 Text { text: root.strings.opt_keep; font-size: 11px; color: Theme.text2; }
                                 ComboBox {
-                                    model: ["original", "dimensions", "filesize", "earlierdate", "earlierexifdate", "oldest", "name", "path"];
+                                    model: root.keep-labels;
                                     current-index <=> root.keep-index;
                                 }
                                 if !root.semantic-enabled : VerticalLayout {
@@ -786,7 +788,7 @@ export component AppWindow inherits Window {
                                 }
                                 Text { text: root.strings.opt_threads; font-size: 11px; color: Theme.text2; }
                                 ComboBox {
-                                    model: ["Auto", "1", "2", "4", "8", "16", "32"];
+                                    model: root.thread-labels;
                                     current-index <=> root.threads-index;
                                 }
                                 VerticalLayout {
@@ -894,7 +896,7 @@ export component AppWindow inherits Window {
                                 font-size: 10px;
                                 vertical-alignment: center;
                                 horizontal-stretch: 1;
-                                overflow: elide;
+                                wrap: word-wrap;
                             }
                         }
 
@@ -932,11 +934,12 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             height: 30px;
                             padding-left: 4px;
+                            spacing: 4px;
                             Text { text: root.strings.col_group; width: 45px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
                             Text { text: root.strings.col_original; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
                             Text { text: root.strings.col_duplicate; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
-                            Text { text: root.strings.col_similarity; width: 64px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
-                            Text { text: root.strings.col_size; horizontal-stretch: 1; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_similarity; width: 74px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                            Text { text: root.strings.col_size; horizontal-stretch: 1; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                         }
 
                         Rectangle {
@@ -983,7 +986,7 @@ export component AppWindow inherits Window {
                                             }
                                             Text { text: row.duplicate; vertical-alignment: center; font-size: 11px; color: Theme.text; overflow: elide; }
                                         }
-                                        Text { text: row.similarity; width: 64px; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
+                                        Text { text: row.similarity; width: 74px; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
                                         Text { text: row.size; horizontal-stretch: 1; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
                                     }
                                     TouchArea { clicked => { scope.focus(); root.select-row(i); } }

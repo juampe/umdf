@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "添加文件夹…",
+    "remove": "移除",
+    "clear": "清除",
+    "options": "选项",
+    "start": "开始",
+    "scanning": "正在扫描…",
+    "stop": "停止",
+    "dark": "深色",
+    "light": "浅色",
+    "language": "语言",
+    "help": "帮助",
+    "help_title": "帮助",
+    "close": "关闭",
+    "locations": "位置",
+    "pictures": "图片",
+    "documents": "文档",
+    "home": "主目录",
+    "computer": "计算机",
+    "folders_none": "要扫描的文件夹（无）",
+    "remove_selected": "移除所选",
+    "clear_all": "全部清除",
+    "opt_scan_subfolders": "包含子文件夹",
+    "opt_only_identical": "仅 100% 相同",
+    "opt_compare_media": "比较媒体内容",
+    "opt_similarity": "相似度",
+    "opt_keep": "保留",
+    "opt_metric": "指标",
+    "opt_threads": "线程",
+    "opt_semantic": "语义（GPU）",
+    "semantic_model": ".onnx 模型路径",
+    "models_manage": "模型…",
+    "models_title": "模型",
+    "models_help": "从 Hugging Face 下载图像嵌入模型。文件夹和当前模型保存在 config.toml；派生数据缓存在 cache.db。",
+    "models_folder": "模型文件夹",
+    "models_capabilities": "功能",
+    "models_download": "下载",
+    "models_use": "使用",
+    "models_active": "已启用",
+    "models_remove": "移除",
+    "models_accel": "加速",
+    "models_threshold": "相似度",
+    "models_none": "尚未安装模型。请在下方下载。",
+    "models_clear_cache": "清空缓存",
+    "semantic_unavailable": "此版本不包含语义搜索。请使用 --features embeddings 和 ONNX Runtime 重新编译。",
+    "opt_tolerance": "像素容差",
+    "trash_all": "全部移至回收站",
+    "move_all": "全部移动",
+    "delete_all": "全部删除",
+    "keeps_best": "保留每组中的原图",
+    "cancel": "取消",
+    "confirm": "确认",
+    "match_list": "匹配列表",
+    "col_group": "组",
+    "col_original": "原图",
+    "col_duplicate": "重复",
+    "col_similarity": "相似度",
+    "col_size": "大小",
+    "empty_list": "匹配列表为空。",
+    "preview": "预览",
+    "original": "原图",
+    "duplicate": "重复",
+    "move_destination": "移动目标文件夹",
+    "move_placeholder": "/重复文件/路径",
+    "browse": "浏览…",
+    "trash": "回收站",
+    "move": "移动",
+    "delete": "删除",
+    "select_folder": "选择文件夹",
+    "up": "上一级",
+    "go": "前往",
+    "select_this_folder": "使用此文件夹",
+    "show_hidden": "显示隐藏文件"
+  },
+  "phrases": {
+    "folders_label": "要扫描的文件夹（{n}）",
+    "stage_ready": "就绪",
+    "stage_starting": "正在启动…",
+    "stage_loading_total": "正在加载 {total} 个文件…",
+    "stage_loading": "正在加载 {name}…",
+    "stage_embedding": "正在计算嵌入 {done}/{total}…",
+    "stage_hashing": "正在计算哈希 {done}/{total}…",
+    "stage_comparing": "正在比较 {done}/{total}…",
+    "stage_grouping": "正在分组匹配…",
+    "stage_finished": "已完成",
+    "stage_stopping": "正在停止…",
+    "stage_stopped": "已停止",
+    "stage_error": "错误",
+    "stage_no_folders": "未选择文件夹",
+    "status_ready": "就绪。",
+    "status_scanning": "正在扫描…",
+    "status_busy": "已有扫描正在运行。",
+    "status_no_folders": "请先添加至少一个文件夹。",
+    "status_stopping": "正在停止…",
+    "status_ffmpeg_missing": "未找到 ffmpeg/ffprobe；视频/音频内容比较已禁用。",
+    "status_folder_added": "已添加：{path}",
+    "status_folder_exists": "该文件夹已在列表中。",
+    "status_not_a_folder": "{path} 不是文件夹。",
+    "status_folder_removed": "文件夹已移除。",
+    "status_folders_cleared": "文件夹列表已清空。",
+    "status_move_dest_missing": "请为“移动”选择目标文件夹。",
+    "status_nothing_to_apply": "没有可应用的内容。",
+    "status_confirm_bulk": "请确认批量操作。",
+    "status_bulk_cancelled": "批量操作已取消。",
+    "status_trashed": "已移至回收站：{path}",
+    "status_trash_failed": "无法将 {path} 移至回收站",
+    "status_deleted": "已删除：{path}",
+    "status_delete_failed": "无法删除 {path}",
+    "status_moved": "已移动：{path}",
+    "status_move_failed": "无法移动 {path}",
+    "status_error": "错误：{error}",
+    "confirm_bulk": "确定要将 {count} 个重复文件{verb}吗？",
+    "confirm_bulk_dest": "确定要将 {count} 个重复文件{verb}到 {destination} 吗？",
+    "bulk_done": "{verb}：{done} 项，释放 {bytes}，失败 {failed} 项。",
+    "files_scanned": "已扫描 {n} 个文件",
+    "files_scanned_progress": "已扫描 {index}/{total} 个文件",
+    "duplicates_found": "找到 {n} 个重复文件",
+    "duplicates_found_groups": "{groups} 组中共有 {n} 个重复文件",
+    "reclaimable": "可回收：{human}",
+    "elapsed": "用时：{secs} 秒 · {groups} 组 · {threads} 线程",
+    "original_likely": "原图 · {pct}% 可能性",
+    "reason_resolution": "分辨率更高",
+    "reason_quality": "每像素/码率质量更好",
+    "reason_age": "文件日期更早",
+    "reason_metadata": "相机 EXIF 元数据",
+    "reason_name": "名称不含副本标记",
+    "reason_location": "典型的原图位置",
+    "reason_other": "信号最一致",
+    "no_picture": "未选择图片",
+    "status_stopped_partial": "已停止，共扫描 {n} 个文件 — 保留部分结果。可以重新开始。",
+    "status_stopped_zero": "在处理任何文件之前已停止。可以重新开始。",
+    "status_finished": "已完成：{groups} 组，{duplicates} 个重复文件。",
+    "browser_folders": "{n} 个子文件夹 — 点击打开",
+    "model_no_url": "此模型没有下载 URL。",
+    "model_downloading": "正在下载 {name}…",
+    "model_downloaded": "已下载 {name}（{mb} MB）。请点击“使用”。",
+    "model_failed": "下载失败：{error}",
+    "model_missing": "文件缺失：{path}",
+    "model_active": "{name} 现在是当前模型。",
+    "model_removed": "已移除 {name}。",
+    "models_folder": "模型文件夹：{path}",
+    "cache_cleared": "缓存已清空；下次扫描将重新计算指纹和嵌入。",
+    "no_embeddings_build": "此版本不支持 ONNX 嵌入；请使用 --features embeddings 重新编译。",
+    "model_select_first": "请先选择或下载模型（模型…）。",
+    "browser_not_a_folder": "不是文件夹：{path}",
+    "browser_destination": "选择目标文件夹并点击“使用此文件夹”。",
+    "verb_trash": "移至回收站",
+    "verb_move": "移动",
+    "verb_delete": "删除",
+    "model_resnet18_caps": "通用图像相似度：缩放、重新压缩和轻度编辑的照片",
+    "model_resnet50_caps": "使用更大、更高质量模型的通用图像相似度",
+    "model_clip_caps": "语义相似度：同一场景或人物的不同照片（阈值约 0.83）",
+    "model_siglip_caps": "语义相似度，SigLIP 是 CLIP 的替代方案（阈值约 0.83）",
+    "model_clip_name": "CLIP ViT-B/32（视觉）",
+    "model_siglip_name": "SigLIP base 16-224（视觉）",
+    "no_model_selected": "未选择模型",
+    "keep_original": "原图",
+    "keep_dimensions": "尺寸",
+    "keep_filesize": "文件大小",
+    "keep_earlierdate": "较早日期",
+    "keep_earlierexifdate": "较早 EXIF 日期",
+    "keep_oldest": "最旧",
+    "keep_name": "名称",
+    "keep_path": "路径",
+    "auto_label": "自动"
+  },
+  "help": [
+    {
+      "text": "UMDF 的作用",
+      "kind": 0
+    },
+    {
+      "text": "UMDF 会扫描文件夹中的重复照片、视频、音频和文件。它结合逐字节精确比较和感知指纹，并对哪份副本最可能是原图进行评分。",
+      "kind": 1
+    },
+    {
+      "text": "检测原理",
+      "kind": 0
+    },
+    {
+      "text": "• 精确：大小相同 + SHA-256（或完整比较）→ 100%。",
+      "kind": 2
+    },
+    {
+      "text": "• 感知：图像缩放为 75×75 灰度图；“dpf”统计灰度容差内的像素。",
+      "kind": 2
+    },
+    {
+      "text": "• 视频：ffprobe + “Frame position”处的一帧，使用相同的图像指纹。",
+      "kind": 2
+    },
+    {
+      "text": "• 音频：对 5 秒解码 PCM 计算哈希；重新封装或更改标签仍可匹配，有损重新编码则不会。",
+      "kind": 2
+    },
+    {
+      "text": "灰度容差（像素容差）",
+      "kind": 0
+    },
+    {
+      "text": "两个像素被视为相同的最大灰度差（0–255）。0 = 严格；10（默认）可容忍 JPEG 重新压缩；14–18 可能容忍局部修饰；超过约 24 会增加误报。它不能纠正大幅裁剪或位移。",
+      "kind": 1
+    },
+    {
+      "text": "如果漏掉编辑过的副本，请逐步提高并检查结果。对于精确档案，请降低。",
+      "kind": 1
+    },
+    {
+      "text": "指标",
+      "kind": 0
+    },
+    {
+      "text": "• dpf（默认）：像素容差；通常能容忍缩放、压缩和小幅修饰，但不能容忍大幅裁剪。",
+      "kind": 2
+    },
+    {
+      "text": "• ssim：全局结构相似度；可能更好地容忍局部修饰，但不保证匹配。",
+      "kind": 2
+    },
+    {
+      "text": "• sign：归一化网格的符号一致性。",
+      "kind": 2
+    },
+    {
+      "text": "• pearson：网格相关性；对结构更严格。",
+      "kind": 2
+    },
+    {
+      "text": "• legacy：旧版符号指标，仅用于比较；其尺度非常宽松，不适合用于判断重复。",
+      "kind": 2
+    },
+    {
+      "text": "• 语义（可选）：ONNX 嵌入（ResNet/CLIP/SigLIP）按余弦比较。标准版本中禁用；AI 包已包含。",
+      "kind": 2
+    },
+    {
+      "text": "语义模型（AI）",
+      "kind": 0
+    },
+    {
+      "text": "在 AI 包中，启用“语义（AI）”，点击“模型…”，下载模型并点击“使用”。扫描将按嵌入和余弦相似度比较；“相似度”设置阈值。",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50：快速、通用的相似度，适合缩放、重新压缩或轻度编辑的照片。",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP：场景/内容语义相似度；它们不是人脸识别，也不能识别人物。约 0.83 的阈值是依赖模型的起点。",
+      "kind": 2
+    },
+    {
+      "text": "启用模型时，“相似度”会设为其推荐值（ResNet 0.90，CLIP/SigLIP 0.83）；请用自己的照片调整。",
+      "kind": 2
+    },
+    {
+      "text": "公开模型无需令牌即可下载到模型文件夹（默认 ./models）。配置保存在 config.toml，缓存保存在 cache.db。",
+      "kind": 2
+    },
+    {
+      "text": "AI 包内置 CPU ONNX Runtime，默认使用 CPU。要使用 CUDA，请将 ORT_DYLIB_PATH 指向 GPU 运行时并选择 CUDA；失败时会使用 CPU。",
+      "kind": 2
+    },
+    {
+      "text": "按场景推荐",
+      "kind": 0
+    },
+    {
+      "text": "精确重复：SHA-256；不需要模型。",
+      "kind": 2
+    },
+    {
+      "text": "缩放或重新压缩：dpf（默认）或 ResNet 嵌入。",
+      "kind": 2
+    },
+    {
+      "text": "裁剪或不同构图：CLIP/SigLIP 可能有帮助，但宽高比限制（≤1.5）会在比较前排除差异很大的裁剪。",
+      "kind": 2
+    },
+    {
+      "text": "不同照片中的同一场景或内容：CLIP/SigLIP，起始阈值约 0.83；请检查误报。",
+      "kind": 2
+    },
+    {
+      "text": "旋转：会应用 EXIF 方向；如果旋转已写入像素且没有 EXIF，即使语义模型也可能漏检。请手动检查。",
+      "kind": 2
+    },
+    {
+      "text": "红眼或局部修饰：尝试 dpf 容差 14–18 或 ssim；否则请手动检查。提高容差会增加误报。",
+      "kind": 2
+    },
+    {
+      "text": "视频：“Frame position”处的一帧；音频：5 秒 PCM。需要 PATH 中有 ffmpeg 和 ffprobe。",
+      "kind": 2
+    },
+    {
+      "text": "旋转和编辑过的照片",
+      "kind": 0
+    },
+    {
+      "text": "• 解码时会应用 EXIF 方向：带标签的照片与其物理旋转后的副本匹配。",
+      "kind": 2
+    },
+    {
+      "text": "• 如果旋转已写入像素且没有 EXIF，可能无法检测；没有保证，请手动检查。",
+      "kind": 2
+    },
+    {
+      "text": "• 红眼校正只改变很小区域；dpf/ssim 可能仍然匹配，但不保证。请调整容差或阈值并验证。",
+      "kind": 2
+    },
+    {
+      "text": "保留哪份副本？",
+      "kind": 0
+    },
+    {
+      "text": "“原图”策略根据分辨率、每像素字节数、文件年龄、EXIF 丰富度、名称标记和位置计算启发式分数。它不是概率，也不保证是原图；预览会显示分数和原因。",
+      "kind": 1
+    },
+    {
+      "text": "安全操作",
+      "kind": 0
+    },
+    {
+      "text": "• 回收站/移动/删除作用于一个重复文件；批量按钮会要求确认。",
+      "kind": 2
+    },
+    {
+      "text": "• 回收站取决于桌面环境和文件系统；删除是永久且不可逆的。",
+      "kind": 2
+    },
+    {
+      "text": "• 删除后，下一行会保持选中，以便连续比较和删除。",
+      "kind": 2
+    },
+    {
+      "text": "• 键盘：↑/↓ 选择，Del/Delete 删除。",
+      "kind": 2
+    },
+    {
+      "text": "性能",
+      "kind": 0
+    },
+    {
+      "text": "解码、哈希和比较默认使用所有 CPU；可调整“线程”或 --threads。感知比较最坏情况下为 O(n²)，大图像会占用大量内存。",
+      "kind": 1
+    },
+    {
+      "text": "限制",
+      "kind": 0
+    },
+    {
+      "text": "• “原图”分数是启发式的：它对候选排序，不保证哪份是原图。",
+      "kind": 2
+    },
+    {
+      "text": "• 75×75 灰度网格在非常暗、低对比度或大片均匀的图像上可能失败。",
+      "kind": 2
+    },
+    {
+      "text": "• 宽高比限制（最大/最小 ≤ 1.5）可能丢弃差异很大的裁剪或构图。",
+      "kind": 2
+    },
+    {
+      "text": "• dpf 能容忍重新压缩和小改动，不能容忍大幅裁剪或写入像素的旋转；提高容差会增加误报。",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP 比较全局内容，不比较人脸或身份；相似场景中的不同人物可能匹配。",
+      "kind": 2
+    },
+    {
+      "text": "• 0.90/0.83 阈值是依赖模型和集合的起点。",
+      "kind": 2
+    },
+    {
+      "text": "• 视频：仅一帧；不同帧、剪辑或时长可能无法检测。",
+      "kind": 2
+    },
+    {
+      "text": "• 音频：重新封装/更改标签可匹配；有损重新编码不会。",
+      "kind": 2
+    },
+    {
+      "text": "• 没有 ffmpeg/ffprobe 时，只比较图像和精确文件。",
+      "kind": 2
+    },
+    {
+      "text": "• 损坏、不支持或非常大的文件可能被跳过或消耗大量内存。",
+      "kind": 2
+    },
+    {
+      "text": "• 回收站/移动取决于系统；删除不可逆。",
+      "kind": 2
+    },
+    {
+      "text": "• 标准版本没有嵌入；AI 包内置 CPU 运行时。CUDA 需要外部 GPU ONNX Runtime（ORT_DYLIB_PATH）。",
+      "kind": 2
+    },
+    {
+      "text": "• 下载的模型不包含在安装程序中，并保留其上游仓库的许可证。",
+      "kind": 2
+    }
+  ]
+}

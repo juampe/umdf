@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "Adicionar pasta…",
+    "remove": "Remover",
+    "clear": "Limpar",
+    "options": "Opções",
+    "start": "Iniciar",
+    "scanning": "A procurar…",
+    "stop": "Parar",
+    "dark": "Escuro",
+    "light": "Claro",
+    "language": "Idioma",
+    "help": "Ajuda",
+    "help_title": "Ajuda",
+    "close": "Fechar",
+    "locations": "Localizações",
+    "pictures": "Imagens",
+    "documents": "Documentos",
+    "home": "Pasta pessoal",
+    "computer": "Computador",
+    "folders_none": "Pastas a analisar (nenhuma)",
+    "remove_selected": "Remover selecionada",
+    "clear_all": "Limpar tudo",
+    "opt_scan_subfolders": "Incluir subpastas",
+    "opt_only_identical": "Apenas 100% idênticos",
+    "opt_compare_media": "Comparar conteúdo multimédia",
+    "opt_similarity": "Semelhança",
+    "opt_keep": "Manter",
+    "opt_metric": "Métrica",
+    "opt_threads": "Threads",
+    "opt_semantic": "Semântica (GPU)",
+    "semantic_model": "Caminho do modelo .onnx",
+    "models_manage": "Modelos…",
+    "models_title": "Modelos",
+    "models_help": "Transfira um modelo de embeddings de imagem do Hugging Face. A pasta e o modelo ativo são guardados em config.toml; os dados derivados são colocados em cache em cache.db.",
+    "models_folder": "Pasta de modelos",
+    "models_capabilities": "Capacidades",
+    "models_download": "Transferir",
+    "models_use": "Usar",
+    "models_active": "Ativo",
+    "models_remove": "Remover",
+    "models_accel": "Aceleração",
+    "models_threshold": "Semelhança",
+    "models_none": "Ainda não há modelos instalados. Transfira um abaixo.",
+    "models_clear_cache": "Limpar cache",
+    "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
+    "opt_tolerance": "Tolerância de cinza",
+    "trash_all": "Mover todos os duplicados para o lixo",
+    "move_all": "Mover todos",
+    "delete_all": "Eliminar todos",
+    "keeps_best": "mantém o original de cada grupo",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "match_list": "Lista de correspondências",
+    "col_group": "Grupo",
+    "col_original": "Original",
+    "col_duplicate": "Duplicado",
+    "col_similarity": "Semelhança",
+    "col_size": "Tamanho",
+    "empty_list": "A lista de correspondências está vazia.",
+    "preview": "Pré-visualização",
+    "original": "Original",
+    "duplicate": "Duplicado",
+    "move_destination": "Pasta de destino",
+    "move_placeholder": "/caminho/para/duplicados",
+    "browse": "Procurar…",
+    "trash": "Lixo",
+    "move": "Mover",
+    "delete": "Eliminar",
+    "select_folder": "Selecione uma pasta",
+    "up": "Subir",
+    "go": "Ir",
+    "select_this_folder": "Usar esta pasta",
+    "show_hidden": "Mostrar ocultos"
+  },
+  "phrases": {
+    "folders_label": "Pastas a analisar ({n})",
+    "stage_ready": "Pronto",
+    "stage_starting": "A iniciar…",
+    "stage_loading_total": "A carregar {total} ficheiros…",
+    "stage_loading": "A carregar {name}…",
+    "stage_embedding": "A calcular embeddings {done}/{total}…",
+    "stage_hashing": "A calcular hashes {done}/{total}…",
+    "stage_comparing": "A comparar {done}/{total}…",
+    "stage_grouping": "A agrupar correspondências…",
+    "stage_finished": "Concluído",
+    "stage_stopping": "A parar…",
+    "stage_stopped": "Parado",
+    "stage_error": "Erro",
+    "stage_no_folders": "Nenhuma pasta selecionada",
+    "status_ready": "Pronto.",
+    "status_scanning": "A procurar…",
+    "status_busy": "Já está a decorrer uma análise.",
+    "status_no_folders": "Adicione primeiro pelo menos uma pasta.",
+    "status_stopping": "A parar…",
+    "status_ffmpeg_missing": "ffmpeg/ffprobe não encontrado; a comparação de conteúdo de vídeo/áudio está desativada.",
+    "status_folder_added": "Adicionada: {path}",
+    "status_folder_exists": "Essa pasta já está na lista.",
+    "status_not_a_folder": "{path} não é uma pasta.",
+    "status_folder_removed": "Pasta removida.",
+    "status_folders_cleared": "Lista de pastas limpa.",
+    "status_move_dest_missing": "Escolha uma pasta de destino para Mover.",
+    "status_nothing_to_apply": "Nada a aplicar.",
+    "status_confirm_bulk": "Confirme a ação em massa.",
+    "status_bulk_cancelled": "Ação em massa cancelada.",
+    "status_trashed": "Movido para o lixo: {path}",
+    "status_trash_failed": "Não foi possível mover {path} para o lixo",
+    "status_deleted": "Eliminado: {path}",
+    "status_delete_failed": "Não foi possível eliminar {path}",
+    "status_moved": "Movido: {path}",
+    "status_move_failed": "Não foi possível mover {path}",
+    "status_error": "Erro: {error}",
+    "confirm_bulk": "Tem a certeza de que quer {verb} {count} duplicado(s)?",
+    "confirm_bulk_dest": "Tem a certeza de que quer {verb} {count} duplicado(s) para {destination}?",
+    "bulk_done": "{verb}: {done} item(ns), {bytes} libertados, {failed} falhado(s).",
+    "files_scanned": "{n} ficheiros analisados",
+    "files_scanned_progress": "{index}/{total} ficheiros analisados",
+    "duplicates_found": "{n} duplicados encontrados",
+    "duplicates_found_groups": "{n} duplicados em {groups} grupos",
+    "reclaimable": "Recuperável: {human}",
+    "elapsed": "Tempo: {secs} s · {groups} grupos · {threads} threads",
+    "original_likely": "Original · {pct}% provável",
+    "reason_resolution": "maior resolução",
+    "reason_quality": "melhor qualidade por píxel/bitrate",
+    "reason_age": "data de ficheiro mais antiga",
+    "reason_metadata": "metadados EXIF da câmara",
+    "reason_name": "nome sem marcas de cópia",
+    "reason_location": "localização típica de originais",
+    "reason_other": "conjunto de sinais mais consistente",
+    "no_picture": "Nenhuma imagem selecionada",
+    "status_stopped_partial": "Parado após {n} ficheiro(s) — resultados parciais mantidos. Pode iniciar novamente.",
+    "status_stopped_zero": "Parado antes de processar qualquer ficheiro. Pode iniciar novamente.",
+    "status_finished": "Concluído: {groups} grupo(s), {duplicates} duplicado(s).",
+    "browser_folders": "{n} subpasta(s) — clique para abrir",
+    "model_no_url": "Este modelo não tem URL de transferência.",
+    "model_downloading": "A transferir {name}…",
+    "model_downloaded": "{name} transferido ({mb} MB). Prima Usar.",
+    "model_failed": "Falha na transferência: {error}",
+    "model_missing": "Ficheiro em falta: {path}",
+    "model_active": "{name} é agora o modelo ativo.",
+    "model_removed": "{name} removido.",
+    "models_folder": "Pasta de modelos: {path}",
+    "cache_cleared": "Cache limpa; a próxima análise recalculará fingerprints e embeddings.",
+    "no_embeddings_build": "Esta compilação não inclui embeddings ONNX; recompile com --features embeddings.",
+    "model_select_first": "Selecione ou transfira primeiro um modelo (Modelos…).",
+    "browser_not_a_folder": "Não é uma pasta: {path}",
+    "browser_destination": "Escolha a pasta de destino e prima «Usar esta pasta».",
+    "verb_trash": "mover para o lixo",
+    "verb_move": "mover",
+    "verb_delete": "eliminar",
+    "model_resnet18_caps": "Semelhança geral: fotos redimensionadas, recomprimidas e com retoques ligeiros",
+    "model_resnet50_caps": "Semelhança geral com um modelo maior e de maior qualidade",
+    "model_clip_caps": "Semelhança semântica: tomas diferentes da mesma cena ou pessoa (limiar ~0,83)",
+    "model_siglip_caps": "Semelhança semântica, alternativa SigLIP ao CLIP (limiar ~0,83)",
+    "model_clip_name": "CLIP ViT-B/32 (visão)",
+    "model_siglip_name": "SigLIP base 16-224 (visão)",
+    "no_model_selected": "Nenhum modelo selecionado",
+    "keep_original": "Original",
+    "keep_dimensions": "Dimensões",
+    "keep_filesize": "Tamanho",
+    "keep_earlierdate": "Data anterior",
+    "keep_earlierexifdate": "Data EXIF anterior",
+    "keep_oldest": "Mais antigo",
+    "keep_name": "Nome",
+    "keep_path": "Caminho",
+    "auto_label": "Auto"
+  },
+  "help": [
+    {
+      "text": "O que o UMDF faz",
+      "kind": 0
+    },
+    {
+      "text": "O UMDF analisa pastas à procura de fotos, vídeos, áudio e ficheiros duplicados. Combina comparação exata byte a byte com impressões digitais percetuais e classifica a cópia mais provável de ser o original.",
+      "kind": 1
+    },
+    {
+      "text": "Como funciona a deteção",
+      "kind": 0
+    },
+    {
+      "text": "• Exato: mesmo tamanho + SHA-256 (ou comparação completa) → 100%.",
+      "kind": 2
+    },
+    {
+      "text": "• Percetual: a imagem é redimensionada para 75×75 em tons de cinza; «dpf» conta os píxeis dentro da tolerância de cinza.",
+      "kind": 2
+    },
+    {
+      "text": "• Vídeo: ffprobe + um fotograma em «Frame position», com a mesma impressão digital de imagem.",
+      "kind": 2
+    },
+    {
+      "text": "• Áudio: 5 s de PCM descodificado com hash; remuxar ou reetiquetar mantém a correspondência; recodificar com perdas não.",
+      "kind": 2
+    },
+    {
+      "text": "Tolerância de cinza (pixel tolerance)",
+      "kind": 0
+    },
+    {
+      "text": "Diferença máxima de nível de cinza (0–255) para que dois píxeis contem como iguais. 0 = estrito; 10 (predefinição) tolera recompressão JPEG; 14–18 pode tolerar retoques locais; acima de ~24 aumentam os falsos positivos. Não corrige grandes recortes nem deslocamentos.",
+      "kind": 1
+    },
+    {
+      "text": "Se escaparem cópias editadas, aumente-a aos poucos e reveja os resultados. Para arquivos exatos, diminua-a.",
+      "kind": 1
+    },
+    {
+      "text": "Métricas",
+      "kind": 0
+    },
+    {
+      "text": "• dpf (predefinição): tolerância de píxel; costuma tolerar redimensionamento, compressão e pequenos retoques, mas não grandes recortes.",
+      "kind": 2
+    },
+    {
+      "text": "• ssim: semelhança estrutural global; pode tolerar melhor retoques locais, mas não garante correspondência.",
+      "kind": 2
+    },
+    {
+      "text": "• sign: acordo de sinal da grelha normalizada.",
+      "kind": 2
+    },
+    {
+      "text": "• pearson: correlação das grelhas; mais estrita quanto à estrutura.",
+      "kind": 2
+    },
+    {
+      "text": "• legacy: métrica de sinal legada, mantida apenas para comparação; a escala é muito permissiva e não é fiável para decidir duplicados.",
+      "kind": 2
+    },
+    {
+      "text": "• Semântica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por cosseno. Desativada nas compilações padrão; os pacotes AI incluem-na.",
+      "kind": 2
+    },
+    {
+      "text": "Modelos semânticos (IA)",
+      "kind": 0
+    },
+    {
+      "text": "Num pacote AI, ative «Semântica (IA)», prima «Modelos…», transfira um modelo e prima «Usar». A análise compara por embedding com semelhança de cosseno; «Semelhança» define o limiar.",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50: semelhança geral e rápida para fotos redimensionadas, recomprimidas ou com retoques ligeiros.",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP: semelhança semântica de cena/conteúdo; não são reconhecimento facial nem identificam pessoas. O limiar ~0,83 é um ponto de partida dependente do modelo.",
+      "kind": 2
+    },
+    {
+      "text": "Ao ativar um modelo, «Semelhança» assume o valor recomendado (0,90 ResNet, 0,83 CLIP/SigLIP); ajuste-o com as suas fotos.",
+      "kind": 2
+    },
+    {
+      "text": "Os modelos públicos são transferidos sem token para a pasta de modelos (predefinição ./models). A configuração fica em config.toml e a cache em cache.db.",
+      "kind": 2
+    },
+    {
+      "text": "Os pacotes AI incluem um ONNX Runtime CPU e usam CPU por predefinição. Para CUDA, aponte ORT_DYLIB_PATH para um runtime GPU e selecione CUDA; se falhar, usa-se CPU.",
+      "kind": 2
+    },
+    {
+      "text": "Recomendações por caso",
+      "kind": 0
+    },
+    {
+      "text": "Duplicados exatos: SHA-256; não é necessário modelo.",
+      "kind": 2
+    },
+    {
+      "text": "Redimensionadas ou recomprimidas: dpf (predefinição) ou embeddings ResNet.",
+      "kind": 2
+    },
+    {
+      "text": "Recortes ou enquadramentos diferentes: CLIP/SigLIP pode ajudar, mas o limite de proporção (≤1,5) pode excluir recortes muito diferentes antes da comparação.",
+      "kind": 2
+    },
+    {
+      "text": "Mesma cena ou conteúdo em tomas diferentes: CLIP/SigLIP com limiar inicial ~0,83; reveja os falsos positivos.",
+      "kind": 2
+    },
+    {
+      "text": "Rodadas: a orientação EXIF é aplicada; uma rotação aplicada aos píxeis sem EXIF pode escapar mesmo aos modelos semânticos. Reveja manualmente.",
+      "kind": 2
+    },
+    {
+      "text": "Olhos vermelhos ou retoques locais: experimente dpf com tolerância 14–18 ou ssim; caso contrário, reveja manualmente. Aumentar a tolerância aumenta os falsos positivos.",
+      "kind": 2
+    },
+    {
+      "text": "Vídeo: um fotograma em «Frame position»; áudio: 5 s de PCM. Requer ffmpeg e ffprobe no PATH.",
+      "kind": 2
+    },
+    {
+      "text": "Fotos rodadas e editadas",
+      "kind": 0
+    },
+    {
+      "text": "• A orientação EXIF é aplicada ao descodificar: uma foto etiquetada corresponde à sua cópia rodada fisicamente.",
+      "kind": 2
+    },
+    {
+      "text": "• Uma rotação aplicada aos píxeis sem EXIF pode não ser detetada; não há garantia, reveja manualmente.",
+      "kind": 2
+    },
+    {
+      "text": "• A correção de olhos vermelhos altera uma área pequena; dpf/ssim podem continuar a corresponder, mas não é garantido. Ajuste a tolerância ou o limiar e verifique.",
+      "kind": 2
+    },
+    {
+      "text": "Que cópia é mantida?",
+      "kind": 0
+    },
+    {
+      "text": "A política «original» calcula uma pontuação heurística a partir da resolução, bytes por píxel, idade, riqueza EXIF, marcas no nome e localização. Não é uma probabilidade nem garante o original; a pré-visualização mostra a pontuação e os motivos.",
+      "kind": 1
+    },
+    {
+      "text": "Ações seguras",
+      "kind": 0
+    },
+    {
+      "text": "• Lixo/Mover/Eliminar atuam sobre um duplicado; os botões em massa pedem confirmação.",
+      "kind": 2
+    },
+    {
+      "text": "• O lixo depende do ambiente de trabalho e do sistema de ficheiros; Eliminar é permanente e irreversível.",
+      "kind": 2
+    },
+    {
+      "text": "• Após eliminar, a linha seguinte fica selecionada para comparar e eliminar em cadeia.",
+      "kind": 2
+    },
+    {
+      "text": "• Teclado: ↑/↓ selecionam, Del/Delete elimina.",
+      "kind": 2
+    },
+    {
+      "text": "Desempenho",
+      "kind": 0
+    },
+    {
+      "text": "A descodificação, o hash e a comparação usam todas as CPUs por predefinição; ajuste «Threads» ou --threads. A comparação percetual é O(n²) no pior caso e as imagens grandes consomem memória.",
+      "kind": 1
+    },
+    {
+      "text": "Limitações",
+      "kind": 0
+    },
+    {
+      "text": "• A pontuação «original» é heurística: ordena candidatos, não garante qual é o original.",
+      "kind": 2
+    },
+    {
+      "text": "• A grelha 75×75 em tons de cinza pode falhar em imagens muito escuras, de baixo contraste ou maioritariamente uniformes.",
+      "kind": 2
+    },
+    {
+      "text": "• O limite de proporção (máx/mín ≤ 1,5) pode descartar recortes ou enquadramentos muito diferentes.",
+      "kind": 2
+    },
+    {
+      "text": "• dpf tolera recompressão e pequenas alterações, não grandes recortes nem rotações aplicadas aos píxeis; aumentar a tolerância aumenta os falsos positivos.",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP comparam conteúdo global, não rostos nem identidade; pessoas diferentes em cenas semelhantes podem corresponder.",
+      "kind": 2
+    },
+    {
+      "text": "• Os limiares 0,90/0,83 são pontos de partida dependentes do modelo e da coleção.",
+      "kind": 2
+    },
+    {
+      "text": "• Vídeo: um único fotograma; outro fotograma, corte ou duração pode não ser detetado.",
+      "kind": 2
+    },
+    {
+      "text": "• Áudio: remuxar/reeetiquetar corresponde; recodificar com perdas não.",
+      "kind": 2
+    },
+    {
+      "text": "• Sem ffmpeg/ffprobe apenas se comparam imagens e ficheiros exatos.",
+      "kind": 2
+    },
+    {
+      "text": "• Ficheiros corrompidos, não suportados ou muito grandes podem ser ignorados ou consumir muita memória.",
+      "kind": 2
+    },
+    {
+      "text": "• Lixo/Mover dependem do sistema; Eliminar é irreversível.",
+      "kind": 2
+    },
+    {
+      "text": "• As compilações padrão não têm embeddings; os pacotes AI incluem um runtime CPU. CUDA requer um ONNX Runtime GPU externo (ORT_DYLIB_PATH).",
+      "kind": 2
+    },
+    {
+      "text": "• Os modelos transferidos não são incluídos no instalador e mantêm a licença do repositório de origem.",
+      "kind": 2
+    }
+  ]
+}

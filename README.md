@@ -22,8 +22,10 @@ matches, and proposes which copy to keep using an explainable
 * **Safe actions** — trash, move or delete with a dry run, confirmation for
   bulk actions and a hard "leave one" guarantee.
 * **Exports** — CSV and XML.
-* **Desktop UI in Slint** — light/dark theme, English/Spanish, folder picker,
-  thumbnails, side-by-side preview and keyboard-driven chained deletion.
+* **Desktop UI in Slint** — light/dark theme, nine languages (English,
+  Spanish, French, German, Portuguese, Italian, Simplified Chinese, Japanese
+  and Korean), folder picker, thumbnails, side-by-side preview and
+  keyboard-driven chained deletion. Noto Sans CJK is embedded for CJK text.
 
 ## Layout
 
@@ -47,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.2.0_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.2.0-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.2.0-x86_64.AppImage && ./umdf-0.2.0-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.0_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.0-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.0-x86_64.AppImage && ./umdf-0.3.0-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the

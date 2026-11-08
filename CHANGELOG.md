@@ -4,6 +4,17 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-08
+
+### Added
+
+- UI and Help translations for **French, German, Portuguese, Italian,
+  Simplified Chinese, Japanese and Korean**.
+- Language selection is persisted in `config.toml` (`language = "fr"`, ...).
+- **Noto Sans CJK** is embedded in the UI binary, so Chinese/Japanese/Korean
+  render without installing extra fonts.
+- Noto OFL copyright/notice in every package.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added

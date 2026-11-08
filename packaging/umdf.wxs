@@ -25,7 +25,11 @@
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="UMDF">
-          <Directory Id="LibFolder" Name="lib" />
+          <Directory Id="LibFolder" Name="lib">
+            <Component Id="OrtDll" Guid="*">
+              <File Id="OrtDllFile" Source="$(var.BinDir)\lib\onnxruntime.dll" KeyPath="yes" />
+            </Component>
+          </Directory>
           <Component Id="MainExecutables" Guid="*">
             <File Id="UmdfExe" Source="$(var.BinDir)\umdf.exe" KeyPath="yes" />
             <File Id="UmdfUiExe" Source="$(var.BinDir)\umdf-ui.exe" />
@@ -33,14 +37,12 @@
             <File Id="License" Source="$(var.BinDir)\LICENSE" />
             <File Id="ThirdParty" Source="$(var.BinDir)\THIRD_PARTY.md" />
             <File Id="ThirdPartyLicenses" Source="$(var.BinDir)\THIRD_PARTY_LICENSES.md" />
+            <File Id="NotoCopyright" Source="$(var.BinDir)\NOTO-COPYRIGHT.txt" />
             <File Id="Changelog" Source="$(var.BinDir)\CHANGELOG.md" />
             <File Id="OrtLicense" Source="$(var.BinDir)\ONNXRUNTIME-LICENSE" />
             <File Id="OrtThirdParty" Source="$(var.BinDir)\ONNXRUNTIME-THIRD-PARTY-NOTICES.txt" />
             <File Id="OrtPrivacy" Source="$(var.BinDir)\ONNXRUNTIME-PRIVACY.md" />
             <File Id="SourceNotice" Source="$(var.BinDir)\SOURCE.txt" />
-          </Component>
-          <Component Id="OrtDll" Guid="*" Directory="LibFolder">
-            <File Id="OrtDllFile" Source="$(var.BinDir)\lib\onnxruntime.dll" KeyPath="yes" />
           </Component>
         </Directory>
       </Directory>

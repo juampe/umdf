@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "Ordner hinzufügen…",
+    "remove": "Entfernen",
+    "clear": "Leeren",
+    "options": "Optionen",
+    "start": "Starten",
+    "scanning": "Suche…",
+    "stop": "Stopp",
+    "dark": "Dunkel",
+    "light": "Hell",
+    "language": "Sprache",
+    "help": "Hilfe",
+    "help_title": "Hilfe",
+    "close": "Schließen",
+    "locations": "Orte",
+    "pictures": "Bilder",
+    "documents": "Dokumente",
+    "home": "Benutzerordner",
+    "computer": "Computer",
+    "folders_none": "Zu durchsuchende Ordner (keine)",
+    "remove_selected": "Auswahl entfernen",
+    "clear_all": "Alle entfernen",
+    "opt_scan_subfolders": "Unterordner einbeziehen",
+    "opt_only_identical": "Nur 100 % identisch",
+    "opt_compare_media": "Medieninhalte vergleichen",
+    "opt_similarity": "Ähnlichkeit",
+    "opt_keep": "Behalten",
+    "opt_metric": "Metrik",
+    "opt_threads": "Threads",
+    "opt_semantic": "Semantisch (GPU)",
+    "semantic_model": "Pfad zum .onnx-Modell",
+    "models_manage": "Modelle…",
+    "models_title": "Modelle",
+    "models_help": "Laden Sie ein Bild-Embedding-Modell von Hugging Face herunter. Ordner und aktives Modell werden in config.toml gespeichert; abgeleitete Daten werden in cache.db zwischengespeichert.",
+    "models_folder": "Modellordner",
+    "models_capabilities": "Fähigkeiten",
+    "models_download": "Herunterladen",
+    "models_use": "Verwenden",
+    "models_active": "Aktiv",
+    "models_remove": "Entfernen",
+    "models_accel": "Beschleunigung",
+    "models_threshold": "Ähnlichkeit",
+    "models_none": "Noch keine Modelle installiert. Laden Sie unten eines herunter.",
+    "models_clear_cache": "Cache leeren",
+    "semantic_unavailable": "Die semantische Suche ist in diesem Build nicht enthalten. Kompilieren Sie mit --features embeddings und ONNX Runtime.",
+    "opt_tolerance": "Graustufen-Toleranz",
+    "trash_all": "Alle Duplikate in den Papierkorb",
+    "move_all": "Alle verschieben",
+    "delete_all": "Alle löschen",
+    "keeps_best": "Original jeder Gruppe bleibt",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "match_list": "Trefferliste",
+    "col_group": "Gruppe",
+    "col_original": "Original",
+    "col_duplicate": "Duplikat",
+    "col_similarity": "Ähnlichkeit",
+    "col_size": "Größe",
+    "empty_list": "Die Trefferliste ist leer.",
+    "preview": "Vorschau",
+    "original": "Original",
+    "duplicate": "Duplikat",
+    "move_destination": "Zielordner",
+    "move_placeholder": "/pfad/für/duplikate",
+    "browse": "Durchsuchen…",
+    "trash": "Papierkorb",
+    "move": "Verschieben",
+    "delete": "Löschen",
+    "select_folder": "Ordner auswählen",
+    "up": "Nach oben",
+    "go": "Gehen",
+    "select_this_folder": "Diesen Ordner verwenden",
+    "show_hidden": "Versteckte anzeigen"
+  },
+  "phrases": {
+    "folders_label": "Zu durchsuchende Ordner ({n})",
+    "stage_ready": "Bereit",
+    "stage_starting": "Starte…",
+    "stage_loading_total": "Lade {total} Dateien…",
+    "stage_loading": "Lade {name}…",
+    "stage_embedding": "Berechne Embeddings {done}/{total}…",
+    "stage_hashing": "Berechne Hashes {done}/{total}…",
+    "stage_comparing": "Vergleiche {done}/{total}…",
+    "stage_grouping": "Gruppiere Treffer…",
+    "stage_finished": "Fertig",
+    "stage_stopping": "Stoppe…",
+    "stage_stopped": "Gestoppt",
+    "stage_error": "Fehler",
+    "stage_no_folders": "Keine Ordner ausgewählt",
+    "status_ready": "Bereit.",
+    "status_scanning": "Suche…",
+    "status_busy": "Eine Suche läuft bereits.",
+    "status_no_folders": "Fügen Sie zuerst mindestens einen Ordner hinzu.",
+    "status_stopping": "Stoppe…",
+    "status_ffmpeg_missing": "ffmpeg/ffprobe nicht gefunden; der Vergleich von Video-/Audioinhalten ist deaktiviert.",
+    "status_folder_added": "Hinzugefügt: {path}",
+    "status_folder_exists": "Dieser Ordner ist bereits in der Liste.",
+    "status_not_a_folder": "{path} ist kein Ordner.",
+    "status_folder_removed": "Ordner entfernt.",
+    "status_folders_cleared": "Ordnerliste geleert.",
+    "status_move_dest_missing": "Wählen Sie einen Zielordner für Verschieben.",
+    "status_nothing_to_apply": "Nichts anzuwenden.",
+    "status_confirm_bulk": "Bestätigen Sie die Sammelaktion.",
+    "status_bulk_cancelled": "Sammelaktion abgebrochen.",
+    "status_trashed": "In den Papierkorb verschoben: {path}",
+    "status_trash_failed": "{path} konnte nicht in den Papierkorb verschoben werden",
+    "status_deleted": "Gelöscht: {path}",
+    "status_delete_failed": "{path} konnte nicht gelöscht werden",
+    "status_moved": "Verschoben: {path}",
+    "status_move_failed": "{path} konnte nicht verschoben werden",
+    "status_error": "Fehler: {error}",
+    "confirm_bulk": "Möchten Sie wirklich {count} Duplikat(e) {verb}?",
+    "confirm_bulk_dest": "Möchten Sie wirklich {count} Duplikat(e) nach {destination} {verb}?",
+    "bulk_done": "{verb}: {done} Element(e), {bytes} freigegeben, {failed} fehlgeschlagen.",
+    "files_scanned": "{n} Dateien durchsucht",
+    "files_scanned_progress": "{index}/{total} Dateien durchsucht",
+    "duplicates_found": "{n} Duplikate gefunden",
+    "duplicates_found_groups": "{n} Duplikate in {groups} Gruppen",
+    "reclaimable": "Freigebbar: {human}",
+    "elapsed": "Dauer: {secs} s · {groups} Gruppen · {threads} Threads",
+    "original_likely": "Original · {pct} % wahrscheinlich",
+    "reason_resolution": "höhere Auflösung",
+    "reason_quality": "bessere Qualität pro Pixel/Bitrate",
+    "reason_age": "älteres Dateidatum",
+    "reason_metadata": "EXIF-Kamerametadaten",
+    "reason_name": "Name ohne Kopiermarker",
+    "reason_location": "typischer Originalort",
+    "reason_other": "konsistentestes Signalset",
+    "no_picture": "Kein Bild ausgewählt",
+    "status_stopped_partial": "Nach {n} Datei(en) gestoppt — Teilergebnisse bleiben erhalten. Sie können erneut starten.",
+    "status_stopped_zero": "Vor der Verarbeitung einer Datei gestoppt. Sie können erneut starten.",
+    "status_finished": "Fertig: {groups} Gruppe(n), {duplicates} Duplikat(e).",
+    "browser_folders": "{n} Unterordner — zum Öffnen anklicken",
+    "model_no_url": "Dieses Modell hat keine Download-URL.",
+    "model_downloading": "Lade {name} herunter…",
+    "model_downloaded": "{name} heruntergeladen ({mb} MB). Drücken Sie Verwenden.",
+    "model_failed": "Download fehlgeschlagen: {error}",
+    "model_missing": "Datei fehlt: {path}",
+    "model_active": "{name} ist jetzt das aktive Modell.",
+    "model_removed": "{name} entfernt.",
+    "models_folder": "Modellordner: {path}",
+    "cache_cleared": "Cache geleert; die nächste Suche berechnet Fingerabdrücke und Embeddings neu.",
+    "no_embeddings_build": "Dieser Build unterstützt keine ONNX-Embeddings; neu kompilieren mit --features embeddings.",
+    "model_select_first": "Wählen Sie zuerst ein Modell aus oder laden Sie eines herunter (Modelle…).",
+    "browser_not_a_folder": "Kein Ordner: {path}",
+    "browser_destination": "Wählen Sie den Zielordner und drücken Sie „Diesen Ordner verwenden“.",
+    "verb_trash": "in den Papierkorb verschieben",
+    "verb_move": "verschieben",
+    "verb_delete": "löschen",
+    "model_resnet18_caps": "Allgemeine Bildähnlichkeit: skalierte, neu komprimierte und leicht bearbeitete Fotos",
+    "model_resnet50_caps": "Allgemeine Bildähnlichkeit mit einem größeren, hochwertigeren Modell",
+    "model_clip_caps": "Semantische Ähnlichkeit: verschiedene Aufnahmen derselben Szene oder Person (Schwelle ~0,83)",
+    "model_siglip_caps": "Semantische Ähnlichkeit, SigLIP-Alternative zu CLIP (Schwelle ~0,83)",
+    "model_clip_name": "CLIP ViT-B/32 (Vision)",
+    "model_siglip_name": "SigLIP base 16-224 (Vision)",
+    "no_model_selected": "Kein Modell ausgewählt",
+    "keep_original": "Original",
+    "keep_dimensions": "Abmessungen",
+    "keep_filesize": "Dateigröße",
+    "keep_earlierdate": "Älteres Datum",
+    "keep_earlierexifdate": "Älteres EXIF-Datum",
+    "keep_oldest": "Ältestes",
+    "keep_name": "Name",
+    "keep_path": "Pfad",
+    "auto_label": "Auto"
+  },
+  "help": [
+    {
+      "text": "Was UMDF macht",
+      "kind": 0
+    },
+    {
+      "text": "UMDF durchsucht Ordner nach doppelten Fotos, Videos, Audiodateien und Dateien. Es kombiniert exakten Byte-Vergleich mit perzeptuellen Fingerabdrücken und bewertet, welche Kopie am wahrscheinlichsten das Original ist.",
+      "kind": 1
+    },
+    {
+      "text": "Wie die Erkennung funktioniert",
+      "kind": 0
+    },
+    {
+      "text": "• Exakt: gleiche Größe + SHA-256 (oder vollständiger Vergleich) → 100 %.",
+      "kind": 2
+    },
+    {
+      "text": "• Perzeptuell: Das Bild wird auf 75×75 Graustufen skaliert; „dpf“ zählt Pixel innerhalb der Graustufen-Toleranz.",
+      "kind": 2
+    },
+    {
+      "text": "• Video: ffprobe + ein Frame bei „Frame position“, mit demselben Bild-Fingerabdruck.",
+      "kind": 2
+    },
+    {
+      "text": "• Audio: 5 s dekodiertes PCM werden gehasht; Remuxen oder Retaggen bleibt eine Übereinstimmung, verlustbehaftetes Neukodieren nicht.",
+      "kind": 2
+    },
+    {
+      "text": "Graustufen-Toleranz (Pixel tolerance)",
+      "kind": 0
+    },
+    {
+      "text": "Maximale Differenz der Graustufe (0–255), damit zwei Pixel als gleich gelten. 0 = streng; 10 (Standard) toleriert JPEG-Neukomprimierung; 14–18 kann lokale Retuschen tolerieren; über ~24 nehmen Fehlpositive zu. Große Beschnitte oder Verschiebungen werden nicht korrigiert.",
+      "kind": 1
+    },
+    {
+      "text": "Wenn bearbeitete Kopien fehlen, erhöhen Sie sie schrittweise und prüfen Sie die Ergebnisse. Für exakte Archive senken Sie sie.",
+      "kind": 1
+    },
+    {
+      "text": "Metriken",
+      "kind": 0
+    },
+    {
+      "text": "• dpf (Standard): Pixeltoleranz; toleriert meist Skalierung, Komprimierung und kleine Retuschen, aber keine großen Beschnitte.",
+      "kind": 2
+    },
+    {
+      "text": "• ssim: globale strukturelle Ähnlichkeit; kann lokale Retuschen besser tolerieren, garantiert aber keine Übereinstimmung.",
+      "kind": 2
+    },
+    {
+      "text": "• sign: Vorzeichenübereinstimmung des normalisierten Rasters.",
+      "kind": 2
+    },
+    {
+      "text": "• pearson: Korrelation der Raster; strenger hinsichtlich der Struktur.",
+      "kind": 2
+    },
+    {
+      "text": "• legacy: veraltete Vorzeichenmetrik, nur zum Vergleich; ihre Skala ist sehr permissiv und für Duplikatentscheidungen unzuverlässig.",
+      "kind": 2
+    },
+    {
+      "text": "• Semantisch (optional): ONNX-Embeddings (ResNet/CLIP/SigLIP), per Kosinus verglichen. In Standard-Builds deaktiviert; AI-Pakete enthalten es.",
+      "kind": 2
+    },
+    {
+      "text": "Semantische Modelle (KI)",
+      "kind": 0
+    },
+    {
+      "text": "In einem AI-Paket „Semantisch (KI)“ aktivieren, „Modelle…“ drücken, ein Modell herunterladen und „Verwenden“ drücken. Die Suche vergleicht per Embedding mit Kosinusähnlichkeit; „Ähnlichkeit“ legt die Schwelle fest.",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50: schnelle allgemeine Ähnlichkeit für skalierte, neu komprimierte oder leicht bearbeitete Fotos.",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP: semantische Szenen-/Inhaltsähnlichkeit; keine Gesichtserkennung und keine Identifikation von Personen. Die Schwelle ~0,83 ist ein modellabhängiger Startwert.",
+      "kind": 2
+    },
+    {
+      "text": "Beim Aktivieren eines Modells wird „Ähnlichkeit“ auf den empfohlenen Wert gesetzt (0,90 ResNet, 0,83 CLIP/SigLIP); passen Sie ihn mit eigenen Fotos an.",
+      "kind": 2
+    },
+    {
+      "text": "Öffentliche Modelle werden ohne Token in den Modellordner (Standard ./models) geladen. Die Konfiguration liegt in config.toml, der Cache in cache.db.",
+      "kind": 2
+    },
+    {
+      "text": "AI-Pakete enthalten eine CPU-ONNX-Runtime und verwenden standardmäßig CPU. Für CUDA ORT_DYLIB_PATH auf eine GPU-Runtime setzen und CUDA wählen; bei Fehlern wird CPU verwendet.",
+      "kind": 2
+    },
+    {
+      "text": "Empfehlungen nach Fall",
+      "kind": 0
+    },
+    {
+      "text": "Exakte Duplikate: SHA-256; kein Modell nötig.",
+      "kind": 2
+    },
+    {
+      "text": "Skaliert oder neu komprimiert: dpf (Standard) oder ResNet-Embeddings.",
+      "kind": 2
+    },
+    {
+      "text": "Beschnitte oder andere Bildausschnitte: CLIP/SigLIP kann helfen, aber die Seitenverhältnis-Prüfung (≤1,5) kann sehr unterschiedliche Beschnitte vor dem Vergleich ausschließen.",
+      "kind": 2
+    },
+    {
+      "text": "Gleiche Szene oder Inhalt in verschiedenen Aufnahmen: CLIP/SigLIP mit Startschwelle ~0,83; Fehlpositive prüfen.",
+      "kind": 2
+    },
+    {
+      "text": "Gedreht: EXIF-Orientierung wird angewendet; eine in die Pixel eingebrannte Drehung ohne EXIF kann selbst von semantischen Modellen übersehen werden. Manuell prüfen.",
+      "kind": 2
+    },
+    {
+      "text": "Rote Augen oder lokale Retusche: dpf mit Toleranz 14–18 oder ssim versuchen; sonst manuell prüfen. Eine höhere Toleranz erhöht Fehlpositive.",
+      "kind": 2
+    },
+    {
+      "text": "Video: ein Frame bei „Frame position“; Audio: 5 s PCM. Erfordert ffmpeg und ffprobe im PATH.",
+      "kind": 2
+    },
+    {
+      "text": "Gedrehte und bearbeitete Fotos",
+      "kind": 0
+    },
+    {
+      "text": "• Die EXIF-Orientierung wird beim Dekodieren angewendet: Ein getaggtes Foto passt zu seiner physisch gedrehten Kopie.",
+      "kind": 2
+    },
+    {
+      "text": "• Eine auf die Pixel angewendete Drehung ohne EXIF wird möglicherweise nicht erkannt; es gibt keine Garantie, prüfen Sie manuell.",
+      "kind": 2
+    },
+    {
+      "text": "• Die Rot-Augen-Korrektur ändert einen kleinen Bereich; dpf/ssim können weiter passen, aber nicht garantiert. Toleranz oder Schwelle anpassen und prüfen.",
+      "kind": 2
+    },
+    {
+      "text": "Welche Kopie bleibt?",
+      "kind": 0
+    },
+    {
+      "text": "Die Richtlinie „Original“ berechnet eine heuristische Punktzahl aus Auflösung, Bytes pro Pixel, Alter, EXIF-Reichtum, Namensmarkern und Speicherort. Es ist keine Wahrscheinlichkeit und garantiert nicht das Original; die Vorschau zeigt Punktzahl und Gründe.",
+      "kind": 1
+    },
+    {
+      "text": "Sichere Aktionen",
+      "kind": 0
+    },
+    {
+      "text": "• Papierkorb/Verschieben/Löschen wirken auf ein Duplikat; Sammelschaltflächen fragen nach Bestätigung.",
+      "kind": 2
+    },
+    {
+      "text": "• Der Papierkorb hängt von Desktop und Dateisystem ab; Löschen ist dauerhaft und unwiderruflich.",
+      "kind": 2
+    },
+    {
+      "text": "• Nach dem Löschen bleibt die nächste Zeile ausgewählt, um weiter zu vergleichen und zu löschen.",
+      "kind": 2
+    },
+    {
+      "text": "• Tastatur: ↑/↓ auswählen, Entf/Delete löscht.",
+      "kind": 2
+    },
+    {
+      "text": "Leistung",
+      "kind": 0
+    },
+    {
+      "text": "Dekodierung, Hashing und Vergleich nutzen standardmäßig alle CPUs; „Threads“ oder --threads anpassen. Der perzeptuelle Vergleich ist im schlimmsten Fall O(n²), und große Bilder verbrauchen Speicher.",
+      "kind": 1
+    },
+    {
+      "text": "Grenzen",
+      "kind": 0
+    },
+    {
+      "text": "• Die „Original“-Punktzahl ist heuristisch: Sie ordnet Kandidaten, garantiert aber nicht, welche Kopie das Original ist.",
+      "kind": 2
+    },
+    {
+      "text": "• Das 75×75-Graustufenraster kann bei sehr dunklen, kontrastarmen oder überwiegend gleichförmigen Bildern versagen.",
+      "kind": 2
+    },
+    {
+      "text": "• Die Seitenverhältnis-Prüfung (max/min ≤ 1,5) kann sehr unterschiedliche Beschnitte oder Bildausschnitte verwerfen.",
+      "kind": 2
+    },
+    {
+      "text": "• dpf toleriert Neukomprimierung und kleine Änderungen, keine großen Beschnitte oder eingebrannten Drehungen; eine höhere Toleranz erhöht Fehlpositive.",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP vergleichen globalen Inhalt, keine Gesichter oder Identität; verschiedene Personen in ähnlichen Szenen können passen.",
+      "kind": 2
+    },
+    {
+      "text": "• Die Schwellen 0,90/0,83 sind Startwerte, die vom Modell und der Sammlung abhängen.",
+      "kind": 2
+    },
+    {
+      "text": "• Video: ein einzelnes Frame; ein anderes Frame, ein Schnitt oder eine andere Dauer wird möglicherweise nicht erkannt.",
+      "kind": 2
+    },
+    {
+      "text": "• Audio: Remuxen/Retaggen passt; verlustbehaftetes Neukodieren nicht.",
+      "kind": 2
+    },
+    {
+      "text": "• Ohne ffmpeg/ffprobe werden nur Bilder und exakte Dateien verglichen.",
+      "kind": 2
+    },
+    {
+      "text": "• Beschädigte, nicht unterstützte oder sehr große Dateien können übersprungen werden oder viel Speicher verbrauchen.",
+      "kind": 2
+    },
+    {
+      "text": "• Papierkorb/Verschieben hängen vom System ab; Löschen ist unwiderruflich.",
+      "kind": 2
+    },
+    {
+      "text": "• Standard-Builds haben keine Embeddings; AI-Pakete enthalten eine CPU-Runtime. CUDA erfordert eine externe GPU-ONNX-Runtime (ORT_DYLIB_PATH).",
+      "kind": 2
+    },
+    {
+      "text": "• Heruntergeladene Modelle sind nicht im Installer enthalten und behalten die Lizenz ihres Upstream-Repositories.",
+      "kind": 2
+    }
+  ]
+}

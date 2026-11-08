@@ -89,6 +89,7 @@ jobs:
             cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
           fi
           cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
+          cp assets/fonts/NOTO-COPYRIGHT.txt "dist/${out}/NOTO-COPYRIGHT.txt"
           cat > "dist/${out}/SOURCE.txt" <<EOF
           UMDF ${TAG}
           Corresponding source code:
@@ -174,14 +175,18 @@ jobs:
           ORT_ROOT: ${{ matrix.ort_root }}
         run: |
           set -euo pipefail
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$RUNNER_TEMP/onnxruntime.archive"
+          archive="$RUNNER_TEMP/${ORT_ARCHIVE}"
+          if ! curl -fsSL --retry 8 --retry-all-errors --retry-delay 5 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$archive"; then
+            echo "ONNX Runtime download failed" >&2
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/ort"
           case "${ORT_ARCHIVE}" in
             *.zip)
-              powershell -NoProfile -Command "Expand-Archive -LiteralPath '$RUNNER_TEMP/onnxruntime.archive' -DestinationPath '$RUNNER_TEMP/ort' -Force"
+              powershell -NoProfile -Command "Expand-Archive -LiteralPath '$archive' -DestinationPath '$RUNNER_TEMP/ort' -Force"
               ;;
             *)
-              tar -xzf "$RUNNER_TEMP/onnxruntime.archive" -C "$RUNNER_TEMP/ort"
+              tar -xzf "$archive" -C "$RUNNER_TEMP/ort"
               ;;
           esac
           test -d "$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
@@ -218,6 +223,7 @@ jobs:
           [ -f "$ort/ThirdPartyNotices.txt" ] && cp "$ort/ThirdPartyNotices.txt" "dist/${out}/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt"
           [ -f "$ort/Privacy.md" ] && cp "$ort/Privacy.md" "dist/${out}/ONNXRUNTIME-PRIVACY.md"
           cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
+          cp assets/fonts/NOTO-COPYRIGHT.txt "dist/${out}/NOTO-COPYRIGHT.txt"
           cat > "dist/${out}/SOURCE.txt" <<EOF
           UMDF ${TAG}
           Corresponding source code:
@@ -346,6 +352,7 @@ jobs:
           Copy-Item target\release\umdf.exe, target\release\umdf-ui.exe $stage
           Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\lib\onnxruntime.dll" (Join-Path $stage "lib")
           Copy-Item README.md, LICENSE, THIRD_PARTY.md, THIRD_PARTY_LICENSES.md, CHANGELOG.md $stage
+          Copy-Item assets\fonts\NOTO-COPYRIGHT.txt $stage
           Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\LICENSE" (Join-Path $stage "ONNXRUNTIME-LICENSE")
           Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\ThirdPartyNotices.txt" (Join-Path $stage "ONNXRUNTIME-THIRD-PARTY-NOTICES.txt")
           Copy-Item "$env:RUNNER_TEMP\ort\onnxruntime-win-x64-1.31.1\Privacy.md" (Join-Path $stage "ONNXRUNTIME-PRIVACY.md")

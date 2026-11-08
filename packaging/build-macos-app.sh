@@ -14,6 +14,7 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 install -m 0755 "$BIN_DIR/umdf-ui" "$APP_DIR/Contents/MacOS/umdf-ui"
 install -m 0644 assets/icon.icns "$APP_DIR/Contents/Resources/icon.icns"
 install -m 0644 LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md "$APP_DIR/Contents/Resources/"
+install -m 0644 assets/fonts/NOTO-COPYRIGHT.txt "$APP_DIR/Contents/Resources/NOTO-COPYRIGHT.txt"
 sed "s/@VERSION@/$VERSION/g" packaging/Info.plist > "$APP_DIR/Contents/Info.plist"
 
 if [ -n "$ORT_LIB_DIR" ] && [ -d "$ORT_LIB_DIR" ]; then

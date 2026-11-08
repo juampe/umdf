@@ -2462,9 +2462,9 @@ insights.
 
 Used by:
 
-- umdf-cli 0.2.0
-- umdf-core 0.2.0
-- umdf-ui 0.2.0
+- umdf-cli 0.3.0
+- umdf-core 0.3.0
+- umdf-ui 0.3.0
 - i-slint-backend-selector 1.18.1
 - i-slint-backend-winit 1.18.1
 - i-slint-common 1.18.1

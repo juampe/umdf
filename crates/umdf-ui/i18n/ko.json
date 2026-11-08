@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "폴더 추가…",
+    "remove": "제거",
+    "clear": "지우기",
+    "options": "옵션",
+    "start": "시작",
+    "scanning": "검사 중…",
+    "stop": "중지",
+    "dark": "어둡게",
+    "light": "밝게",
+    "language": "언어",
+    "help": "도움말",
+    "help_title": "도움말",
+    "close": "닫기",
+    "locations": "위치",
+    "pictures": "사진",
+    "documents": "문서",
+    "home": "홈",
+    "computer": "컴퓨터",
+    "folders_none": "검사할 폴더 (없음)",
+    "remove_selected": "선택 항목 제거",
+    "clear_all": "모두 지우기",
+    "opt_scan_subfolders": "하위 폴더 포함",
+    "opt_only_identical": "100% 동일만",
+    "opt_compare_media": "미디어 내용 비교",
+    "opt_similarity": "유사도",
+    "opt_keep": "유지",
+    "opt_metric": "지표",
+    "opt_threads": "스레드",
+    "opt_semantic": "의미론적 (GPU)",
+    "semantic_model": ".onnx 모델 경로",
+    "models_manage": "모델…",
+    "models_title": "모델",
+    "models_help": "Hugging Face에서 이미지 임베딩 모델을 다운로드합니다. 폴더와 활성 모델은 config.toml에 저장되고 파생 데이터는 cache.db에 캐시됩니다.",
+    "models_folder": "모델 폴더",
+    "models_capabilities": "기능",
+    "models_download": "다운로드",
+    "models_use": "사용",
+    "models_active": "활성",
+    "models_remove": "제거",
+    "models_accel": "가속",
+    "models_threshold": "유사도",
+    "models_none": "설치된 모델이 없습니다. 아래에서 다운로드하세요.",
+    "models_clear_cache": "캐시 지우기",
+    "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
+    "opt_tolerance": "픽셀 허용 오차",
+    "trash_all": "모든 중복을 휴지통으로",
+    "move_all": "모두 이동",
+    "delete_all": "모두 삭제",
+    "keeps_best": "각 그룹의 원본 유지",
+    "cancel": "취소",
+    "confirm": "확인",
+    "match_list": "일치 목록",
+    "col_group": "그룹",
+    "col_original": "원본",
+    "col_duplicate": "중복",
+    "col_similarity": "유사도",
+    "col_size": "크기",
+    "empty_list": "일치 목록이 비어 있습니다.",
+    "preview": "미리보기",
+    "original": "원본",
+    "duplicate": "중복",
+    "move_destination": "이동 대상 폴더",
+    "move_placeholder": "/중복/파일/경로",
+    "browse": "찾아보기…",
+    "trash": "휴지통",
+    "move": "이동",
+    "delete": "삭제",
+    "select_folder": "폴더 선택",
+    "up": "위로",
+    "go": "이동",
+    "select_this_folder": "이 폴더 사용",
+    "show_hidden": "숨김 파일 표시"
+  },
+  "phrases": {
+    "folders_label": "검사할 폴더 ({n})",
+    "stage_ready": "준비됨",
+    "stage_starting": "시작 중…",
+    "stage_loading_total": "{total}개 파일 로드 중…",
+    "stage_loading": "{name} 로드 중…",
+    "stage_embedding": "임베딩 계산 중 {done}/{total}…",
+    "stage_hashing": "해시 계산 중 {done}/{total}…",
+    "stage_comparing": "비교 중 {done}/{total}…",
+    "stage_grouping": "일치 항목 그룹화 중…",
+    "stage_finished": "완료",
+    "stage_stopping": "중지 중…",
+    "stage_stopped": "중지됨",
+    "stage_error": "오류",
+    "stage_no_folders": "선택된 폴더 없음",
+    "status_ready": "준비됨.",
+    "status_scanning": "검사 중…",
+    "status_busy": "이미 검사가 실행 중입니다.",
+    "status_no_folders": "먼저 폴더를 하나 이상 추가하세요.",
+    "status_stopping": "중지 중…",
+    "status_ffmpeg_missing": "ffmpeg/ffprobe를 찾을 수 없습니다. 비디오/오디오 내용 비교가 비활성화됩니다.",
+    "status_folder_added": "추가됨: {path}",
+    "status_folder_exists": "해당 폴더는 이미 목록에 있습니다.",
+    "status_not_a_folder": "{path}은(는) 폴더가 아닙니다.",
+    "status_folder_removed": "폴더가 제거되었습니다.",
+    "status_folders_cleared": "폴더 목록이 지워졌습니다.",
+    "status_move_dest_missing": "이동할 대상 폴더를 선택하세요.",
+    "status_nothing_to_apply": "적용할 항목이 없습니다.",
+    "status_confirm_bulk": "일괄 작업을 확인하세요.",
+    "status_bulk_cancelled": "일괄 작업이 취소되었습니다.",
+    "status_trashed": "휴지통으로 이동됨: {path}",
+    "status_trash_failed": "{path}을(를) 휴지통으로 이동할 수 없습니다",
+    "status_deleted": "삭제됨: {path}",
+    "status_delete_failed": "{path}을(를) 삭제할 수 없습니다",
+    "status_moved": "이동됨: {path}",
+    "status_move_failed": "{path}을(를) 이동할 수 없습니다",
+    "status_error": "오류: {error}",
+    "confirm_bulk": "중복 {count}개를 {verb}할까요?",
+    "confirm_bulk_dest": "중복 {count}개를 {destination}(으)로 {verb}할까요?",
+    "bulk_done": "{verb}: {done}개, {bytes} 해제, {failed}개 실패.",
+    "files_scanned": "{n}개 파일 검사됨",
+    "files_scanned_progress": "{index}/{total}개 파일 검사됨",
+    "duplicates_found": "중복 {n}개 발견",
+    "duplicates_found_groups": "{groups}개 그룹에 중복 {n}개",
+    "reclaimable": "확보 가능: {human}",
+    "elapsed": "경과: {secs}초 · {groups}개 그룹 · {threads}개 스레드",
+    "original_likely": "원본 · {pct}% 가능성",
+    "reason_resolution": "더 높은 해상도",
+    "reason_quality": "픽셀/비트레이트당 품질 우수",
+    "reason_age": "파일 날짜가 더 오래됨",
+    "reason_metadata": "카메라 EXIF 메타데이터",
+    "reason_name": "복사 표시가 없는 이름",
+    "reason_location": "원본의 일반적인 위치",
+    "reason_other": "가장 일관된 신호",
+    "no_picture": "선택된 사진 없음",
+    "status_stopped_partial": "{n}개 파일 후 중지됨 — 부분 결과가 유지됩니다. 다시 시작할 수 있습니다.",
+    "status_stopped_zero": "파일을 처리하기 전에 중지되었습니다. 다시 시작할 수 있습니다.",
+    "status_finished": "완료: {groups}개 그룹, {duplicates}개 중복.",
+    "browser_folders": "하위 폴더 {n}개 — 클릭하여 열기",
+    "model_no_url": "이 모델에는 다운로드 URL이 없습니다.",
+    "model_downloading": "{name} 다운로드 중…",
+    "model_downloaded": "{name} 다운로드됨 ({mb} MB). 사용을 누르세요.",
+    "model_failed": "다운로드 실패: {error}",
+    "model_missing": "파일 없음: {path}",
+    "model_active": "{name}이(가) 이제 활성 모델입니다.",
+    "model_removed": "{name} 제거됨.",
+    "models_folder": "모델 폴더: {path}",
+    "cache_cleared": "캐시가 지워졌습니다. 다음 검사에서 지문과 임베딩을 다시 계산합니다.",
+    "no_embeddings_build": "이 빌드는 ONNX 임베딩을 지원하지 않습니다. --features embeddings로 다시 빌드하세요.",
+    "model_select_first": "먼저 모델을 선택하거나 다운로드하세요 (모델…).",
+    "browser_not_a_folder": "폴더가 아님: {path}",
+    "browser_destination": "대상 폴더를 선택하고 “이 폴더 사용”을 누르세요.",
+    "verb_trash": "휴지통으로 이동",
+    "verb_move": "이동",
+    "verb_delete": "삭제",
+    "model_resnet18_caps": "일반 이미지 유사도: 크기 조정, 재압축, 가벼운 편집 사진",
+    "model_resnet50_caps": "더 크고 품질 높은 모델의 일반 이미지 유사도",
+    "model_clip_caps": "의미론적 유사도: 같은 장면이나 인물의 다른 사진 (임계값 ~0.83)",
+    "model_siglip_caps": "의미론적 유사도, CLIP의 SigLIP 대안 (임계값 ~0.83)",
+    "model_clip_name": "CLIP ViT-B/32 (비전)",
+    "model_siglip_name": "SigLIP base 16-224 (비전)",
+    "no_model_selected": "선택된 모델 없음",
+    "keep_original": "원본",
+    "keep_dimensions": "크기",
+    "keep_filesize": "파일 크기",
+    "keep_earlierdate": "이전 날짜",
+    "keep_earlierexifdate": "이전 EXIF 날짜",
+    "keep_oldest": "가장 오래됨",
+    "keep_name": "이름",
+    "keep_path": "경로",
+    "auto_label": "자동"
+  },
+  "help": [
+    {
+      "text": "UMDF 기능",
+      "kind": 0
+    },
+    {
+      "text": "UMDF는 폴더에서 중복된 사진, 비디오, 오디오 및 파일을 찾습니다. 바이트 단위 정확 비교와 지각 지문을 결합하고 어떤 복사본이 원본일 가능성이 높은지 점수를 매깁니다.",
+      "kind": 1
+    },
+    {
+      "text": "감지 방식",
+      "kind": 0
+    },
+    {
+      "text": "• 정확: 같은 크기 + SHA-256(또는 전체 비교) → 100%.",
+      "kind": 2
+    },
+    {
+      "text": "• 지각: 이미지를 75×75 회색조로 축소하고 “dpf”가 회색 허용 오차 내의 픽셀을 셉니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 비디오: ffprobe + “Frame position”의 한 프레임을 같은 이미지 지문으로 비교합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 오디오: 디코딩된 PCM 5초를 해시합니다. 재먹싱/재태깅은 일치하지만 손실 재인코딩은 일치하지 않습니다.",
+      "kind": 2
+    },
+    {
+      "text": "회색 허용 오차 (픽셀 허용 오차)",
+      "kind": 0
+    },
+    {
+      "text": "두 픽셀이 같다고 간주되는 최대 회색 차이(0–255). 0 = 엄격, 10(기본)은 JPEG 재압축을 허용, 14–18은 국부 보정을 허용할 수 있습니다. 약 24를 넘으면 오탐이 증가합니다. 큰 자르기나 이동은 보정하지 않습니다.",
+      "kind": 1
+    },
+    {
+      "text": "편집된 복사본을 놓치면 조금씩 올리고 결과를 확인하세요. 정확한 아카이브에는 낮추세요.",
+      "kind": 1
+    },
+    {
+      "text": "지표",
+      "kind": 0
+    },
+    {
+      "text": "• dpf(기본): 픽셀 허용 오차. 보통 크기 조정, 압축, 작은 보정은 허용하지만 큰 자르기는 허용하지 않습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• ssim: 전역 구조 유사도. 국부 보정을 더 허용할 수 있지만 일치를 보장하지는 않습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• sign: 정규화 그리드의 부호 일치.",
+      "kind": 2
+    },
+    {
+      "text": "• pearson: 그리드 상관. 구조에 더 엄격합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• legacy: 비교용으로 유지된 레거시 부호 지표. 범위가 매우 관대하여 중복 판단에 신뢰할 수 없습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 의미론적(선택): ONNX 임베딩(ResNet/CLIP/SigLIP)을 코사인으로 비교합니다. 표준 빌드에서는 비활성화되며 AI 패키지에는 포함됩니다.",
+      "kind": 2
+    },
+    {
+      "text": "의미론적 모델 (AI)",
+      "kind": 0
+    },
+    {
+      "text": "AI 패키지에서 “의미론적 (AI)”를 활성화하고 “모델…”을 눌러 모델을 다운로드한 뒤 “사용”을 누르세요. 검사는 임베딩 코사인 유사도로 비교하며 “유사도”가 임계값을 설정합니다.",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50: 크기 조정, 재압축, 가벼운 편집 사진에 적합한 빠른 일반 유사도.",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP: 장면/내용 의미론적 유사도. 얼굴 인식이나 인물 식별이 아닙니다. ~0.83 임계값은 모델에 따라 달라지는 시작값입니다.",
+      "kind": 2
+    },
+    {
+      "text": "모델을 활성화하면 “유사도”가 권장값(ResNet 0.90, CLIP/SigLIP 0.83)으로 설정됩니다. 자신의 사진으로 조정하세요.",
+      "kind": 2
+    },
+    {
+      "text": "공개 모델은 토큰 없이 모델 폴더(기본 ./models)로 다운로드됩니다. 설정은 config.toml, 캐시는 cache.db에 저장됩니다.",
+      "kind": 2
+    },
+    {
+      "text": "AI 패키지에는 CPU ONNX Runtime이 포함되어 기본으로 CPU를 사용합니다. CUDA를 사용하려면 ORT_DYLIB_PATH를 GPU 런타임으로 지정하고 CUDA를 선택하세요. 실패하면 CPU를 사용합니다.",
+      "kind": 2
+    },
+    {
+      "text": "사례별 권장",
+      "kind": 0
+    },
+    {
+      "text": "정확한 중복: SHA-256. 모델이 필요 없습니다.",
+      "kind": 2
+    },
+    {
+      "text": "크기 조정 또는 재압축: dpf(기본) 또는 ResNet 임베딩.",
+      "kind": 2
+    },
+    {
+      "text": "자르기나 구도 차이: CLIP/SigLIP이 도움이 될 수 있지만 종횡비 제한(≤1.5)이 비교 전에 매우 다른 자르기를 제외할 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "다른 사진의 같은 장면/내용: CLIP/SigLIP와 시작 임계값 ~0.83. 오탐을 확인하세요.",
+      "kind": 2
+    },
+    {
+      "text": "회전: EXIF 방향이 적용됩니다. EXIF 없이 픽셀에 구워진 회전은 의미론적 모델도 놓칠 수 있습니다. 수동으로 확인하세요.",
+      "kind": 2
+    },
+    {
+      "text": "적목/국부 보정: dpf 허용 오차 14–18 또는 ssim을 시도하세요. 아니면 수동으로 확인하세요. 허용 오차를 높이면 오탐이 증가합니다.",
+      "kind": 2
+    },
+    {
+      "text": "비디오: “Frame position”의 한 프레임, 오디오: PCM 5초. PATH에 ffmpeg와 ffprobe가 필요합니다.",
+      "kind": 2
+    },
+    {
+      "text": "회전 및 편집된 사진",
+      "kind": 0
+    },
+    {
+      "text": "• 디코딩 시 EXIF 방향이 적용되어 태그된 사진은 물리적으로 회전된 복사본과 일치합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• EXIF 없이 픽셀에 적용된 회전은 감지되지 않을 수 있습니다. 보장이 없으므로 수동으로 확인하세요.",
+      "kind": 2
+    },
+    {
+      "text": "• 적목 보정은 작은 영역만 변경합니다. dpf/ssim이 여전히 일치할 수 있지만 보장되지는 않습니다. 허용 오차나 임계값을 조정하고 확인하세요.",
+      "kind": 2
+    },
+    {
+      "text": "어떤 복사본을 유지하나요?",
+      "kind": 0
+    },
+    {
+      "text": "“원본” 정책은 해상도, 픽셀당 바이트, 파일 연령, EXIF 풍부함, 이름 표시, 위치로 휴리스틱 점수를 계산합니다. 확률이 아니며 원본을 보장하지 않습니다. 미리보기에 점수와 이유가 표시됩니다.",
+      "kind": 1
+    },
+    {
+      "text": "안전한 작업",
+      "kind": 0
+    },
+    {
+      "text": "• 휴지통/이동/삭제는 중복 하나에 적용됩니다. 일괄 버튼은 확인을 요청합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 휴지통은 데스크톱과 파일 시스템에 따라 다릅니다. 삭제는 영구적이며 되돌릴 수 없습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 삭제 후 다음 행이 선택된 상태로 유지되어 연속 비교 및 삭제가 가능합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 키보드: ↑/↓ 선택, Del/Delete 삭제.",
+      "kind": 2
+    },
+    {
+      "text": "성능",
+      "kind": 0
+    },
+    {
+      "text": "디코딩, 해시, 비교는 기본으로 모든 CPU를 사용합니다. “스레드” 또는 --threads로 조정하세요. 지각 비교는 최악의 경우 O(n²)이며 큰 이미지는 메모리를 많이 사용합니다.",
+      "kind": 1
+    },
+    {
+      "text": "제한 사항",
+      "kind": 0
+    },
+    {
+      "text": "• “원본” 점수는 휴리스틱입니다. 후보의 순위를 매길 뿐 어떤 복사본이 원본인지 보장하지 않습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 75×75 회색조 그리드는 매우 어둡거나 대비가 낮거나 대부분 균일한 이미지에서 실패할 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 종횡비 제한(최대/최소 ≤ 1.5)은 매우 다른 자르기나 구도를 제외할 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• dpf는 재압축과 작은 변경은 허용하지만 큰 자르기나 구워진 회전은 허용하지 않습니다. 허용 오차를 높이면 오탐이 증가합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP은 전역 내용을 비교하며 얼굴이나 신원을 비교하지 않습니다. 비슷한 장면의 다른 사람이 일치할 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 0.90/0.83 임계값은 모델과 컬렉션에 따라 달라지는 시작값입니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 비디오: 단일 프레임. 다른 프레임, 컷, 길이는 감지되지 않을 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 오디오: 재먹싱/재태깅은 일치하지만 손실 재인코딩은 일치하지 않습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• ffmpeg/ffprobe가 없으면 이미지와 정확한 파일만 비교합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 손상되었거나 지원되지 않거나 매우 큰 파일은 건너뛰거나 많은 메모리를 사용할 수 있습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 휴지통/이동은 시스템에 따라 다릅니다. 삭제는 되돌릴 수 없습니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 표준 빌드에는 임베딩이 없습니다. AI 패키지에는 CPU 런타임이 포함됩니다. CUDA에는 외부 GPU ONNX Runtime(ORT_DYLIB_PATH)이 필요합니다.",
+      "kind": 2
+    },
+    {
+      "text": "• 다운로드한 모델은 설치 프로그램에 포함되지 않으며 업스트림 저장소의 라이선스를 유지합니다.",
+      "kind": 2
+    }
+  ]
+}

@@ -71,6 +71,14 @@ keeps the license of its upstream Hugging Face repository (for example ResNet,
 CLIP and SigLIP model weights). Review the model card before redistributing a
 model.
 
+## Noto Sans CJK
+
+The UI embeds **Noto Sans CJK Regular** (Copyright 2010-2023 Google LLC and
+contributors) as a fallback for Chinese, Japanese and Korean text. It is
+licensed under the **SIL Open Font License 1.1**. The full copyright and
+license text is included in every package as `NOTO-COPYRIGHT.txt` and in the
+repository at `assets/fonts/NOTO-COPYRIGHT.txt`.
+
 ## App icon
 
 The UMDF icon (`assets/icon*`) is part of the project and is distributed under

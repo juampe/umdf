@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "フォルダーを追加…",
+    "remove": "削除",
+    "clear": "クリア",
+    "options": "オプション",
+    "start": "開始",
+    "scanning": "スキャン中…",
+    "stop": "停止",
+    "dark": "ダーク",
+    "light": "ライト",
+    "language": "言語",
+    "help": "ヘルプ",
+    "help_title": "ヘルプ",
+    "close": "閉じる",
+    "locations": "場所",
+    "pictures": "ピクチャ",
+    "documents": "ドキュメント",
+    "home": "ホーム",
+    "computer": "コンピューター",
+    "folders_none": "スキャンするフォルダー（なし）",
+    "remove_selected": "選択を削除",
+    "clear_all": "すべてクリア",
+    "opt_scan_subfolders": "サブフォルダーを含める",
+    "opt_only_identical": "100% 一致のみ",
+    "opt_compare_media": "メディア内容を比較",
+    "opt_similarity": "類似度",
+    "opt_keep": "保持",
+    "opt_metric": "指標",
+    "opt_threads": "スレッド",
+    "opt_semantic": "セマンティック（GPU）",
+    "semantic_model": ".onnx モデルのパス",
+    "models_manage": "モデル…",
+    "models_title": "モデル",
+    "models_help": "Hugging Face から画像埋め込みモデルをダウンロードします。フォルダーと有効なモデルは config.toml に保存され、派生データは cache.db にキャッシュされます。",
+    "models_folder": "モデルフォルダー",
+    "models_capabilities": "機能",
+    "models_download": "ダウンロード",
+    "models_use": "使用",
+    "models_active": "有効",
+    "models_remove": "削除",
+    "models_accel": "アクセラレーション",
+    "models_threshold": "類似度",
+    "models_none": "モデルがインストールされていません。下からダウンロードしてください。",
+    "models_clear_cache": "キャッシュをクリア",
+    "semantic_unavailable": "このビルドにはセマンティック検索が含まれていません。--features embeddings と ONNX Runtime で再ビルドしてください。",
+    "opt_tolerance": "ピクセル許容値",
+    "trash_all": "すべての重複をゴミ箱へ",
+    "move_all": "すべて移動",
+    "delete_all": "すべて削除",
+    "keeps_best": "各グループのオリジナルを保持",
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "match_list": "一致リスト",
+    "col_group": "グループ",
+    "col_original": "オリジナル",
+    "col_duplicate": "重複",
+    "col_similarity": "類似度",
+    "col_size": "サイズ",
+    "empty_list": "一致リストは空です。",
+    "preview": "プレビュー",
+    "original": "オリジナル",
+    "duplicate": "重複",
+    "move_destination": "移動先フォルダー",
+    "move_placeholder": "/重複ファイル/のパス",
+    "browse": "参照…",
+    "trash": "ゴミ箱",
+    "move": "移動",
+    "delete": "削除",
+    "select_folder": "フォルダーを選択",
+    "up": "上へ",
+    "go": "移動",
+    "select_this_folder": "このフォルダーを使用",
+    "show_hidden": "隠しファイルを表示"
+  },
+  "phrases": {
+    "folders_label": "スキャンするフォルダー（{n}）",
+    "stage_ready": "準備完了",
+    "stage_starting": "開始中…",
+    "stage_loading_total": "{total} 個のファイルを読み込み中…",
+    "stage_loading": "{name} を読み込み中…",
+    "stage_embedding": "埋め込みを計算中 {done}/{total}…",
+    "stage_hashing": "ハッシュを計算中 {done}/{total}…",
+    "stage_comparing": "比較中 {done}/{total}…",
+    "stage_grouping": "一致をグループ化中…",
+    "stage_finished": "完了",
+    "stage_stopping": "停止中…",
+    "stage_stopped": "停止",
+    "stage_error": "エラー",
+    "stage_no_folders": "フォルダーが選択されていません",
+    "status_ready": "準備完了。",
+    "status_scanning": "スキャン中…",
+    "status_busy": "スキャンはすでに実行中です。",
+    "status_no_folders": "先にフォルダーを少なくとも 1 つ追加してください。",
+    "status_stopping": "停止中…",
+    "status_ffmpeg_missing": "ffmpeg/ffprobe が見つかりません。ビデオ/オーディオの内容比較は無効です。",
+    "status_folder_added": "追加しました: {path}",
+    "status_folder_exists": "このフォルダーはすでにリストにあります。",
+    "status_not_a_folder": "{path} はフォルダーではありません。",
+    "status_folder_removed": "フォルダーを削除しました。",
+    "status_folders_cleared": "フォルダーリストをクリアしました。",
+    "status_move_dest_missing": "移動先フォルダーを選択してください。",
+    "status_nothing_to_apply": "適用するものがありません。",
+    "status_confirm_bulk": "一括操作を確認してください。",
+    "status_bulk_cancelled": "一括操作をキャンセルしました。",
+    "status_trashed": "ゴミ箱へ移動: {path}",
+    "status_trash_failed": "{path} をゴミ箱へ移動できませんでした",
+    "status_deleted": "削除しました: {path}",
+    "status_delete_failed": "{path} を削除できませんでした",
+    "status_moved": "移動しました: {path}",
+    "status_move_failed": "{path} を移動できませんでした",
+    "status_error": "エラー: {error}",
+    "confirm_bulk": "{count} 個の重複を{verb}しますか？",
+    "confirm_bulk_dest": "{count} 個の重複を {destination} へ{verb}しますか？",
+    "bulk_done": "{verb}: {done} 件、{bytes} 解放、{failed} 件失敗。",
+    "files_scanned": "{n} 個のファイルをスキャン",
+    "files_scanned_progress": "{index}/{total} 個のファイルをスキャン",
+    "duplicates_found": "{n} 個の重複を検出",
+    "duplicates_found_groups": "{groups} グループに {n} 個の重複",
+    "reclaimable": "解放可能: {human}",
+    "elapsed": "経過: {secs} 秒 · {groups} グループ · {threads} スレッド",
+    "original_likely": "オリジナル · {pct}% の可能性",
+    "reason_resolution": "より高い解像度",
+    "reason_quality": "ピクセル/ビットレートあたりの品質が高い",
+    "reason_age": "ファイル日付が古い",
+    "reason_metadata": "カメラの EXIF メタデータ",
+    "reason_name": "コピーを示す名前がない",
+    "reason_location": "オリジナルの典型的な場所",
+    "reason_other": "最も一貫したシグナル",
+    "no_picture": "画像が選択されていません",
+    "status_stopped_partial": "{n} 個のファイルで停止 — 部分結果は保持されます。再開できます。",
+    "status_stopped_zero": "ファイルを処理する前に停止しました。再開できます。",
+    "status_finished": "完了: {groups} グループ、{duplicates} 個の重複。",
+    "browser_folders": "{n} 個のサブフォルダー — クリックして開く",
+    "model_no_url": "このモデルにはダウンロード URL がありません。",
+    "model_downloading": "{name} をダウンロード中…",
+    "model_downloaded": "{name} をダウンロードしました（{mb} MB）。「使用」を押してください。",
+    "model_failed": "ダウンロード失敗: {error}",
+    "model_missing": "ファイルがありません: {path}",
+    "model_active": "{name} が有効なモデルになりました。",
+    "model_removed": "{name} を削除しました。",
+    "models_folder": "モデルフォルダー: {path}",
+    "cache_cleared": "キャッシュをクリアしました。次回のスキャンで指紋と埋め込みを再計算します。",
+    "no_embeddings_build": "このビルドは ONNX 埋め込みに対応していません。--features embeddings で再ビルドしてください。",
+    "model_select_first": "先にモデルを選択またはダウンロードしてください（モデル…）。",
+    "browser_not_a_folder": "フォルダーではありません: {path}",
+    "browser_destination": "移動先フォルダーを選択し、「このフォルダーを使用」を押してください。",
+    "verb_trash": "ゴミ箱へ移動",
+    "verb_move": "移動",
+    "verb_delete": "削除",
+    "model_resnet18_caps": "一般的な画像類似度: リサイズ、再圧縮、軽い編集された写真",
+    "model_resnet50_caps": "より大きく高品質なモデルによる一般的な画像類似度",
+    "model_clip_caps": "セマンティック類似度: 同じシーンや人物の異なる写真（しきい値 ~0.83）",
+    "model_siglip_caps": "セマンティック類似度、CLIP の代替 SigLIP（しきい値 ~0.83）",
+    "model_clip_name": "CLIP ViT-B/32（ビジョン）",
+    "model_siglip_name": "SigLIP base 16-224（ビジョン）",
+    "no_model_selected": "モデルが選択されていません",
+    "keep_original": "オリジナル",
+    "keep_dimensions": "サイズ",
+    "keep_filesize": "ファイルサイズ",
+    "keep_earlierdate": "古い日付",
+    "keep_earlierexifdate": "古い EXIF 日付",
+    "keep_oldest": "最も古い",
+    "keep_name": "名前",
+    "keep_path": "パス",
+    "auto_label": "自動"
+  },
+  "help": [
+    {
+      "text": "UMDF の機能",
+      "kind": 0
+    },
+    {
+      "text": "UMDF はフォルダー内の重複した写真、ビデオ、オーディオ、ファイルを探します。バイト単位の完全比較と知覚指紋を組み合わせ、どのコピーがオリジナルらしいかを採点します。",
+      "kind": 1
+    },
+    {
+      "text": "検出の仕組み",
+      "kind": 0
+    },
+    {
+      "text": "• 完全一致: 同じサイズ + SHA-256（または完全比較）→ 100%。",
+      "kind": 2
+    },
+    {
+      "text": "• 知覚: 画像を 75×75 のグレースケールに縮小し、「dpf」がグレー許容値内のピクセルを数えます。",
+      "kind": 2
+    },
+    {
+      "text": "• ビデオ: ffprobe + 「Frame position」の 1 フレームを同じ画像指紋で比較します。",
+      "kind": 2
+    },
+    {
+      "text": "• オーディオ: デコードした PCM 5 秒をハッシュ化。再マックスや再タグ付けは一致しますが、非可逆再エンコードは一致しません。",
+      "kind": 2
+    },
+    {
+      "text": "グレー許容値（ピクセル許容値）",
+      "kind": 0
+    },
+    {
+      "text": "2 つのピクセルを同じとみなす最大グレー差（0–255）。0 = 厳密、10（既定）は JPEG 再圧縮を許容、14–18 は局所的な修正を許容する場合があります。約 24 を超えると誤検出が増えます。大きなトリミングやずれは補正しません。",
+      "kind": 1
+    },
+    {
+      "text": "編集されたコピーが見つからない場合は、少しずつ上げて結果を確認してください。完全なアーカイブでは下げてください。",
+      "kind": 1
+    },
+    {
+      "text": "指標",
+      "kind": 0
+    },
+    {
+      "text": "• dpf（既定）: ピクセル許容値。通常はリサイズ、圧縮、小さな修正を許容しますが、大きなトリミングは許容しません。",
+      "kind": 2
+    },
+    {
+      "text": "• ssim: 全体的な構造類似度。局所的な修正をより許容する場合がありますが、一致を保証しません。",
+      "kind": 2
+    },
+    {
+      "text": "• sign: 正規化グリッドの符号一致。",
+      "kind": 2
+    },
+    {
+      "text": "• pearson: グリッドの相関。構造に厳格です。",
+      "kind": 2
+    },
+    {
+      "text": "• legacy: 旧来の符号指標で、比較専用です。尺度が非常に寛容で、重複判定には信頼できません。",
+      "kind": 2
+    },
+    {
+      "text": "• セマンティック（任意）: ONNX 埋め込み（ResNet/CLIP/SigLIP）をコサインで比較。標準ビルドでは無効、AI パッケージには含まれます。",
+      "kind": 2
+    },
+    {
+      "text": "セマンティックモデル（AI）",
+      "kind": 0
+    },
+    {
+      "text": "AI パッケージで「セマンティック（AI）」を有効にし、「モデル…」を押してモデルをダウンロードし、「使用」を押します。スキャンは埋め込みのコサイン類似度で比較し、「類似度」がしきい値を設定します。",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50: リサイズ、再圧縮、軽い編集された写真向けの高速で一般的な類似度。",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP: シーン/内容のセマンティック類似度。顔認識や人物識別ではありません。~0.83 のしきい値はモデル依存の開始値です。",
+      "kind": 2
+    },
+    {
+      "text": "モデルを有効にすると「類似度」が推奨値（ResNet 0.90、CLIP/SigLIP 0.83）になります。自分の写真で調整してください。",
+      "kind": 2
+    },
+    {
+      "text": "公開モデルはトークンなしでモデルフォルダー（既定 ./models）にダウンロードされます。設定は config.toml、キャッシュは cache.db に保存されます。",
+      "kind": 2
+    },
+    {
+      "text": "AI パッケージには CPU 版 ONNX Runtime が含まれ、既定で CPU を使用します。CUDA を使うには ORT_DYLIB_PATH を GPU ランタイムに向けて CUDA を選択してください。失敗時は CPU を使用します。",
+      "kind": 2
+    },
+    {
+      "text": "ケース別の推奨",
+      "kind": 0
+    },
+    {
+      "text": "完全な重複: SHA-256。モデルは不要です。",
+      "kind": 2
+    },
+    {
+      "text": "リサイズまたは再圧縮: dpf（既定）または ResNet 埋め込み。",
+      "kind": 2
+    },
+    {
+      "text": "トリミングや構図の違い: CLIP/SigLIP が役立つ場合がありますが、アスペクト比ゲート（≤1.5）により大きく異なるトリミングは比較前に除外されることがあります。",
+      "kind": 2
+    },
+    {
+      "text": "異なる写真の同じシーンや内容: CLIP/SigLIP と開始しきい値 ~0.83。誤検出を確認してください。",
+      "kind": 2
+    },
+    {
+      "text": "回転: EXIF の向きが適用されます。EXIF なしでピクセルに焼き込まれた回転は、セマンティックモデルでも見逃す可能性があります。手動で確認してください。",
+      "kind": 2
+    },
+    {
+      "text": "赤目や局所的な修正: dpf の許容値 14–18 または ssim を試してください。それでもだめなら手動で確認してください。許容値を上げると誤検出が増えます。",
+      "kind": 2
+    },
+    {
+      "text": "ビデオ: 「Frame position」の 1 フレーム。オーディオ: PCM 5 秒。PATH に ffmpeg と ffprobe が必要です。",
+      "kind": 2
+    },
+    {
+      "text": "回転・編集された写真",
+      "kind": 0
+    },
+    {
+      "text": "• デコード時に EXIF の向きを適用するため、タグ付き写真は物理的に回転したコピーと一致します。",
+      "kind": 2
+    },
+    {
+      "text": "• EXIF なしでピクセルに適用された回転は検出できない場合があります。保証はないため手動で確認してください。",
+      "kind": 2
+    },
+    {
+      "text": "• 赤目補正は小さな領域を変えるだけです。dpf/ssim が一致する場合もありますが保証はありません。許容値やしきい値を調整して確認してください。",
+      "kind": 2
+    },
+    {
+      "text": "どのコピーを保持するか",
+      "kind": 0
+    },
+    {
+      "text": "「オリジナル」ポリシーは、解像度、ピクセルあたりのバイト数、古さ、EXIF の豊富さ、名前に含まれるコピー印、場所からヒューリスティックスコアを計算します。確率ではなく、オリジナルを保証するものでもありません。プレビューにスコアと理由が表示されます。",
+      "kind": 1
+    },
+    {
+      "text": "安全な操作",
+      "kind": 0
+    },
+    {
+      "text": "• ゴミ箱/移動/削除は 1 つの重複に作用します。一括ボタンは確認を求めます。",
+      "kind": 2
+    },
+    {
+      "text": "• ゴミ箱はデスクトップとファイルシステムに依存します。削除は永続的で元に戻せません。",
+      "kind": 2
+    },
+    {
+      "text": "• 削除後、次の行が選択されたままになり、連続して比較・削除できます。",
+      "kind": 2
+    },
+    {
+      "text": "• キーボード: ↑/↓ で選択、Del/Delete で削除。",
+      "kind": 2
+    },
+    {
+      "text": "パフォーマンス",
+      "kind": 0
+    },
+    {
+      "text": "デコード、ハッシュ、比較は既定で全 CPU を使用します。「スレッド」または --threads で調整できます。知覚比較は最悪の場合 O(n²) で、大きな画像はメモリを消費します。",
+      "kind": 1
+    },
+    {
+      "text": "制限",
+      "kind": 0
+    },
+    {
+      "text": "• 「オリジナル」スコアはヒューリスティックです。候補を順位付けするだけで、どれがオリジナルかを保証しません。",
+      "kind": 2
+    },
+    {
+      "text": "• 75×75 のグレースケールグリッドは、非常に暗い画像、低コントラスト、ほぼ均一な画像では失敗する場合があります。",
+      "kind": 2
+    },
+    {
+      "text": "• アスペクト比ゲート（最大/最小 ≤ 1.5）は、大きく異なるトリミングや構図を除外する場合があります。",
+      "kind": 2
+    },
+    {
+      "text": "• dpf は再圧縮や小さな変更を許容しますが、大きなトリミングや焼き込まれた回転は許容しません。許容値を上げると誤検出が増えます。",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP は全体の内容を比較し、顔や身元は比較しません。似たシーンの別人が一致する場合があります。",
+      "kind": 2
+    },
+    {
+      "text": "• 0.90/0.83 のしきい値は、モデルとコレクションに依存する開始値です。",
+      "kind": 2
+    },
+    {
+      "text": "• ビデオ: 1 フレームのみ。別のフレーム、カット、長さでは検出されない場合があります。",
+      "kind": 2
+    },
+    {
+      "text": "• オーディオ: 再マックス/再タグ付けは一致しますが、非可逆再エンコードは一致しません。",
+      "kind": 2
+    },
+    {
+      "text": "• ffmpeg/ffprobe がない場合、画像と完全一致ファイルのみ比較します。",
+      "kind": 2
+    },
+    {
+      "text": "• 破損、未対応、非常に大きなファイルはスキップされるか、多くのメモリを消費する場合があります。",
+      "kind": 2
+    },
+    {
+      "text": "• ゴミ箱/移動はシステムに依存します。削除は元に戻せません。",
+      "kind": 2
+    },
+    {
+      "text": "• 標準ビルドには埋め込みがありません。AI パッケージには CPU ランタイムが含まれます。CUDA には外部 GPU ONNX Runtime（ORT_DYLIB_PATH）が必要です。",
+      "kind": 2
+    },
+    {
+      "text": "• ダウンロードしたモデルはインストーラーに含まれず、上流リポジトリのライセンスを保持します。",
+      "kind": 2
+    }
+  ]
+}

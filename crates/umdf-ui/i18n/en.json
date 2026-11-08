@@ -1,0 +1,407 @@
+{
+  "strings": {
+    "title": "Universal Media Duplicate Finder",
+    "add_folder": "Add folder…",
+    "remove": "Remove",
+    "clear": "Clear",
+    "options": "Options",
+    "start": "Start",
+    "scanning": "Scanning…",
+    "stop": "Stop",
+    "dark": "Dark",
+    "light": "Light",
+    "language": "Language",
+    "help": "Help",
+    "help_title": "Help",
+    "close": "Close",
+    "locations": "Locations",
+    "pictures": "Pictures",
+    "documents": "Documents",
+    "home": "Home",
+    "computer": "Computer",
+    "folders_none": "Folders to scan (none)",
+    "remove_selected": "Remove selected",
+    "clear_all": "Clear all",
+    "opt_scan_subfolders": "Scan subfolders",
+    "opt_only_identical": "Only 100% identical",
+    "opt_compare_media": "Compare media content",
+    "opt_similarity": "Similarity",
+    "opt_keep": "Keep",
+    "opt_metric": "Metric",
+    "opt_threads": "Threads",
+    "opt_semantic": "Semantic (GPU)",
+    "semantic_model": "Path to the .onnx model",
+    "models_manage": "Models…",
+    "models_title": "Models",
+    "models_help": "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.",
+    "models_folder": "Models folder",
+    "models_capabilities": "Capabilities",
+    "models_download": "Download",
+    "models_use": "Use",
+    "models_active": "Active",
+    "models_remove": "Remove",
+    "models_accel": "Acceleration",
+    "models_threshold": "Similarity",
+    "models_none": "No models installed yet. Download one below.",
+    "models_clear_cache": "Clear cache",
+    "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
+    "opt_tolerance": "Pixel tolerance",
+    "trash_all": "Trash all duplicates",
+    "move_all": "Move all",
+    "delete_all": "Delete all",
+    "keeps_best": "keeps the original of each group",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "match_list": "Match list",
+    "col_group": "Group",
+    "col_original": "Original",
+    "col_duplicate": "Duplicate",
+    "col_similarity": "Similarity",
+    "col_size": "Size",
+    "empty_list": "The match list is empty.",
+    "preview": "Preview",
+    "original": "Original",
+    "duplicate": "Duplicate",
+    "move_destination": "Move destination",
+    "move_placeholder": "/path/for/duplicates",
+    "browse": "Browse…",
+    "trash": "Trash",
+    "move": "Move",
+    "delete": "Delete",
+    "select_folder": "Select a folder",
+    "up": "Up",
+    "go": "Go",
+    "select_this_folder": "Select this folder",
+    "show_hidden": "Show hidden"
+  },
+  "phrases": {
+    "folders_label": "Folders to scan ({n})",
+    "stage_ready": "Ready",
+    "stage_starting": "Starting…",
+    "stage_loading_total": "Loading {total} files…",
+    "stage_loading": "Loading {name}…",
+    "stage_embedding": "Computing embeddings {done}/{total}…",
+    "stage_hashing": "Hashing {done}/{total}…",
+    "stage_comparing": "Comparing {done}/{total}…",
+    "stage_grouping": "Grouping matches…",
+    "stage_finished": "Finished",
+    "stage_stopping": "Stopping…",
+    "stage_stopped": "Stopped",
+    "stage_error": "Error",
+    "stage_no_folders": "No folders selected",
+    "status_ready": "Ready.",
+    "status_scanning": "Scanning…",
+    "status_busy": "A scan is already running.",
+    "status_no_folders": "Add at least one folder first.",
+    "status_stopping": "Stopping…",
+    "status_ffmpeg_missing": "ffmpeg/ffprobe not found; video/audio content comparison is disabled.",
+    "status_folder_added": "Added {path}",
+    "status_folder_exists": "That folder is already in the list.",
+    "status_not_a_folder": "{path} is not a folder.",
+    "status_folder_removed": "Folder removed.",
+    "status_folders_cleared": "Folder list cleared.",
+    "status_move_dest_missing": "Choose a destination folder for Move.",
+    "status_nothing_to_apply": "Nothing to apply.",
+    "status_confirm_bulk": "Confirm the bulk action.",
+    "status_bulk_cancelled": "Bulk action cancelled.",
+    "status_trashed": "Moved to trash: {path}",
+    "status_trash_failed": "Could not trash {path}",
+    "status_deleted": "Deleted: {path}",
+    "status_delete_failed": "Could not delete {path}",
+    "status_moved": "Moved: {path}",
+    "status_move_failed": "Could not move {path}",
+    "status_error": "Error: {error}",
+    "confirm_bulk": "Are you sure you want to {verb} {count} duplicate(s)?",
+    "confirm_bulk_dest": "Are you sure you want to {verb} {count} duplicate(s) to {destination}?",
+    "bulk_done": "{verb}: {done} item(s), {bytes} freed, {failed} failed.",
+    "files_scanned": "{n} files scanned",
+    "files_scanned_progress": "{index}/{total} files scanned",
+    "duplicates_found": "{n} duplicates found",
+    "duplicates_found_groups": "{n} duplicates in {groups} groups",
+    "reclaimable": "Reclaimable: {human}",
+    "elapsed": "Elapsed: {secs} s · {groups} groups · {threads} threads",
+    "original_likely": "Original · {pct}% likely",
+    "reason_resolution": "higher resolution",
+    "reason_quality": "better quality per pixel/bitrate",
+    "reason_age": "older file date",
+    "reason_metadata": "camera EXIF metadata",
+    "reason_name": "name without copy markers",
+    "reason_location": "typical original location",
+    "reason_other": "most consistent signal set",
+    "no_picture": "No picture selected",
+    "status_stopped_partial": "Stopped after {n} file(s) — partial results kept. You can start again.",
+    "status_stopped_zero": "Stopped before processing any file. You can start again.",
+    "status_finished": "Finished: {groups} group(s), {duplicates} duplicate(s).",
+    "browser_folders": "{n} sub-folder(s) — click one to open it",
+    "model_no_url": "This model has no download URL.",
+    "model_downloading": "Downloading {name}…",
+    "model_downloaded": "Downloaded {name} ({mb} MB). Press Use.",
+    "model_failed": "Download failed: {error}",
+    "model_missing": "Missing file: {path}",
+    "model_active": "{name} is now the active model.",
+    "model_removed": "Removed {name}.",
+    "models_folder": "Models folder: {path}",
+    "cache_cleared": "Cache cleared; the next scan will recompute fingerprints and embeddings.",
+    "no_embeddings_build": "This build has no ONNX embeddings support; rebuild with --features embeddings.",
+    "model_select_first": "Select or download a model first (Models…).",
+    "browser_not_a_folder": "Not a folder: {path}",
+    "browser_destination": "Choose the destination folder and press “Select this folder”.",
+    "verb_trash": "trash",
+    "verb_move": "move",
+    "verb_delete": "delete",
+    "model_resnet18_caps": "General image similarity: resized, recompressed and lightly edited photos",
+    "model_resnet50_caps": "General image similarity with a larger, higher-quality model",
+    "model_clip_caps": "Semantic similarity: different shots of the same scene or person (threshold ~0.83)",
+    "model_siglip_caps": "Semantic similarity, SigLIP alternative to CLIP (threshold ~0.83)",
+    "model_clip_name": "CLIP ViT-B/32 (vision)",
+    "model_siglip_name": "SigLIP base 16-224 (vision)",
+    "no_model_selected": "No model selected",
+    "keep_original": "Original",
+    "keep_dimensions": "Dimensions",
+    "keep_filesize": "File size",
+    "keep_earlierdate": "Earlier date",
+    "keep_earlierexifdate": "Earlier EXIF date",
+    "keep_oldest": "Oldest",
+    "keep_name": "Name",
+    "keep_path": "Path",
+    "auto_label": "Auto"
+  },
+  "help": [
+    {
+      "text": "What UMDF does",
+      "kind": 0
+    },
+    {
+      "text": "UMDF scans folders for duplicate photos, videos, audio and files. It combines exact byte comparison with perceptual fingerprints and scores which copy is most likely to be the original.",
+      "kind": 1
+    },
+    {
+      "text": "How detection works",
+      "kind": 0
+    },
+    {
+      "text": "• Exact: same size + SHA-256 (or full-file comparison) → 100%.",
+      "kind": 2
+    },
+    {
+      "text": "• Perceptual: the image is resampled to 75×75 grayscale; 'dpf' counts pixels within the gray tolerance.",
+      "kind": 2
+    },
+    {
+      "text": "• Video: ffprobe + one frame at 'Frame position', fingerprinted as an image.",
+      "kind": 2
+    },
+    {
+      "text": "• Audio: 5 s of decoded PCM hashed; re-muxed or retagged files match; lossy re-encoding does not.",
+      "kind": 2
+    },
+    {
+      "text": "Pixel tolerance (gray tolerance)",
+      "kind": 0
+    },
+    {
+      "text": "Maximum difference in gray level (0–255) for two pixels to count as equal. 0 = strict; 10 (default) tolerates JPEG recompression; 14–18 may tolerate local retouching; above ~24 false positives increase. It does not correct large crops or shifts.",
+      "kind": 1
+    },
+    {
+      "text": "If edited copies are missed, raise it gradually and review the results. For exact archives, lower it.",
+      "kind": 1
+    },
+    {
+      "text": "Metrics",
+      "kind": 0
+    },
+    {
+      "text": "• dpf (default): pixel tolerance; usually tolerates resize, compression and small retouching, but not large crops.",
+      "kind": 2
+    },
+    {
+      "text": "• ssim: global structural similarity; may tolerate local retouching better, but does not guarantee a match.",
+      "kind": 2
+    },
+    {
+      "text": "• sign: sign agreement of the normalised grid.",
+      "kind": 2
+    },
+    {
+      "text": "• pearson: correlation of the grids; stricter about structure.",
+      "kind": 2
+    },
+    {
+      "text": "• legacy: legacy sign-agreement metric kept for comparison; its scale is very permissive and it is not reliable for duplicate decisions.",
+      "kind": 2
+    },
+    {
+      "text": "• Semantic (optional): ONNX embeddings (ResNet/CLIP/SigLIP) compared by cosine. Disabled in standard builds; AI packages include it.",
+      "kind": 2
+    },
+    {
+      "text": "Semantic models (AI)",
+      "kind": 0
+    },
+    {
+      "text": "In an AI package, enable 'Semantic (AI)', press 'Models…', download a model and press 'Use'. The scan compares by embedding with cosine similarity; 'Similarity' sets the threshold.",
+      "kind": 1
+    },
+    {
+      "text": "ResNet-18/50: fast, general similarity for resized, recompressed or lightly edited photos.",
+      "kind": 2
+    },
+    {
+      "text": "CLIP/SigLIP: semantic scene/content similarity; they are not face recognition and do not identify people. The ~0.83 threshold is a model-dependent starting point.",
+      "kind": 2
+    },
+    {
+      "text": "Activating a model sets 'Similarity' to its recommended value (0.90 ResNet, 0.83 CLIP/SigLIP); tune it with your own photos.",
+      "kind": 2
+    },
+    {
+      "text": "Public models download without a token into the models folder (default ./models). Configuration lives in config.toml and the cache in cache.db.",
+      "kind": 2
+    },
+    {
+      "text": "AI packages bundle a CPU ONNX Runtime and default to CPU. For CUDA, point ORT_DYLIB_PATH at a GPU runtime and select CUDA; if it fails, CPU is used.",
+      "kind": 2
+    },
+    {
+      "text": "Recommended by case",
+      "kind": 0
+    },
+    {
+      "text": "Exact duplicates: SHA-256; no model needed.",
+      "kind": 2
+    },
+    {
+      "text": "Resized or recompressed: dpf (default) or ResNet embeddings.",
+      "kind": 2
+    },
+    {
+      "text": "Crops or different framing: CLIP/SigLIP may help, but the aspect-ratio gate (≤1.5) can exclude very different crops before comparison.",
+      "kind": 2
+    },
+    {
+      "text": "Same scene or content in different shots: CLIP/SigLIP with a ~0.83 starting threshold; review false positives.",
+      "kind": 2
+    },
+    {
+      "text": "Rotated: EXIF orientation is applied; a rotation baked into the pixels without EXIF can be missed even by semantic models. Review it manually.",
+      "kind": 2
+    },
+    {
+      "text": "Red-eye or local retouching: try dpf with tolerance 14–18 or ssim; otherwise review manually. Raising the tolerance increases false positives.",
+      "kind": 2
+    },
+    {
+      "text": "Video: one frame at 'Frame position'; audio: 5 s of PCM. Requires ffmpeg and ffprobe on PATH.",
+      "kind": 2
+    },
+    {
+      "text": "Rotated and edited photos",
+      "kind": 0
+    },
+    {
+      "text": "• EXIF orientation is applied when decoding: a tagged photo matches its physically rotated copy.",
+      "kind": 2
+    },
+    {
+      "text": "• A rotation applied to the pixels without EXIF may not be detected; there is no guarantee, so review it manually.",
+      "kind": 2
+    },
+    {
+      "text": "• Red-eye correction changes a small area; dpf/ssim may still match, but it is not guaranteed. Adjust tolerance or threshold and verify.",
+      "kind": 2
+    },
+    {
+      "text": "Which copy is kept?",
+      "kind": 0
+    },
+    {
+      "text": "The 'original' policy computes a heuristic score from resolution, bytes per pixel, age, EXIF richness, name markers and location. It is not a probability and does not guarantee the original; the preview shows the score and reasons.",
+      "kind": 1
+    },
+    {
+      "text": "Safe actions",
+      "kind": 0
+    },
+    {
+      "text": "• Trash/Move/Delete act on one duplicate; bulk buttons ask for confirmation.",
+      "kind": 2
+    },
+    {
+      "text": "• Trash depends on the desktop and filesystem; Delete is permanent and irreversible.",
+      "kind": 2
+    },
+    {
+      "text": "• After deleting, the next row stays selected to compare and delete repeatedly.",
+      "kind": 2
+    },
+    {
+      "text": "• Keyboard: ↑/↓ select, Del/Delete removes.",
+      "kind": 2
+    },
+    {
+      "text": "Performance",
+      "kind": 0
+    },
+    {
+      "text": "Decoding, hashing and comparison use all CPUs by default; adjust 'Threads' or --threads. Perceptual comparison is O(n²) in the worst case and large images consume memory.",
+      "kind": 1
+    },
+    {
+      "text": "Limitations",
+      "kind": 0
+    },
+    {
+      "text": "• The 'original' score is heuristic: it ranks candidates, it does not guarantee which copy is the original.",
+      "kind": 2
+    },
+    {
+      "text": "• The 75×75 grayscale grid can fail on very dark, low-contrast or mostly uniform images.",
+      "kind": 2
+    },
+    {
+      "text": "• The aspect-ratio gate (max/min ≤ 1.5) can discard very different crops or framings.",
+      "kind": 2
+    },
+    {
+      "text": "• dpf tolerates recompression and small changes, not large crops or baked-in rotations; raising the tolerance increases false positives.",
+      "kind": 2
+    },
+    {
+      "text": "• CLIP/SigLIP compare global content, not faces or identity; different people in similar scenes can match.",
+      "kind": 2
+    },
+    {
+      "text": "• The 0.90/0.83 thresholds are starting points that depend on the model and the collection.",
+      "kind": 2
+    },
+    {
+      "text": "• Video: a single frame; a different frame, cut or duration may not be detected.",
+      "kind": 2
+    },
+    {
+      "text": "• Audio: re-muxing/retagging matches; lossy re-encoding does not.",
+      "kind": 2
+    },
+    {
+      "text": "• Without ffmpeg/ffprobe only images and exact files are compared.",
+      "kind": 2
+    },
+    {
+      "text": "• Corrupt, unsupported or very large files may be skipped or consume a lot of memory.",
+      "kind": 2
+    },
+    {
+      "text": "• Trash/Move depend on the system; Delete is irreversible.",
+      "kind": 2
+    },
+    {
+      "text": "• Standard builds have no embeddings; AI packages bundle a CPU runtime. CUDA requires an external GPU ONNX Runtime (ORT_DYLIB_PATH).",
+      "kind": 2
+    },
+    {
+      "text": "• Downloaded models are not included in the installer and keep the license of their upstream repository.",
+      "kind": 2
+    }
+  ]
+}

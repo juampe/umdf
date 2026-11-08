@@ -19,6 +19,8 @@ pub struct Settings {
     pub models_dir: PathBuf,
     /// `"cuda"` or `"cpu"`.
     pub device: String,
+    /// UI language code (`en`, `es`, `fr`, `de`, `pt`, `it`, `zh`, `ja`, `ko`).
+    pub language: String,
     /// Cosine-similarity threshold for semantic comparisons (0..1).
     pub similarity: f32,
     /// Absolute path of the active model, empty when none is selected.
@@ -37,6 +39,7 @@ impl Default for Settings {
             // Release packages bundle a CPU ONNX Runtime; CUDA requires a
             // GPU-enabled runtime and an explicit opt-in.
             device: "cpu".to_string(),
+            language: "en".to_string(),
             similarity: 0.90,
             active_model: String::new(),
             models: Vec::new(),
@@ -218,6 +221,7 @@ mod tests {
         assert_eq!(settings.device, "cpu");
         assert!((settings.similarity - 0.90).abs() < f32::EPSILON);
         assert!(settings.models_dir.ends_with("models"));
+        assert_eq!(settings.language, "en");
     }
 
     #[test]
@@ -225,6 +229,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.similarity = 0.83;
         settings.device = "cpu".to_string();
+        settings.language = "fr".to_string();
         settings.models.push(InstalledModel {
             name: "CLIP".into(),
             path: PathBuf::from("/tmp/clip.onnx"),
@@ -237,6 +242,7 @@ mod tests {
         let text = toml::to_string_pretty(&settings).unwrap();
         let back: Settings = toml::from_str(&text).unwrap();
         assert_eq!(back.device, "cpu");
+        assert_eq!(back.language, "fr");
         assert!((back.similarity - 0.83).abs() < f32::EPSILON);
         assert_eq!(back.models.len(), 1);
         assert_eq!(back.models[0].path, PathBuf::from("/tmp/clip.onnx"));
