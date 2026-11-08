@@ -21,6 +21,10 @@
   </Product>
 
   <Fragment>
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.BinDir)\LICENSE.rtf" />
+  </Fragment>
+
+  <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="UMDF">
