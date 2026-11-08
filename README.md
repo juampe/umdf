@@ -275,8 +275,11 @@ Layout is a modern light/dark card design:
   `--threads N`) overrides it.
 * **Previews and thumbnails are decoded off the UI thread**, with
   latest-request-wins coalescing and a small cache.
-* **Language selector** switches the whole interface between English and
-  Español at runtime.
+* **Language selector** switches the whole interface and Help between nine
+  languages at runtime: English, Español, Français, Deutsch, Português,
+  Italiano, 简体中文, 日本語 and 한국어. The choice is persisted in
+  `config.toml` (`language = "fr"`, ...). Noto Sans CJK is embedded, so no
+  extra font installation is needed.
 * **Light / dark mode** with a single `Theme` global; native widgets follow
   `Palette.color-scheme`.
 
@@ -286,6 +289,7 @@ Self-test hooks used for automated UI checks (no mouse needed):
 umdf-ui --demo /path/to/folder --demo-select
 umdf-ui --demo /path/to/folder --demo-stop-ms 900 --demo-restart-ms 1500
 umdf-ui --demo /path/to/folder --demo-lang es
+umdf-ui --demo /path/to/folder --demo-lang zh
 umdf-ui --demo /path/to/folder --demo-bulk trash
 umdf-ui --demo /path/to/folder --demo-delete 3
 umdf-ui --demo-help
