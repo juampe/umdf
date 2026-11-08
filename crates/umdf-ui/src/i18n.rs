@@ -80,7 +80,7 @@ impl Tr {
                 semantic_model: "Ruta del modelo .onnx".into(),
                 models_manage: "Modelos…".into(),
                 models_title: "Modelos".into(),
-                models_help: "Descarga un modelo de embeddings de imagen desde Hugging Face. Se guardan en la carpeta indicada y se recuerdan en config.db.".into(),
+                models_help: "Descarga un modelo de embeddings de imagen desde Hugging Face. La carpeta y el modelo activo se guardan en config.toml; los datos derivados se cachean en cache.db.".into(),
                 models_folder: "Carpeta de modelos".into(),
                 models_capabilities: "Capacidades".into(),
                 models_download: "Descargar".into(),
@@ -90,6 +90,7 @@ impl Tr {
                 models_accel: "Aceleración".into(),
                 models_threshold: "Similitud".into(),
                 models_none: "No hay modelos instalados. Descarga uno abajo.".into(),
+                models_clear_cache: "Vaciar caché".into(),
                 opt_tolerance: "Tolerancia de gris".into(),
                 trash_all: "A la papelera".into(),
                 move_all: "Mover todos".into(),
@@ -154,7 +155,7 @@ impl Tr {
                 semantic_model: "Path to the .onnx model".into(),
                 models_manage: "Models…".into(),
                 models_title: "Models".into(),
-                models_help: "Download an image-embedding model from Hugging Face. Models are stored in the folder below and remembered in config.db.".into(),
+                models_help: "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.".into(),
                 models_folder: "Models folder".into(),
                 models_capabilities: "Capabilities".into(),
                 models_download: "Download".into(),
@@ -164,6 +165,7 @@ impl Tr {
                 models_accel: "Acceleration".into(),
                 models_threshold: "Similarity".into(),
                 models_none: "No models installed yet. Download one below.".into(),
+                models_clear_cache: "Clear cache".into(),
                 opt_tolerance: "Pixel tolerance".into(),
                 trash_all: "Trash all duplicates".into(),
                 move_all: "Move all".into(),
@@ -626,6 +628,13 @@ impl Tr {
     pub fn models_folder(&self, path: &str) -> String {
         if self.es() { format!("Carpeta de modelos: {path}") } else { format!("Models folder: {path}") }
     }
+    pub fn cache_cleared(&self) -> String {
+        if self.es() {
+            "Caché vaciada; el próximo escaneo recalculará fingerprints y embeddings.".into()
+        } else {
+            "Cache cleared; the next scan will recompute fingerprints and embeddings.".into()
+        }
+    }
     pub fn no_embeddings_build(&self) -> String {
         if self.es() {
             "Esta compilación no incluye embeddings ONNX; recompila con --features embeddings.".into()
@@ -682,7 +691,8 @@ impl Tr {
                 ("Activa «Semántica (IA)» en Opciones, pulsa «Modelos…», descarga un modelo y pulsa «Usar». El escaneo compara entonces por embedding con similitud coseno; el control «Similitud» fija el umbral.", 1),
                 ("ResNet-18/50: similitud general, rápida; para fotos redimensionadas, recomprimidas o con retoques ligeros.", 2),
                 ("CLIP/SigLIP: similitud semántica; encuentra la misma escena o persona en tomas distintas. Baja el umbral a ~0.83.", 2),
-                ("Los modelos públicos del catálogo se descargan sin token y se guardan en la carpeta de modelos (por defecto ./models); la configuración se guarda en config.db.", 2),
+                ("Al activar un modelo, «Similitud» toma su valor recomendado: 0.90 en ResNet y 0.83 en CLIP/SigLIP; puedes ajustarlo después.", 2),
+                ("Los modelos públicos del catálogo se descargan sin token y se guardan en la carpeta de modelos (por defecto ./models); la configuración se guarda en config.toml y los fingerprints/embeddings en cache.db.", 2),
                 ("Se usa CUDA si está disponible; si no, CPU (más lento pero funcional).", 2),
                 ("Recomendaciones por caso", 0),
                 ("Duplicados exactos: SHA-256; no hace falta modelo.", 2),
@@ -731,7 +741,8 @@ impl Tr {
                 ("Enable 'Semantic (AI)' in Options, press 'Models…', download a model and press 'Use'. The scan then compares by embedding with cosine similarity; the 'Similarity' control sets the threshold.", 1),
                 ("ResNet-18/50: fast, general similarity for resized, recompressed or lightly edited photos.", 2),
                 ("CLIP/SigLIP: semantic similarity; finds the same scene or person across different shots. Lower the threshold to ~0.83.", 2),
-                ("Public catalogue models download without a token and are stored in the models folder (default ./models); settings live in config.db.", 2),
+                ("Activating a model sets 'Similarity' to its recommended value: 0.90 for ResNet and 0.83 for CLIP/SigLIP; you can adjust it afterwards.", 2),
+                ("Public catalogue models download without a token and are stored in the models folder (default ./models); settings live in config.toml and fingerprints/embeddings are cached in cache.db.", 2),
                 ("CUDA is used when available; otherwise CPU (slower but functional).", 2),
                 ("Recommended by case", 0),
                 ("Exact duplicates: SHA-256; no model needed.", 2),

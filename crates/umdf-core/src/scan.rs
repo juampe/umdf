@@ -1,6 +1,6 @@
 //! Scan orchestrator: discovery → extraction → matching → grouping.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
@@ -66,6 +66,47 @@ const AUDIO_SAMPLE_SECONDS: f64 = 5.0;
 /// Used when the caller did not provide a cancellation flag.
 static NEVER_CANCELLED: AtomicBool = AtomicBool::new(false);
 
+/// Optional cache for values derived from file contents.
+///
+/// Implementations must be safe to call from the worker threads. Cache misses
+/// and write failures are ignored by the scanner: the cache only accelerates a
+/// scan, it never changes its result.
+pub trait ScanCache: Send + Sync {
+    fn fingerprint(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        grid: u32,
+    ) -> Option<Fingerprint>;
+
+    fn store_fingerprint(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        grid: u32,
+        fingerprint: &Fingerprint,
+    );
+
+    fn embedding(
+        &self,
+        path: &Path,
+        model: &str,
+        size: u64,
+        modified_ms: Option<i64>,
+    ) -> Option<Vec<f32>>;
+
+    fn store_embedding(
+        &self,
+        path: &Path,
+        model: &str,
+        size: u64,
+        modified_ms: Option<i64>,
+        values: &[f32],
+    );
+}
+
 pub fn run(cfg: &ScanConfig) -> anyhow::Result<ScanReport> {
     run_with_progress(cfg, None)
 }
@@ -85,18 +126,30 @@ pub fn run_with_progress(
     cfg: &ScanConfig,
     tx: Option<&Sender<Progress>>,
 ) -> anyhow::Result<ScanReport> {
+    run_with_progress_cached(cfg, tx, None)
+}
+
+/// Like [`run_with_progress`], but reuses previously computed fingerprints and
+/// embeddings through `cache`. The cache is optional and purely an
+/// optimisation; deleting it only makes the next scan slower.
+pub fn run_with_progress_cached(
+    cfg: &ScanConfig,
+    tx: Option<&Sender<Progress>>,
+    cache: Option<&dyn ScanCache>,
+) -> anyhow::Result<ScanReport> {
     let threads = effective_threads(cfg);
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
         .thread_name(|i| format!("umdf-worker-{i}"))
         .build()?;
-    pool.install(|| run_inner(cfg, tx, threads))
+    pool.install(|| run_inner(cfg, tx, threads, cache))
 }
 
 fn run_inner(
     cfg: &ScanConfig,
     tx: Option<&Sender<Progress>>,
     threads: usize,
+    cache: Option<&dyn ScanCache>,
 ) -> anyhow::Result<ScanReport> {
     let started = Instant::now();
     let mut stats = Stats::default();
@@ -156,6 +209,7 @@ fn run_inner(
                     cancel_ref,
                     ffprobe_bin.as_deref(),
                     ffmpeg_bin.as_deref(),
+                    cache,
                 )
             })
             .collect();
@@ -209,15 +263,72 @@ fn run_inner(
                         total: ids.len(),
                     },
                 );
-                let paths: Vec<PathBuf> =
-                    ids.iter().map(|id| items[*id].path.clone()).collect();
-                let mut engine = crate::embeddings::EmbeddingEngine::new(ecfg)?;
-                if engine.forced_cpu() {
-                    eprintln!("UMDF: semantic embeddings are running on the CPU");
+                // Include the model file metadata so replacing the .onnx at the
+                // same path invalidates the previously cached vectors.
+                let model_key = {
+                    let path = ecfg.model_path.to_string_lossy().to_string();
+                    match std::fs::metadata(&ecfg.model_path) {
+                        Ok(meta) => {
+                            let modified = meta
+                                .modified()
+                                .ok()
+                                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|delta| delta.as_millis())
+                                .unwrap_or(0);
+                            format!("{path}|{}|{modified}", meta.len())
+                        }
+                        Err(_) => path,
+                    }
+                };
+                let meta: Vec<(PathBuf, u64, Option<i64>)> = ids
+                    .iter()
+                    .map(|id| {
+                        let item = &items[*id];
+                        (
+                            item.path.clone(),
+                            item.size,
+                            item.modified.map(|date| date.timestamp_millis()),
+                        )
+                    })
+                    .collect();
+
+                // Reuse vectors from previous scans and only run the model on
+                // the images whose file size or mtime changed.
+                let mut vectors: Vec<Option<Vec<f32>>> = meta
+                    .iter()
+                    .map(|(path, size, modified)| {
+                        cache.and_then(|cache| {
+                            cache.embedding(path, &model_key, *size, *modified)
+                        })
+                    })
+                    .collect();
+                let missing: Vec<usize> = (0..ids.len())
+                    .filter(|slot| vectors[*slot].is_none())
+                    .collect();
+                if !missing.is_empty() {
+                    let paths: Vec<PathBuf> =
+                        missing.iter().map(|slot| meta[*slot].0.clone()).collect();
+                    let mut engine = crate::embeddings::EmbeddingEngine::new(ecfg)?;
+                    if engine.forced_cpu() {
+                        eprintln!("UMDF: semantic embeddings are running on the CPU");
+                    }
+                    let computed = engine.embed_paths(&paths)?;
+                    for (slot, vector) in missing.into_iter().zip(computed) {
+                        if let Some(cache) = cache {
+                            let (path, size, modified) = &meta[slot];
+                            cache.store_embedding(
+                                path,
+                                &model_key,
+                                *size,
+                                *modified,
+                                &vector,
+                            );
+                        }
+                        vectors[slot] = Some(vector);
+                    }
                 }
-                let vectors = engine.embed_paths(&paths)?;
-                for (id, vector) in ids.iter().zip(vectors) {
-                    items[*id].embedding = Some(vector);
+                for (slot, id) in ids.iter().enumerate() {
+                    items[*id].embedding = vectors[slot].take();
                 }
                 stats.embeddings = ids.len();
                 emit(
@@ -510,8 +621,9 @@ fn extract_item(
     cand: &walk::Candidate,
     cfg: &ScanConfig,
     cancel: &AtomicBool,
-    ffprobe: Option<&std::path::Path>,
-    ffmpeg: Option<&std::path::Path>,
+    ffprobe: Option<&Path>,
+    ffmpeg: Option<&Path>,
+    cache: Option<&dyn ScanCache>,
 ) -> Option<MediaItem> {
     let kind = classify(&cand.extension);
     let mut item = MediaItem::new(index, cand.path.clone(), kind, cand.size);
@@ -532,9 +644,26 @@ fn extract_item(
             if below_min_dimensions(cfg, &item) {
                 return None;
             }
-            match fingerprint::load_fingerprint(&cand.path, cfg.grid) {
-                Ok(fp) => item.fingerprint = Some(fp),
-                Err(e) => item.extract_error = Some(e.to_string()),
+            let modified_ms = item.modified.map(|date| date.timestamp_millis());
+            match cache.and_then(|cache| {
+                cache.fingerprint(&cand.path, cand.size, modified_ms, cfg.grid)
+            }) {
+                Some(fp) => item.fingerprint = Some(fp),
+                None => match fingerprint::load_fingerprint(&cand.path, cfg.grid) {
+                    Ok(fp) => {
+                        if let Some(cache) = cache {
+                            cache.store_fingerprint(
+                                &cand.path,
+                                cand.size,
+                                modified_ms,
+                                cfg.grid,
+                                &fp,
+                            );
+                        }
+                        item.fingerprint = Some(fp);
+                    }
+                    Err(e) => item.extract_error = Some(e.to_string()),
+                },
             }
         }
         MediaKind::Video | MediaKind::Audio => {

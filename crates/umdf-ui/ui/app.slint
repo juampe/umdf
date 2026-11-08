@@ -86,6 +86,7 @@ export struct Strings {
     models_accel: string,
     models_threshold: string,
     models_none: string,
+    models_clear_cache: string,
     opt_tolerance: string,
 
     trash_all: string,
@@ -343,7 +344,7 @@ export component AppWindow inherits Window {
         semantic_model: "Path to the .onnx model",
         models_manage: "Models…",
         models_title: "Models",
-        models_help: "Download an image-embedding model from Hugging Face. Models are stored in the folder below and remembered in config.db.",
+        models_help: "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.",
         models_folder: "Models folder",
         models_capabilities: "Capabilities",
         models_download: "Download",
@@ -353,6 +354,7 @@ export component AppWindow inherits Window {
         models_accel: "Acceleration",
         models_threshold: "Similarity",
         models_none: "No models installed yet. Download one below.",
+        models_clear_cache: "Clear cache",
         opt_tolerance: "Pixel tolerance",
         trash_all: "Trash all duplicates",
         move_all: "Move all",
@@ -471,6 +473,7 @@ export component AppWindow inherits Window {
     callback save-model-settings();
     callback close-models();
     callback open-models();
+    callback clear-cache();
     callback trash-row(int);
     callback move-row(int);
     callback delete-row(int);
@@ -1235,7 +1238,7 @@ export component AppWindow inherits Window {
 
             models-card := Rectangle {
                 width: 820px;
-                height: 660px;
+                height: 540px;
                 x: (parent.width - models-card.width) / 2;
                 y: (parent.height - models-card.height) / 2;
                 background: Theme.card;
@@ -1243,7 +1246,7 @@ export component AppWindow inherits Window {
 
                 VerticalLayout {
                     padding: 16px;
-                    spacing: 10px;
+                    spacing: 8px;
                     Text { text: root.strings.models_title; color: Theme.text; font-size: 18px; font-weight: 700; }
                     Text { text: root.strings.models_help; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
 
@@ -1277,7 +1280,7 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             spacing: 2px;
                             for row[i] in root.model-rows : Rectangle {
-                                height: 58px;
+                                height: 54px;
                                 background: row.state == 2
                                     ? Theme.selected
                                     : (Math.mod(i, 2) == 0 ? transparent : Theme.soft);
@@ -1359,7 +1362,7 @@ export component AppWindow inherits Window {
                         color: Theme.muted;
                         font-size: 11px;
                         wrap: word-wrap;
-                        height: 28px;
+                        height: 22px;
                     }
                     Text {
                         text: root.models-db;
@@ -1369,6 +1372,13 @@ export component AppWindow inherits Window {
                     }
 
                     HorizontalLayout {
+                        spacing: 8px;
+                        FlatButton {
+                            label: root.strings.models_clear_cache;
+                            minw: 120px;
+                            bg: Theme.soft;
+                            clicked => { root.clear-cache(); }
+                        }
                         Rectangle { horizontal-stretch: 1; }
                         FlatButton {
                             label: root.strings.close;

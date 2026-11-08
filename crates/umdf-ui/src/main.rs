@@ -1,7 +1,9 @@
 //! Slint desktop front-end for the Universal Media Duplicate Finder.
 
+mod cache;
 mod i18n;
 mod models;
+mod settings;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -17,8 +19,10 @@ use umdf_core::config::{
 };
 use umdf_core::{EmbeddingConfig, KeepPolicy, Metric, Progress, ScanConfig, ScanReport};
 
+use cache::CacheDb;
 use i18n::{human_bytes, Lang, Tr, Verb};
-use models::{Db, InstalledModel};
+use models::InstalledModel;
+use settings::Settings;
 
 slint::include_modules!();
 
@@ -91,46 +95,30 @@ fn main() -> anyhow::Result<()> {
     ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
     ui.set_embeddings_supported(cfg!(feature = "embeddings"));
 
-    // ---- persisted configuration / model catalogue --------------------------
-    let db: Arc<Mutex<Option<Db>>> = Arc::new(Mutex::new(match Db::open() {
-        Ok(db) => Some(db),
+    // ---- persisted configuration (config.toml) + cache (cache.db) -----------
+    let settings: Arc<Mutex<Settings>> = Arc::new(Mutex::new(Settings::load()));
+    let cache: Arc<CacheDb> = Arc::new(match CacheDb::open() {
+        Ok(cache) => cache,
         Err(error) => {
-            eprintln!("UMDF: could not open config.db: {error}");
-            None
+            eprintln!("UMDF: could not open cache.db: {error}");
+            let fallback = std::env::temp_dir().join("umdf-cache.db");
+            CacheDb::open_at(fallback).expect("temporary cache database")
         }
-    }));
+    });
     let ui_models: Arc<Mutex<Vec<UiModel>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let mut models_dir = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("models");
-    let mut device = 0i32;
-    let mut threshold = 0.90f32;
-    let mut active_model = String::new();
-    if let Ok(guard) = db.lock() {
-        if let Some(database) = guard.as_ref() {
-            if let Some(value) = database.get("models_dir") {
-                models_dir = PathBuf::from(value);
-            }
-            if let Some(value) = database.get("semantic_device") {
-                device = if value == "cpu" { 1 } else { 0 };
-            }
-            if let Some(value) = database.get("semantic_threshold") {
-                threshold = value.parse().unwrap_or(0.90);
-            }
-            active_model = database.get("active_model").unwrap_or_default();
-        }
-    }
-    let db_path = db
-        .lock()
-        .ok()
-        .and_then(|guard| guard.as_ref().map(|database| database.path.clone()));
-    ui.set_models_db(
-        db_path
-            .map(|path| format!("config.db: {}", path.display()))
-            .unwrap_or_else(|| "config.db unavailable".to_string())
-            .into(),
-    );
+    let (models_dir, device, threshold, active_model, installed) = {
+        let guard = settings.lock().expect("settings lock");
+        (
+            guard.models_dir.clone(),
+            guard.device_index(),
+            guard.similarity,
+            guard.active_model.clone(),
+            guard.models.clone(),
+        )
+    };
+
+    update_cache_label(&ui, &cache);
     ui.set_models_dir(models_dir.to_string_lossy().to_string().into());
     ui.set_semantic_device(device);
     ui.set_semantic_threshold(threshold);
@@ -139,23 +127,17 @@ fn main() -> anyhow::Result<()> {
     if !active_model.is_empty() && Path::new(&active_model).is_file() {
         ui.set_semantic_enabled(true);
         ui.set_semantic_model(active_model.clone().into());
-        if let Ok(guard) = db.lock() {
-            if let Some(database) = guard.as_ref() {
-                if let Ok(list) = database.models() {
-                    if let Some(found) = list
-                        .iter()
-                        .find(|model| model.path == PathBuf::from(&active_model))
-                    {
-                        ui.set_semantic_preset(if found.preset == "clip" { 1 } else { 0 });
-                        ui.set_semantic_input_size(found.input_size as i32);
-                        ui.set_semantic_threshold(found.threshold);
-                        ui.set_semantic_threshold_label(format!("{:.2}", found.threshold).into());
-                    }
-                }
-            }
+        if let Some(found) = installed
+            .iter()
+            .find(|model| model.path == PathBuf::from(&active_model))
+        {
+            ui.set_semantic_preset(if found.preset == "clip" { 1 } else { 0 });
+            ui.set_semantic_input_size(found.input_size as i32);
+            ui.set_semantic_threshold(found.threshold);
+            ui.set_semantic_threshold_label(format!("{:.2}", found.threshold).into());
         }
     }
-    refresh_models(&ui, &db, &ui_models);
+    refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
 
     ui.set_preview_left_info(boot.no_picture().into());
     ui.set_preview_right_info(boot.no_picture().into());
@@ -198,6 +180,8 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let rows = rows.clone();
         let ui_stats = ui_stats.clone();
+        let settings = settings.clone();
+        let ui_models = ui_models.clone();
         ui.on_set_lang(move |index| {
             let Some(ui) = ui_handle.upgrade() else { return };
             let new_lang = Lang::from_index(index);
@@ -206,6 +190,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_strings(tr.strings());
             ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(tr.help_lines()))));
             ui.set_folders_label(tr.folders_label(folders.borrow().len()).into());
+            refresh_models(&ui, &settings, &ui_models, new_lang == Lang::Es);
 
             // Counters come from the live state (deletions included), not from
             // the original report.
@@ -387,7 +372,7 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let folder_model = folder_model.clone();
         let lang = lang.clone();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
         ui.on_browse_select(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
@@ -396,8 +381,8 @@ fn main() -> anyhow::Result<()> {
             if ui.get_browser_mode() == "models-dir" {
                 if path.is_dir() {
                     ui.set_models_dir(path.to_string_lossy().to_string().into());
-                    save_model_settings(&ui, &db);
-                    refresh_models(&ui, &db, &ui_models);
+                    save_model_settings(&ui, &settings);
+                    refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
                     ui.set_models_status(
                         Tr::new(lang.get())
                             .models_folder(&path.display().to_string())
@@ -449,19 +434,40 @@ fn main() -> anyhow::Result<()> {
 
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
+        let cache = cache.clone();
+        let lang = lang.clone();
         ui.on_open_models(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
-            refresh_models(&ui, &db, &ui_models);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
+            update_cache_label(&ui, &cache);
             ui.set_models_open(true);
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let cache = cache.clone();
+        let lang = lang.clone();
+        ui.on_clear_cache(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let tr = Tr::new(lang.get());
+            match cache.clear() {
+                Ok(()) => {
+                    ui.set_models_status(tr.cache_cleared().into());
+                    update_cache_label(&ui, &cache);
+                }
+                Err(error) => {
+                    ui.set_models_status(tr.model_failed(&error.to_string()).into());
+                }
+            }
         });
     }
 
     // ---- model manager ------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
         let lang = lang.clone();
         ui.on_download_model(move |index| {
@@ -473,8 +479,9 @@ fn main() -> anyhow::Result<()> {
                 return;
             }
             ui.set_models_status(tr.model_downloading(&model.name).into());
+            let lang_es = lang.get() == Lang::Es;
             let ui_weak = ui_handle.clone();
-            let db = db.clone();
+            let settings = settings.clone();
             let ui_models = ui_models.clone();
             std::thread::spawn(move || {
                 let result = models::download(&model.url, &model.path);
@@ -490,13 +497,13 @@ fn main() -> anyhow::Result<()> {
                                 preset,
                                 input_size: size,
                                 threshold: model.threshold,
+                                source_url: model.url.clone(),
                             };
-                            if let Ok(guard) = db.lock() {
-                                if let Some(database) = guard.as_ref() {
-                                    let _ = database.upsert_model(&installed, &model.url);
-                                }
+                            if let Ok(mut guard) = settings.lock() {
+                                guard.upsert_model(installed);
+                                let _ = guard.save();
                             }
-                            refresh_models(&ui, &db, &ui_models);
+                            refresh_models(&ui, &settings, &ui_models, lang_es);
                             ui.set_models_status(
                                 tr.model_downloaded(&model.name, bytes as f64 / 1_048_576.0)
                                     .into(),
@@ -512,7 +519,7 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
         let lang = lang.clone();
         ui.on_use_model(move |index| {
@@ -523,18 +530,20 @@ fn main() -> anyhow::Result<()> {
                 ui.set_models_status(tr.model_missing(&model.path.display().to_string()).into());
                 return;
             }
-            if let Ok(guard) = db.lock() {
-                if let Some(database) = guard.as_ref() {
-                    let _ = database.set("active_model", &model.path.to_string_lossy());
-                    let _ = database.set(
-                        "semantic_device",
-                        if ui.get_semantic_device() == 0 { "cuda" } else { "cpu" },
-                    );
-                    let _ = database.set(
-                        "semantic_threshold",
-                        &format!("{:.2}", model.threshold),
-                    );
-                }
+            if let Ok(mut guard) = settings.lock() {
+                guard.active_model = model.path.to_string_lossy().to_string();
+                guard.set_device_index(ui.get_semantic_device());
+                guard.similarity = model.threshold;
+                guard.upsert_model(InstalledModel {
+                    name: model.name.clone(),
+                    path: model.path.clone(),
+                    capabilities: model.capabilities.clone(),
+                    preset: model.preset.clone(),
+                    input_size: model.input_size,
+                    threshold: model.threshold,
+                    source_url: model.url.clone(),
+                });
+                let _ = guard.save();
             }
             ui.set_semantic_enabled(true);
             ui.set_semantic_model(model.path.to_string_lossy().to_string().into());
@@ -543,12 +552,12 @@ fn main() -> anyhow::Result<()> {
             ui.set_semantic_threshold(model.threshold);
             ui.set_semantic_threshold_label(format!("{:.2}", model.threshold).into());
             ui.set_models_status(tr.model_active(&model.name).into());
-            refresh_models(&ui, &db, &ui_models);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
         });
     }
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
         let lang = lang.clone();
         ui.on_remove_model(move |index| {
@@ -556,47 +565,42 @@ fn main() -> anyhow::Result<()> {
             let Some(ui) = ui_handle.upgrade() else { return };
             let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
             let _ = std::fs::remove_file(&model.path);
-            let active = if let Ok(guard) = db.lock() {
-                if let Some(database) = guard.as_ref() {
-                    let _ = database.remove_model(&model.path);
-                    database.get("active_model").unwrap_or_default()
-                } else {
-                    String::new()
-                }
+            let was_active = if let Ok(mut guard) = settings.lock() {
+                let was_active = guard.active_model == model.path.to_string_lossy();
+                guard.remove_model(&model.path);
+                let _ = guard.save();
+                was_active
             } else {
-                String::new()
+                false
             };
-            if active == model.path.to_string_lossy() {
-                if let Ok(guard) = db.lock() {
-                    if let Some(database) = guard.as_ref() {
-                        let _ = database.set("active_model", "");
-                    }
-                }
+            if was_active {
                 ui.set_semantic_enabled(false);
                 ui.set_semantic_model("".into());
             }
-            refresh_models(&ui, &db, &ui_models);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
             ui.set_models_status(tr.model_removed(&model.name).into());
         });
     }
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
+        let lang = lang.clone();
         ui.on_save_model_settings(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
-            save_model_settings(&ui, &db);
-            refresh_models(&ui, &db, &ui_models);
+            save_model_settings(&ui, &settings);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
         });
     }
     {
         let ui_handle = ui.as_weak();
-        let db = db.clone();
+        let settings = settings.clone();
         let ui_models = ui_models.clone();
+        let lang = lang.clone();
         ui.on_close_models(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
-            save_model_settings(&ui, &db);
-            refresh_models(&ui, &db, &ui_models);
+            save_model_settings(&ui, &settings);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
             ui.set_models_open(false);
         });
     }
@@ -739,6 +743,7 @@ fn main() -> anyhow::Result<()> {
         let drx = drx.clone();
         let rows = rows.clone();
         let lang = lang.clone();
+        let cache = cache.clone();
         ui.on_start(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -821,9 +826,10 @@ fn main() -> anyhow::Result<()> {
 
             let ptx = ptx.clone();
             let dtx = dtx.clone();
+            let cache = cache.clone();
             std::thread::spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    umdf_core::run_with_progress(&cfg, Some(&ptx))
+                    umdf_core::run_with_progress_cached(&cfg, Some(&ptx), Some(cache.as_ref()))
                 }))
                 .unwrap_or_else(|_| Err(anyhow::anyhow!("scan thread panicked")));
                 let _ = dtx.send(result.map_err(|e| e.to_string()));
@@ -1148,12 +1154,12 @@ fn main() -> anyhow::Result<()> {
     if let Some(pos) = args.iter().position(|a| a == "--models-dir") {
         if let Some(dir) = args.get(pos + 1) {
             ui.set_models_dir(dir.as_str().into());
-            save_model_settings(&ui, &db);
-            refresh_models(&ui, &db, &ui_models);
+            save_model_settings(&ui, &settings);
+            refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
         }
     }
     if args.iter().any(|a| a == "--demo-models") {
-        refresh_models(&ui, &db, &ui_models);
+        refresh_models(&ui, &settings, &ui_models, lang.get() == Lang::Es);
         ui.set_models_open(true);
     }
     if let Some(pos) = args.iter().position(|a| a == "--demo-use-model") {
@@ -1228,38 +1234,52 @@ fn verb_for(kind: &str) -> Verb {
     }
 }
 
-fn save_model_settings(ui: &AppWindow, db: &Arc<Mutex<Option<Db>>>) {
-    if let Ok(guard) = db.lock() {
-        if let Some(database) = guard.as_ref() {
-            let _ = database.set("models_dir", &ui.get_models_dir().to_string());
-            let _ = database.set(
-                "semantic_device",
-                if ui.get_semantic_device() == 0 { "cuda" } else { "cpu" },
-            );
-            let _ = database.set(
-                "semantic_threshold",
-                &format!("{:.2}", ui.get_semantic_threshold()),
-            );
+fn update_cache_label(ui: &AppWindow, cache: &CacheDb) {
+    let stats = cache.stats();
+    ui.set_models_db(
+        format!(
+            "config.toml: {} · cache.db: {} ({} fingerprints · {} embeddings · {})",
+            Settings::path().display(),
+            cache.path().display(),
+            stats.fingerprints,
+            stats.embeddings,
+            human_bytes(stats.bytes)
+        )
+        .into(),
+    );
+}
+
+fn save_model_settings(ui: &AppWindow, settings: &Arc<Mutex<Settings>>) {
+    let models_dir = PathBuf::from(ui.get_models_dir().to_string());
+    let device = ui.get_semantic_device();
+    let similarity = ui.get_semantic_threshold();
+    if let Ok(mut guard) = settings.lock() {
+        // The slider fires on every step; only touch the disk when something
+        // actually changed.
+        let changed = guard.models_dir != models_dir
+            || guard.device_index() != device
+            || (guard.similarity - similarity).abs() > 0.0001;
+        if changed {
+            guard.models_dir = models_dir;
+            guard.set_device_index(device);
+            guard.similarity = similarity;
+            if let Err(error) = guard.save() {
+                eprintln!("UMDF: could not save config.toml: {error}");
+            }
         }
     }
-    ui.set_semantic_threshold_label(format!("{:.2}", ui.get_semantic_threshold()).into());
+    ui.set_semantic_threshold_label(format!("{similarity:.2}").into());
 }
 
 fn refresh_models(
     ui: &AppWindow,
-    db: &Arc<Mutex<Option<Db>>>,
+    settings: &Arc<Mutex<Settings>>,
     ui_models: &Arc<Mutex<Vec<UiModel>>>,
+    es: bool,
 ) {
     let dir = PathBuf::from(ui.get_models_dir().to_string());
-    let (active, installed) = if let Ok(guard) = db.lock() {
-        if let Some(database) = guard.as_ref() {
-            (
-                database.get("active_model").unwrap_or_default(),
-                database.models().unwrap_or_default(),
-            )
-        } else {
-            (String::new(), Vec::new())
-        }
+    let (active, installed) = if let Ok(guard) = settings.lock() {
+        (guard.active_model.clone(), guard.models.clone())
     } else {
         (String::new(), Vec::new())
     };
@@ -1278,16 +1298,21 @@ fn refresh_models(
             0
         };
         rows.push(ModelRow {
-            name: catalog.name.into(),
-            details: format!("{} · ~{} MB", catalog.capabilities, catalog.size_mb).into(),
+            name: catalog.name(es).into(),
+            details: format!(
+                "{} · ~{} MB",
+                catalog.capabilities(es),
+                catalog.size_mb
+            )
+            .into(),
             path: path.to_string_lossy().to_string().into(),
             state,
         });
         entries.push(UiModel {
-            name: catalog.name.to_string(),
+            name: catalog.name(false).to_string(),
             path,
             url: catalog.url.to_string(),
-            capabilities: catalog.capabilities.to_string(),
+            capabilities: catalog.capabilities(false).to_string(),
             preset: catalog.preset.to_string(),
             input_size: catalog.input_size,
             threshold: catalog.threshold,
@@ -1308,7 +1333,7 @@ fn refresh_models(
         entries.push(UiModel {
             name: model.name,
             path: model.path,
-            url: String::new(),
+            url: model.source_url,
             capabilities: model.capabilities,
             preset: model.preset,
             input_size: model.input_size,
@@ -1322,7 +1347,11 @@ fn refresh_models(
     }
 
     let summary = if active.is_empty() {
-        "No model selected".to_string()
+        if es {
+            "Ningún modelo seleccionado".to_string()
+        } else {
+            "No model selected".to_string()
+        }
     } else {
         let name = Path::new(&active)
             .file_name()

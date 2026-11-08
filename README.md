@@ -140,11 +140,28 @@ with the comparison each model enables:
   input size and suggest the preprocessing (ImageNet vs CLIP).
 * **CUDA/CPU** and the similarity threshold are selectable; if the CUDA
   execution provider cannot be created the engine falls back to CPU.
-* The models folder, device, threshold and active model are stored in
-  **SQLite** at `<config dir>/umdf/config.db` (Linux:
-  `~/.config/umdf/config.db`, Windows: `%APPDATA%\umdf\config.db`).
+* Activating a model sets its **recommended threshold** automatically:
+  **0.90** for ResNet-18/50 and **0.83** for CLIP/SigLIP. The slider can still
+  be adjusted afterwards.
 * Model files are not part of the repository (`/models/` and `*.onnx` are
   ignored).
+
+### Configuration and cache
+
+* `<config dir>/umdf/config.toml` stores user configuration: `models_dir`,
+  `device`, `similarity`, `active_model` and the `[[models]]` registry (Linux
+  `~/.config/umdf/config.toml`, Windows `%APPDATA%\umdf\config.toml`). It is
+  plain TOML, easy to review or edit by hand.
+* Older builds kept this in `config.db`; it is migrated automatically on first
+  start and the legacy file is kept as `config.db.bak`.
+* `<config dir>/umdf/cache.db` is a **disposable SQLite cache** of derived
+  values: `fingerprint_cache` (perceptual grids) and `embedding_cache`
+  (semantic vectors). Entries are keyed by absolute path and validated against
+  file size, modification time and the grid/model that produced them, so an
+  edited or replaced file is recomputed automatically. Deleting `cache.db` is
+  always safe and only makes the next scan slower.
+* The Models manager shows the cache size (fingerprints, embeddings, bytes)
+  and a **Clear cache** button.
 
 ### Build and run
 
