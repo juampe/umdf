@@ -16,6 +16,12 @@ fn direct_score(
 ) -> Option<f32> {
     let ai = &items[a];
     let bi = &items[b];
+    if ai.content_hash.is_some() && ai.content_hash == bi.content_hash {
+        return Some(100.0);
+    }
+    if ai.media_signature.is_some() && ai.media_signature == bi.media_signature {
+        return Some(99.0);
+    }
     if let (Some(ea), Some(eb)) = (ai.embedding.as_ref(), bi.embedding.as_ref()) {
         return Some(fingerprint::cosine_percent(ea, eb));
     }
@@ -36,6 +42,12 @@ fn member_matches_keep(
 ) -> bool {
     let ai = &items[keep];
     let bi = &items[other];
+    if ai.content_hash.is_some() && ai.content_hash == bi.content_hash {
+        return true;
+    }
+    if ai.media_signature.is_some() && ai.media_signature == bi.media_signature {
+        return true;
+    }
     let threshold = if ai.embedding.is_some() && bi.embedding.is_some() {
         cfg.embeddings
             .as_ref()
