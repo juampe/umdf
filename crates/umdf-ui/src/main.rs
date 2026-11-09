@@ -1759,7 +1759,7 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.to_string_lossy().to_string());
-            ui.set_stage(tr.stage_loading(&name).into());
+            ui.set_stage(format!("{} · CPU", tr.stage_loading(&name)).into());
             let pct = if total > 0 {
                 35.0 * index as f32 / total as f32
             } else {
@@ -1769,7 +1769,12 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             ui.set_scanned_label(tr.files_scanned_progress(index, total).into());
         }
         Progress::Embedding { done, total } => {
-            ui.set_stage(tr.stage_embedding(done, total).into());
+            let mut stage = tr.stage_embedding(done, total);
+            let runtime = ui.get_semantic_runtime();
+            if !runtime.is_empty() {
+                stage = format!("{stage} · {runtime}");
+            }
+            ui.set_stage(stage.into());
             let pct = if total > 0 {
                 35.0 + 40.0 * done as f32 / total as f32
             } else {
@@ -1782,7 +1787,7 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             ui.set_semantic_runtime_cpu(!cuda && forced_cpu);
         }
         Progress::Hashing { done, total } => {
-            ui.set_stage(tr.stage_hashing(done, total).into());
+            ui.set_stage(format!("{} · CPU", tr.stage_hashing(done, total)).into());
             let pct = if total > 0 {
                 75.0 + 5.0 * done as f32 / total as f32
             } else {
@@ -1791,7 +1796,7 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             set_progress(ui, pct);
         }
         Progress::Comparing { done, total } => {
-            ui.set_stage(tr.stage_comparing(done, total).into());
+            ui.set_stage(format!("{} · CPU", tr.stage_comparing(done, total)).into());
             let pct = if total > 0 {
                 80.0 + 18.0 * done as f32 / total as f32
             } else {

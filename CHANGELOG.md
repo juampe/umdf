@@ -4,6 +4,15 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-11-09
+
+### Changed
+
+- The stage label now shows the active resource: `Cargando … · CPU` during
+  extraction, `Calculando embeddings … · CPU` or `· CUDA` during semantic
+  inference, and `· CPU` for hashing/comparison. This makes it obvious that the
+  GPU is not involved in extraction, hashing or comparison.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added
