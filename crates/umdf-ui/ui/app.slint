@@ -347,6 +347,57 @@ component IconButton inherits Rectangle {
     }
 }
 
+/// One side of the preview: heading, a flexible image area and its metadata.
+/// The image grows with the panel, so widening the preview really enlarges it.
+component PreviewPane inherits Rectangle {
+    in property <string> heading;
+    in property <image> source;
+    in property <string> info;
+    callback open();
+
+    background: transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+
+    VerticalLayout {
+        spacing: 4px;
+
+        Text {
+            text: root.heading;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            min-height: 110px;
+            background: Theme.soft;
+            border-radius: 6px;
+            clip: true;
+
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: root.source;
+                image-fit: contain;
+            }
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.open(); }
+            }
+        }
+        Text {
+            text: root.info;
+            color: Theme.muted;
+            font-size: 10px;
+            wrap: word-wrap;
+            height: 30px;
+            vertical-alignment: top;
+            overflow: elide;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Main window
 // ---------------------------------------------------------------------------
@@ -510,6 +561,14 @@ export component AppWindow inherits Window {
     in-out property <string> keep-confidence: "";
     in-out property <string> keep-reason: "";
 
+    // Resizable preview column and full-window image lightbox.
+    in-out property <length> preview-width: 340px;
+    in-out property <length> preview-drag-width: 340px;
+    in-out property <length> preview-drag-x: 0px;
+    in-out property <bool> lightbox-open: false;
+    // Leave room for the fixed location panel and a usable match list.
+    out property <length> preview-max: Math.max(340px, root.width - 840px);
+
     callback persist-settings();
     callback start();
     callback stop();
@@ -555,6 +614,9 @@ export component AppWindow inherits Window {
     changed dark-mode => {
         Theme.dark = root.dark-mode;
         Palette.color-scheme = root.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    }
+    changed width => {
+        root.preview-width = Math.min(root.preview-width, root.preview-max);
     }
 
     scope := FocusScope {
@@ -1036,8 +1098,8 @@ export component AppWindow inherits Window {
                             padding-left: 4px;
                             spacing: 4px;
                             Text { text: root.strings.col_group; width: 45px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
-                            Text { text: root.strings.col_original; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
-                            Text { text: root.strings.col_duplicate; width: 190px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_original; width: 170px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                            Text { text: root.strings.col_duplicate; width: 170px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; }
                             Text { text: root.strings.col_similarity; width: 74px; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                             Text { text: root.strings.col_size; horizontal-stretch: 1; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                         }
@@ -1061,7 +1123,7 @@ export component AppWindow inherits Window {
                                         spacing: 4px;
                                         Text { text: row.group; width: 45px; vertical-alignment: center; font-size: 11px; color: Theme.text2; }
                                         HorizontalLayout {
-                                            width: 190px;
+                                            width: 170px;
                                             spacing: 6px;
                                             Rectangle {
                                                 width: 26px;
@@ -1074,7 +1136,7 @@ export component AppWindow inherits Window {
                                             Text { text: row.original; vertical-alignment: center; font-size: 11px; color: Theme.text; overflow: elide; }
                                         }
                                         HorizontalLayout {
-                                            width: 190px;
+                                            width: 170px;
                                             spacing: 6px;
                                             Rectangle {
                                                 width: 26px;
@@ -1103,9 +1165,40 @@ export component AppWindow inherits Window {
                     }
                 }
 
+                // ---------- splitter ----------
+                Rectangle {
+                    width: 6px;
+                    border-radius: 3px;
+                    background: split-touch.has-hover || split-touch.pressed
+                        ? Theme.accent
+                        : Theme.line_soft;
+                    animate background { duration: 120ms; }
+
+                    split-touch := TouchArea {
+                        mouse-cursor: ew-resize;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                root.preview-drag-x = self.mouse-x;
+                                root.preview-drag-width = root.preview-width;
+                            }
+                        }
+                        moved => {
+                            if (self.pressed) {
+                                root.preview-width = Math.max(
+                                    260px,
+                                    Math.min(
+                                        root.preview-drag-width - (self.mouse-x - root.preview-drag-x),
+                                        root.preview-max
+                                    )
+                                );
+                            }
+                        }
+                    }
+                }
+
                 // ---------- right column ----------
                 Rectangle {
-                    width: 340px;
+                    width: root.preview-width;
                     background: Theme.card;
                     border-radius: 8px;
                     border-width: 1px;
@@ -1114,7 +1207,27 @@ export component AppWindow inherits Window {
                         padding: 12px;
                         padding-bottom: 16px;
                         spacing: 5px;
-                        Text { text: root.strings.preview; color: Theme.text; font-size: 13px; font-weight: 700; }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Text {
+                                text: root.strings.preview;
+                                color: Theme.text;
+                                font-size: 13px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            FlatButton {
+                                label: root.preview-width > 420px ? "⤡" : "⤢";
+                                minw: 30px;
+                                bg: Theme.soft;
+                                clicked => {
+                                    root.preview-width = root.preview-width > 420px
+                                        ? 340px
+                                        : Math.min(root.width * 0.55, root.preview-max);
+                                }
+                            }
+                        }
 
                         Text {
                             text: root.keep-confidence == "" ? root.strings.original : root.keep-confidence;
@@ -1127,37 +1240,45 @@ export component AppWindow inherits Window {
                             color: Theme.accent;
                             font-size: 10px;
                             wrap: word-wrap;
-                            height: 26px;
-                        }
-                        Rectangle {
-                            height: 138px;
-                            background: Theme.soft;
-                            border-radius: 6px;
-                            clip: true;
-                            Image { width: parent.width; height: parent.height; source: root.preview-left; image-fit: contain; }
-                        }
-                        Text {
-                            text: root.preview-left-info;
-                            color: Theme.muted;
-                            font-size: 10px;
-                            wrap: word-wrap;
                             height: 30px;
+                            vertical-alignment: top;
+                            overflow: elide;
                         }
 
-                        Text { text: root.strings.duplicate; color: Theme.text; font-size: 11px; font-weight: 600; }
                         Rectangle {
-                            height: 138px;
-                            background: Theme.soft;
-                            border-radius: 6px;
-                            clip: true;
-                            Image { width: parent.width; height: parent.height; source: root.preview-right; image-fit: contain; }
-                        }
-                        Text {
-                            text: root.preview-right-info;
-                            color: Theme.muted;
-                            font-size: 10px;
-                            wrap: word-wrap;
-                            height: 30px;
+                            vertical-stretch: 1;
+                            background: transparent;
+
+                            if root.preview-width >= 420px : HorizontalLayout {
+                                spacing: 8px;
+                                PreviewPane {
+                                    heading: "";
+                                    source: root.preview-left;
+                                    info: root.preview-left-info;
+                                    open => { root.lightbox-open = true; }
+                                }
+                                PreviewPane {
+                                    heading: root.strings.duplicate;
+                                    source: root.preview-right;
+                                    info: root.preview-right-info;
+                                    open => { root.lightbox-open = true; }
+                                }
+                            }
+                            if root.preview-width < 420px : VerticalLayout {
+                                spacing: 6px;
+                                PreviewPane {
+                                    heading: "";
+                                    source: root.preview-left;
+                                    info: root.preview-left-info;
+                                    open => { root.lightbox-open = true; }
+                                }
+                                PreviewPane {
+                                    heading: root.strings.duplicate;
+                                    source: root.preview-right;
+                                    info: root.preview-right-info;
+                                    open => { root.lightbox-open = true; }
+                                }
+                            }
                         }
 
                         Rectangle { height: 1px; background: Theme.line_soft; }
@@ -1234,6 +1355,63 @@ export component AppWindow inherits Window {
                     Text { text: root.found-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                     Text { text: root.space-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                     Text { text: root.elapsed-label; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // ======================= image lightbox =======================
+        if root.lightbox-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Theme.backdrop;
+
+            lb-card := Rectangle {
+                width: parent.width * 0.92;
+                height: parent.height * 0.9;
+                x: (parent.width - lb-card.width) / 2;
+                y: (parent.height - lb-card.height) / 2;
+                background: Theme.card;
+                border-radius: 12px;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: root.strings.preview;
+                            color: Theme.text;
+                            font-size: 16px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        FlatButton {
+                            label: "✕";
+                            minw: 36px;
+                            bg: Theme.soft;
+                            clicked => { root.lightbox-open = false; }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+                        PreviewPane {
+                            heading: root.strings.original;
+                            source: root.preview-left;
+                            info: root.preview-left-info;
+                            open => {}
+                        }
+                        PreviewPane {
+                            heading: root.strings.duplicate;
+                            source: root.preview-right;
+                            info: root.preview-right-info;
+                            open => {}
+                        }
+                    }
                 }
             }
         }

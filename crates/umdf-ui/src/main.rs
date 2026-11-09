@@ -2209,7 +2209,9 @@ fn preview_data(
     }
     let value = (|| {
         let img = image::open(path).ok()?;
-        let thumb = img.thumbnail(480, 360).to_rgba8();
+        // Large enough for the full-window lightbox, still cheap to keep in
+        // the small preview cache (24 entries).
+        let thumb = img.thumbnail(1280, 960).to_rgba8();
         let (w, h) = thumb.dimensions();
         Some((w, h, thumb.into_raw(), describe_string(path)))
     })();
