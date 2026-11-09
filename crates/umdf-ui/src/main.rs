@@ -1101,7 +1101,11 @@ fn main() -> anyhow::Result<()> {
                             if demo_select {
                                 ui.invoke_select_row(0);
                             }
-                            set_progress(&ui, 100.0);
+                            // Keep the bar where it was when the user pressed
+                            // Stop instead of pretending the scan completed.
+                            if !stopped {
+                                set_progress(&ui, 100.0);
+                            }
                             let mut message = if stopped {
                                 ui.set_stage(tr.stage_stopped().into());
                                 if report.stats.files_scanned == 0 {
