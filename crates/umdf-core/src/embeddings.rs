@@ -34,16 +34,16 @@ static ENVIRONMENT: OnceLock<ort::environment::Environment> = OnceLock::new();
 fn bundled_runtime() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let mut candidates = vec![
-        dir.to_path_buf(),
-        dir.join("lib"),
-        dir.join("../lib/umdf/lib"),
-    ];
+    // A runtime installed by the user (for example the CUDA build) wins over
+    // the CPU library bundled with the installer.
+    let mut candidates = user_runtime_dirs();
+    candidates.push(dir.to_path_buf());
+    candidates.push(dir.join("lib"));
+    candidates.push(dir.join("../lib/umdf/lib"));
     if let Some(contents) = dir.parent() {
         candidates.push(contents.join("Frameworks"));
         candidates.push(contents.join("Resources"));
     }
-    candidates.extend(user_runtime_dirs());
     candidates
         .iter()
         .find_map(|candidate| runtime_in(candidate))
@@ -99,7 +99,13 @@ fn user_runtime_dirs() -> Vec<PathBuf> {
         return Vec::new();
     };
     let runtime = base.join("umdf").join("runtime");
-    vec![runtime.join("cuda"), runtime.join("cpu"), runtime]
+    vec![
+        runtime.join("cuda"),
+        runtime.join("cuda").join("lib"),
+        runtime.join("cpu"),
+        runtime.join("cpu").join("lib"),
+        runtime.clone(),
+    ]
 }
 
 /// Directory that contains the ONNX Runtime library in use.

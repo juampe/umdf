@@ -12,7 +12,8 @@ All notable changes to UMDF are documented here. The format follows
   and C in the same group through B even when A and C did not match. Every
   member must now match the chosen keep directly, and the list shows the
   keep-to-duplicate score instead of the group maximum. This removes the
-  "different photos at 100 %" rows.
+  "different photos at 100 %" rows. Exact content/media matches keep their
+  100 %/99 % score even when they have no perceptual fingerprint (videos).
 - Files of 0 bytes are reported as `empty file (0 bytes)` and skipped before
   any decode. The first 0.6.2 scan rewrites the old decoder messages in the
   failure cache.
