@@ -22,6 +22,9 @@ All notable changes to UMDF are documented here. The format follows
   never block the Rayon workers.
 - Extraction keeps `2 x threads` images in flight instead of a fixed batch of
   12, so every core is used and a slow image does not idle the pool.
+- File modification/creation times already collected by the directory walk are
+  reused during extraction, removing one filesystem `stat` per file. This is
+  especially noticeable on network shares.
 - When semantic search is enabled, each image is decoded once for both the
   perceptual fingerprint and the model tensor. A bounded worker runs GPU
   batches while the CPU decodes the next chunk; the stage label shows

@@ -14,6 +14,10 @@ pub struct Candidate {
     pub path: PathBuf,
     pub size: u64,
     pub extension: String,
+    /// Times captured by the directory walk. Reusing them avoids a second
+    /// filesystem round trip per file, which matters on network shares.
+    pub modified: Option<chrono::DateTime<chrono::Utc>>,
+    pub created: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Walk every configured folder and return the candidate files.
@@ -81,10 +85,11 @@ pub fn collect_candidates_cancellable(
             if !allowed.is_empty() && !allowed.contains(&ext) {
                 continue;
             }
-            let size = match entry.metadata() {
-                Ok(m) => m.len(),
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
                 Err(_) => continue,
             };
+            let size = metadata.len();
             if size < cfg.min_size {
                 continue;
             }
@@ -93,12 +98,22 @@ pub fn collect_candidates_cancellable(
                     continue;
                 }
             }
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(crate::metadata::system_time_to_utc);
+            let created = metadata
+                .created()
+                .ok()
+                .and_then(crate::metadata::system_time_to_utc);
             let canonical = path.to_path_buf();
             if seen.insert(canonical.clone()) {
                 out.push(Candidate {
                     path: canonical,
                     size,
                     extension: ext,
+                    modified,
+                    created,
                 });
             }
         }

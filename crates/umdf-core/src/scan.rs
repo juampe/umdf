@@ -1088,7 +1088,8 @@ fn extract_item(
     let mut item = MediaItem::new(index, cand.path.clone(), kind, cand.size);
     #[allow(unused_mut)]
     let mut embedding_tensor: Option<Vec<f32>> = None;
-    let (modified, created) = metadata::times(&cand.path);
+    // Reuse the stat already performed by the directory walk.
+    let (modified, created) = (cand.modified, cand.created);
     item.modified = modified;
     let modified_ms = modified.map(|date| date.timestamp_millis());
 
