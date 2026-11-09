@@ -131,8 +131,8 @@ pub struct ScanConfig {
     pub min_size: u64,
     pub max_size: Option<u64>,
 
-    /// Grid edge used for the perceptual fingerprint (75 is the default
-    /// resample size for the `dpf` metric).
+    /// Grid edge used for the perceptual fingerprint. 32 keeps shape and
+    /// luminance detail while reducing each cached fingerprint to 2 KB.
     pub grid: u32,
     pub metric: Metric,
     /// Grey-level tolerance for `Metric::PixelTolerance` (0..=255).
@@ -194,7 +194,7 @@ impl Default for ScanConfig {
             min_height: 0,
             min_size: 0,
             max_size: None,
-            grid: 75,
+            grid: 32,
             metric: Metric::PixelTolerance,
             pixel_tolerance: 10,
             similarity_threshold: 90.0,

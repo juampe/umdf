@@ -21,7 +21,7 @@ anyhow.workspace = true
 chrono.workspace = true
 image.workspace = true
 rayon.workspace = true
-rusqlite = { version = "0.41", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.41", default-features = false, features = ["bundled", "cache"] }
 serde.workspace = true
 serde_json.workspace = true
 toml = "1"
@@ -30,6 +30,9 @@ dirs = "6"
 slint = { version = "1.18", features = ["unstable-fontique-011"] }
 trash.workspace = true
 umdf-core = { path = "../umdf-core" }
+
+[dev-dependencies]
+image.workspace = true
 
 [build-dependencies]
 slint-build = "1.18"

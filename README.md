@@ -49,9 +49,9 @@ is disabled and the UI explains how to install ONNX Runtime and set
 
 | Format | Command |
 |---|---|
-| `.deb` | `sudo apt install ./umdf_0.5.2_amd64.deb` |
-| `.rpm` | `sudo dnf install ./umdf-0.5.2-1.x86_64.rpm` |
-| `.AppImage` | `chmod +x umdf-0.5.2-x86_64.AppImage && ./umdf-0.5.2-x86_64.AppImage` |
+| `.deb` | `sudo apt install ./umdf_0.6.0_amd64.deb` |
+| `.rpm` | `sudo dnf install ./umdf-0.6.0-1.x86_64.rpm` |
+| `.AppImage` | `chmod +x umdf-0.6.0-x86_64.AppImage && ./umdf-0.6.0-x86_64.AppImage` |
 | `.tar.gz` | extract and run `umdf` / `umdf-ui`; bundles ONNX Runtime |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -109,7 +109,7 @@ umdf --folder ~/Media --all-media --threshold 92
 umdf --folder ~/Pictures --threads 8
 ```
 
-Defaults: `--metric dpf --grid 75 --tolerance 10 --threshold 90
+Defaults: `--metric dpf --grid 32 --tolerance 10 --threshold 90
 --selectby original`.
 
 ## Which copy is kept? (`--selectby original`, default)
@@ -142,7 +142,7 @@ policies remain available: `dimensions`, `filesize`, `earlierdate`,
 | `pearson` | correlation of the normalised grids |
 | `legacy` | legacy sign-agreement metric kept for comparison |
 
-`dpf` resamples both pictures to 75×75 and counts the fraction of cells whose
+`dpf` resamples both pictures to 32×32 and counts the fraction of cells whose
 gray level differs by at most `--tolerance` (default 10). Raise it for edited
 copies (red-eye correction, recompression); lower it for strict archives.
 
@@ -242,8 +242,10 @@ with the comparison each model enables:
   (semantic vectors) and `metadata_cache` (width, height, EXIF, creation time,
   duration and audio flag). Entries are keyed by absolute path and validated
   against file size and modification time, so an edited or replaced file is
-  recomputed automatically. A second scan of an unchanged folder does not read
-  image headers, EXIF or ffprobe output again. Deleting `cache.db` is always
+  recomputed automatically. Before extraction the rows for the selected files
+  are loaded into memory, so a second scan of an unchanged folder does not read
+  image headers, EXIF, ffprobe output or one SQLite row per file. New values are
+  written by a single batched writer thread. Deleting `cache.db` is always
   safe and only makes the next scan slower. On Windows the cache is kept out of
   the roaming profile; an older cache in `%APPDATA%\umdf` is migrated
   automatically.
@@ -336,8 +338,8 @@ umdf-ui --demo /path/to/folder --semantic-model models/resnet18.onnx  # needs --
 ## Design notes
 
 * Exact duplicates: streaming SHA-256, computed only for files sharing a size.
-* Perceptual duplicates: mean-normalised greyscale grid (75×75 by default)
-  with a 1.5× aspect-ratio gate.
+* Perceptual duplicates: mean-normalised greyscale grid (32×32 by default,
+  2 KB per cached fingerprint) with a 1.5× aspect-ratio gate.
 * Groups: union-find over accepted pairs.
 * Decisions: six keep policies plus a hard `leave_one` guarantee.
 * Safety: dry-run unless `--apply`; OS trash instead of permanent delete.

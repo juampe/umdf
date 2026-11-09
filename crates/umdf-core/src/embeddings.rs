@@ -43,7 +43,9 @@ fn bundled_runtime() -> Option<PathBuf> {
         candidates.push(contents.join("Frameworks"));
         candidates.push(contents.join("Resources"));
     }
-    candidates.iter().find_map(|candidate| runtime_in(candidate))
+    candidates
+        .iter()
+        .find_map(|candidate| runtime_in(candidate))
 }
 
 fn runtime_in(dir: &Path) -> Option<PathBuf> {
@@ -53,7 +55,10 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
         if !path.is_file() {
             continue;
         }
-        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_ascii_lowercase()) else {
+        let Some(name) = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+        else {
             continue;
         };
         let preferred = name == "onnxruntime.dll"
@@ -61,8 +66,7 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
             || name == "libonnxruntime.dylib";
         let matches = preferred
             || (name.starts_with("libonnxruntime")
-                && (name.ends_with(".dylib")
-                    || name.starts_with("libonnxruntime.so.")));
+                && (name.ends_with(".dylib") || name.starts_with("libonnxruntime.so.")));
         if preferred {
             return Some(path);
         }
@@ -167,12 +171,13 @@ pub fn inspect_model(path: &Path) -> Result<ModelInfo> {
         }
         _ => (None, None),
     };
-    let output_dim = session.outputs().first().and_then(|output| match output.dtype() {
-        ValueType::Tensor { shape, .. } => shape
-            .last()
-            .copied()
-            .filter(|v| *v > 0)
-            .map(|v| v as usize),
+    let output_dim = session
+        .outputs()
+        .first()
+        .and_then(|output| match output.dtype() {
+            ValueType::Tensor { shape, .. } => {
+                shape.last().copied().filter(|v| *v > 0).map(|v| v as usize)
+            }
         _ => None,
     });
 
@@ -269,6 +274,58 @@ impl EmbeddingEngine {
     /// True when the CUDA execution provider was actually selected.
     pub fn uses_cuda(&self) -> bool {
         self.used_cuda
+    }
+
+    /// Run inference on pre-processed tensors produced during extraction.
+    ///
+    /// Each tuple carries the caller's item id, which is returned unchanged so
+    /// results can be matched even when a batch skips undecodable files.
+    pub fn embed_tensors(
+        &mut self,
+        items: Vec<(usize, Vec<f32>)>,
+    ) -> Vec<(usize, Option<Vec<f32>>)> {
+        if items.is_empty() {
+            return Vec::new();
+        }
+        let size = self.input_size;
+        let s = size as usize;
+        let n = items.len();
+        let mut ids = Vec::with_capacity(n);
+        let mut data = Vec::with_capacity(n * 3 * s * s);
+        for (id, tensor) in items {
+            ids.push(id);
+            data.extend_from_slice(&tensor);
+        }
+        let result = (|| -> Result<Vec<Vec<f32>>> {
+            let shape = [n as i64, 3, s as i64, s as i64];
+            let tensor = ort::value::Tensor::from_array((shape, data))
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let name = self.input_name.clone();
+            let outputs = self
+                .session
+                .run(ort::inputs![name.as_str() => tensor])
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let (shape, values) = outputs[0]
+                .try_extract_tensor::<f32>()
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            let dims: Vec<usize> = shape.iter().map(|&d| d.max(0) as usize).collect();
+            let mut vectors = split_output(&dims, values, n)?;
+            for vector in &mut vectors {
+                l2_normalise(vector);
+            }
+            Ok(vectors)
+        })();
+        match result {
+            Ok(vectors) => ids
+                .into_iter()
+                .zip(vectors)
+                .map(|(id, vector)| (id, Some(vector)))
+                .collect(),
+            Err(error) => {
+                crate::log_error(format_args!("UMDF: embedding batch failed: {error}"));
+                ids.into_iter().map(|id| (id, None)).collect()
+            }
+        }
     }
 
     /// Embed every image in batches. Files that cannot be decoded are skipped
@@ -400,8 +457,20 @@ impl EmbeddingEngine {
 }
 
 fn preprocess(path: &Path, size: u32, mean: [f32; 3], std: [f32; 3]) -> Result<Vec<f32>> {
-    let image = fingerprint::load_oriented(path)
-        .with_context(|| format!("decoding {}", path.display()))?;
+    let image =
+        fingerprint::load_oriented(path).with_context(|| format!("decoding {}", path.display()))?;
+    Ok(preprocess_dynamic(&image, size, mean, std))
+}
+
+/// Build the model input tensor from an already decoded image. Extraction uses
+/// this so the same decode feeds both the perceptual fingerprint and the
+/// embedding, avoiding a second read/decode of every image.
+pub(crate) fn preprocess_dynamic(
+    image: &image::DynamicImage,
+    size: u32,
+    mean: [f32; 3],
+    std: [f32; 3],
+) -> Vec<f32> {
     let rgb = image.to_rgb8();
     let resized = image::imageops::resize(&rgb, size, size, FilterType::Triangle);
     let n = size as usize;
@@ -413,7 +482,7 @@ fn preprocess(path: &Path, size: u32, mean: [f32; 3], std: [f32; 3]) -> Result<V
                 (value - mean[channel]) / std[channel];
         }
     }
-    Ok(out)
+    out
 }
 
 fn split_output(dims: &[usize], values: &[f32], batch: usize) -> Result<Vec<Vec<f32>>> {
@@ -489,5 +558,20 @@ mod tests {
         l2_normalise(&mut v);
         assert!((v[0] - 0.6).abs() < 1e-6);
         assert!((v[1] - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn preprocess_dynamic_builds_a_chw_tensor() {
+        let rgb = image::RgbImage::from_pixel(8, 8, image::Rgb([128, 64, 32]));
+        let tensor = preprocess_dynamic(
+            &image::DynamicImage::ImageRgb8(rgb),
+            4,
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+        );
+        assert_eq!(tensor.len(), 3 * 4 * 4);
+        assert!((tensor[0] - 128.0 / 255.0).abs() < 1e-3);
+        assert!((tensor[16] - 64.0 / 255.0).abs() < 1e-3);
+        assert!((tensor[32] - 32.0 / 255.0).abs() < 1e-3);
     }
 }

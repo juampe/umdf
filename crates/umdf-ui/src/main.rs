@@ -1759,7 +1759,13 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.to_string_lossy().to_string());
-            ui.set_stage(format!("{} · CPU", tr.stage_loading(&name)).into());
+            let mut stage = format!("{} · CPU", tr.stage_loading(&name));
+            // Embeddings are computed from the same decode while extraction
+            // runs, so the GPU is also active when CUDA is available.
+            if ui.get_semantic_runtime() == "CUDA" {
+                stage = format!("{stage} + GPU");
+            }
+            ui.set_stage(stage.into());
             let pct = if total > 0 {
                 35.0 * index as f32 / total as f32
             } else {

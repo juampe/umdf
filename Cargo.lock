@@ -2001,6 +2001,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4496,6 +4505,7 @@ dependencies = [
  "bitflags 2.13.2",
  "fallible-iterator",
  "fallible-streaming-iterator",
+ "hashlink",
  "libsqlite3-sys",
  "smallvec",
 ]
@@ -5481,7 +5491,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-cli"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5492,7 +5502,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-core"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5510,7 +5520,7 @@ dependencies = [
 
 [[package]]
 name = "umdf-ui"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",

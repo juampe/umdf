@@ -98,6 +98,16 @@ static NEVER_CANCELLED: AtomicBool = AtomicBool::new(false);
 /// and write failures are ignored by the scanner: the cache only accelerates a
 /// scan, it never changes its result.
 pub trait ScanCache: Send + Sync {
+    /// Optional warm-up before extraction. The cache may load its light index
+    /// and the blobs for these files into memory so the worker threads do not
+    /// issue one SQLite query per file. `model` is the active embedding model
+    /// key, or `None` when semantic search is disabled.
+    fn preload(&self, _paths: &[PathBuf], _model: Option<&str>) {}
+
+    /// Optional end-of-scan hook. Caches with batched writes flush here so the
+    /// values computed by the last batch are durable.
+    fn flush(&self) {}
+
     fn fingerprint(
         &self,
         path: &Path,
@@ -250,7 +260,116 @@ pub fn run_with_progress_cached(
         .num_threads(threads)
         .thread_name(|i| format!("umdf-worker-{i}"))
         .build()?;
-    pool.install(|| run_inner(cfg, tx, threads, cache))
+    let result = pool.install(|| run_inner(cfg, tx, threads, cache));
+    // Persist the final batched writes even when the scan stopped early.
+    if let Some(cache) = cache {
+        cache.flush();
+    }
+    result
+}
+
+/// Background embedding worker. Extraction sends the tensor produced from the
+/// same decode used for the fingerprint; the worker batches it and runs the
+/// model while the CPU decodes the next chunk.
+#[cfg(feature = "embeddings")]
+struct EmbeddingWorker {
+    tx: std::sync::mpsc::SyncSender<(usize, Vec<f32>)>,
+    rx: std::sync::mpsc::Receiver<Vec<(usize, Option<Vec<f32>>)>>,
+    join: Option<std::thread::JoinHandle<()>>,
+    cuda: bool,
+    forced_cpu: bool,
+}
+
+#[cfg(feature = "embeddings")]
+impl EmbeddingWorker {
+    fn finish(mut self) -> Vec<(usize, Option<Vec<f32>>)> {
+        // Closing the input channel lets the worker flush its last batch.
+        drop(self.tx);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+        self.rx.try_iter().flatten().collect()
+    }
+}
+
+#[cfg(feature = "embeddings")]
+fn start_embedding_worker(cfg: &crate::config::EmbeddingConfig) -> Option<EmbeddingWorker> {
+    use std::sync::mpsc;
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let batch = cfg.batch_size.clamp(1, 64);
+    let (tx, rx) = mpsc::sync_channel(batch * 2);
+    let (out_tx, out_rx) = mpsc::channel();
+    let engine_cfg = cfg.clone();
+    let join = std::thread::Builder::new()
+        .name("umdf-embeddings".to_string())
+        .spawn(move || {
+            let mut engine = match crate::embeddings::EmbeddingEngine::new(&engine_cfg) {
+                Ok(engine) => engine,
+                Err(error) => {
+                    crate::log_error(format_args!(
+                        "UMDF: semantic model unavailable ({error}); continuing without embeddings"
+                    ));
+                    let _ = ready_tx.send(Err(error.to_string()));
+                    return;
+                }
+            };
+            let _ = ready_tx.send(Ok((engine.uses_cuda(), engine.forced_cpu())));
+            let batch = engine_cfg.batch_size.clamp(1, 64);
+            let mut pending: Vec<(usize, Vec<f32>)> = Vec::with_capacity(batch);
+            while let Ok(item) = rx.recv() {
+                pending.push(item);
+                if pending.len() >= batch {
+                    let results = engine.embed_tensors(std::mem::take(&mut pending));
+                    let _ = out_tx.send(results);
+                }
+            }
+            if !pending.is_empty() {
+                let results = engine.embed_tensors(pending);
+                let _ = out_tx.send(results);
+            }
+        })
+        .ok()?;
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(180)) {
+        Ok(Ok((cuda, forced_cpu))) => Some(EmbeddingWorker {
+            tx,
+            rx: out_rx,
+            join: Some(join),
+            cuda,
+            forced_cpu,
+        }),
+        Ok(Err(_)) | Err(_) => {
+            let _ = join.join();
+            None
+        }
+    }
+}
+
+#[cfg(feature = "embeddings")]
+fn apply_embedding_batch(
+    batch: Vec<(usize, Option<Vec<f32>>)>,
+    items: &mut [MediaItem],
+    item_index: &std::collections::HashMap<usize, usize>,
+    cache: Option<&dyn ScanCache>,
+    model_key: Option<&str>,
+    stats: &mut Stats,
+) {
+    for (id, vector) in batch {
+        match vector {
+            Some(vector) => {
+                stats.embeddings_computed += 1;
+                let Some(&index) = item_index.get(&id) else {
+                    continue;
+                };
+                if let (Some(cache), Some(model_key)) = (cache, model_key) {
+                    let item = &items[index];
+                    let modified = item.modified.map(|date| date.timestamp_millis());
+                    cache.store_embedding(&item.path, model_key, item.size, modified, &vector);
+                }
+                items[index].embedding = Some(vector);
+            }
+            None => stats.embedding_errors += 1,
+        }
+    }
 }
 
 fn run_inner(
@@ -288,6 +407,44 @@ fn run_inner(
         });
     }
 
+    // The model key identifies the active .onnx (including its size and mtime)
+    // so replacing a model invalidates only its embeddings.
+    #[cfg(feature = "embeddings")]
+    let embedding_model_key: Option<String> = if !cfg.only_identical {
+        cfg.embeddings.as_ref().map(|ecfg| {
+            let path = ecfg.model_path.to_string_lossy().to_string();
+            match std::fs::metadata(&ecfg.model_path) {
+                Ok(meta) => {
+                    let modified = meta
+                        .modified()
+                        .ok()
+                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|delta| delta.as_millis())
+                        .unwrap_or(0);
+                    format!("{path}|{}|{modified}", meta.len())
+                }
+                Err(_) => path,
+            }
+        })
+    } else {
+        None
+    };
+    #[cfg(feature = "embeddings")]
+    let embedding_arg = cfg.embeddings.as_ref().zip(embedding_model_key.as_deref());
+    #[cfg(not(feature = "embeddings"))]
+    let embedding_arg: Option<(&crate::config::EmbeddingConfig, &str)> = None;
+    let embeddings_enabled = AtomicBool::new(embedding_arg.is_some());
+
+    // Warm the cache once with the candidate list. With fingerprints in RAM the
+    // workers no longer wait on a SQLite query per file during extraction.
+    if let Some(cache) = cache {
+        let paths: Vec<PathBuf> = candidates.iter().map(|c| c.path.clone()).collect();
+        #[cfg(feature = "embeddings")]
+        cache.preload(&paths, embedding_model_key.as_deref());
+        #[cfg(not(feature = "embeddings"))]
+        cache.preload(&paths, None);
+    }
+
     // ---- Stage 1: extraction (parallel) ------------------------------------
     let extract_started = Instant::now();
     // Image decoding is the dominant cost, so candidates are processed in
@@ -295,9 +452,15 @@ fn run_inner(
     // very large photos (each decoded image can be hundreds of MB).
     let ffprobe_bin = ffprobe_path(cfg);
     let ffmpeg_bin = cfg.ffmpeg.clone();
-    let batch = threads.clamp(2, 12);
+    // Keep enough images in flight to fill every worker. The decoded image is
+    // dropped inside `extract_item`, so this bounds peak decode memory without
+    // serialising the pool behind a chunk barrier.
+    let batch = (threads * 2).clamp(4, 64);
 
     let mut items: Vec<MediaItem> = Vec::with_capacity(candidates.len());
+    let mut item_index: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    #[cfg(feature = "embeddings")]
+    let mut embedding_worker: Option<EmbeddingWorker> = None;
     let mut scanned = 0usize;
     for chunk in candidates.chunks(batch) {
         wait_if_paused(pause_ref, cancel_ref);
@@ -305,7 +468,7 @@ fn run_inner(
             break;
         }
         let base = scanned;
-        let results: Vec<Option<MediaItem>> = chunk
+        let results: Vec<Option<(MediaItem, Option<Vec<f32>>, bool)>> = chunk
             .par_iter()
             .enumerate()
             .map(|(k, cand)| {
@@ -324,6 +487,8 @@ fn run_inner(
                         ffprobe_bin.as_deref(),
                         ffmpeg_bin.as_deref(),
                         cache,
+                        embedding_arg,
+                        &embeddings_enabled,
                     )
                 }));
                 match extracted {
@@ -340,12 +505,13 @@ fn run_inner(
                             cand.size,
                         );
                         item.extract_error = Some("decoder panic".to_string());
-                        Some(item)
+                        Some((item, None, false))
                     }
                 }
             })
             .collect();
 
+        let mut tensors: Vec<(usize, Vec<f32>)> = Vec::new();
         for (k, maybe) in results.into_iter().enumerate() {
             let cand = &chunk[k];
             emit(
@@ -356,7 +522,7 @@ fn run_inner(
                     path: cand.path.clone(),
                 },
             );
-            if let Some(item) = maybe {
+            if let Some((item, tensor, embedding_cached)) = maybe {
                 if item.kind != MediaKind::Other {
                     if item.metadata_cached {
                         stats.metadata_from_cache += 1;
@@ -381,11 +547,91 @@ fn run_inner(
                 if item.video_frame_cached {
                     stats.video_frames_from_cache += 1;
                 }
+                if embedding_cached {
+                    stats.embeddings_from_cache += 1;
+                }
+                if let Some(tensor) = tensor {
+                    tensors.push((item.id, tensor));
+                }
+                item_index.insert(item.id, items.len());
                 items.push(item);
+            }
+        }
+
+        if !tensors.is_empty() {
+            #[cfg(feature = "embeddings")]
+            {
+                if embeddings_enabled.load(Ordering::Relaxed) {
+                    if embedding_worker.is_none() {
+                        if let Some(ecfg) = cfg.embeddings.as_ref() {
+                            match start_embedding_worker(ecfg) {
+                                Some(worker) => {
+                                    emit(
+                                        tx,
+                                        Progress::EmbeddingDevice {
+                                            cuda: worker.cuda,
+                                            forced_cpu: worker.forced_cpu,
+                                        },
+                                    );
+                                    embedding_worker = Some(worker);
+                                }
+                                None => {
+                                    embeddings_enabled.store(false, Ordering::Relaxed);
+                                    stats.embedding_errors += tensors.len();
+                                }
+                            }
+                        } else {
+                            embeddings_enabled.store(false, Ordering::Relaxed);
+                            stats.embedding_errors += tensors.len();
+                        }
+                    }
+                    if let Some(worker) = embedding_worker.as_ref() {
+                        for tensor in tensors {
+                            if worker.tx.send(tensor).is_err() {
+                                stats.embedding_errors += 1;
+                            }
+                        }
+                    }
+                } else {
+                    stats.embedding_errors += tensors.len();
+                }
+                if let Some(worker) = embedding_worker.as_ref() {
+                    for batch in worker.rx.try_iter() {
+                        apply_embedding_batch(
+                            batch,
+                            &mut items,
+                            &item_index,
+                            cache,
+                            embedding_model_key.as_deref(),
+                            &mut stats,
+                        );
+                    }
+                }
+            }
+            #[cfg(not(feature = "embeddings"))]
+            {
+                let _ = tensors;
             }
         }
         scanned += chunk.len();
         stats.files_scanned = scanned;
+    }
+
+    // Let the embedding worker flush its final batch and collect it. This
+    // overlaps GPU inference with the CPU extraction above instead of running
+    // two sequential full passes over the library.
+    #[cfg(feature = "embeddings")]
+    if let Some(worker) = embedding_worker.take() {
+        for (id, vector) in worker.finish() {
+            apply_embedding_batch(
+                vec![(id, vector)],
+                &mut items,
+                &item_index,
+                cache,
+                embedding_model_key.as_deref(),
+                &mut stats,
+            );
+        }
     }
     // Re-number ids after filtering and record how many files were actually
     // examined (a cancelled scan stops early).
@@ -413,50 +659,16 @@ fn run_inner(
                 .map(|item| item.id)
                 .collect();
             if !ids.is_empty() {
-                // Include the model file metadata so replacing the .onnx at the
-                // same path invalidates the previously cached vectors.
-                let model_key = {
-                    let path = ecfg.model_path.to_string_lossy().to_string();
-                    match std::fs::metadata(&ecfg.model_path) {
-                        Ok(meta) => {
-                            let modified = meta
-                                .modified()
-                                .ok()
-                                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|delta| delta.as_millis())
-                                .unwrap_or(0);
-                            format!("{path}|{}|{modified}", meta.len())
-                        }
-                        Err(_) => path,
-                    }
-                };
-                let meta: Vec<(PathBuf, u64, Option<i64>)> = ids
-                    .iter()
-                    .map(|id| {
-                        let item = &items[*id];
-                        (
-                            item.path.clone(),
-                            item.size,
-                            item.modified.map(|date| date.timestamp_millis()),
-                        )
-                    })
-                    .collect();
-
-                // Reuse vectors from previous scans and only run the model on
-                // the images whose file size or mtime changed.
-                let mut vectors: Vec<Option<Vec<f32>>> = meta
-                    .iter()
-                    .map(|(path, size, modified)| {
-                        cache.and_then(|cache| {
-                            cache.embedding(path, &model_key, *size, *modified)
-                        })
-                    })
-                    .collect();
+                // Most vectors were already restored from the cache or
+                // computed by the extraction pipeline (single decode). Only
+                // the remaining ones need the path-based fallback below.
+                let model_key = embedding_model_key.as_deref().unwrap_or_default();
+                let mut vectors: Vec<Option<Vec<f32>>> =
+                    ids.iter().map(|id| items[*id].embedding.take()).collect();
                 let missing: Vec<usize> = (0..ids.len())
                     .filter(|slot| vectors[*slot].is_none())
                     .collect();
                 let cached_embeddings = ids.len() - missing.len();
-                stats.embeddings_from_cache += cached_embeddings;
                 emit(
                     tx,
                     Progress::Embedding {
@@ -466,6 +678,17 @@ fn run_inner(
                 );
 
                 if !missing.is_empty() {
+                    let meta: Vec<(PathBuf, u64, Option<i64>)> = ids
+                        .iter()
+                        .map(|id| {
+                            let item = &items[*id];
+                            (
+                                item.path.clone(),
+                                item.size,
+                                item.modified.map(|date| date.timestamp_millis()),
+                            )
+                        })
+                        .collect();
                     let paths: Vec<PathBuf> =
                         missing.iter().map(|slot| meta[*slot].0.clone()).collect();
                     // Semantic matching is an optional enhancement: if the
@@ -509,11 +732,7 @@ fn run_inner(
                                         if let Some(cache) = cache {
                                             let (path, size, modified) = &meta[slot];
                                             cache.store_embedding(
-                                                path,
-                                                &model_key,
-                                                *size,
-                                                *modified,
-                                                &vector,
+                                                    path, &model_key, *size, *modified, &vector,
                                             );
                                         }
                                         vectors[slot] = Some(vector);
@@ -529,7 +748,8 @@ fn run_inner(
                                     total: ids.len(),
                                 },
                             );
-                        });
+                            },
+                        );
                         if let Err(error) = result {
                             crate::log_error(format_args!(
                                 "UMDF: semantic embeddings failed ({error}); continuing with the remaining files"
@@ -575,7 +795,7 @@ fn run_inner(
     );
     let mut hashes: Vec<(usize, String, bool)> = Vec::with_capacity(hash_targets.len());
     let mut hashed_done = 0usize;
-    for chunk in hash_targets.chunks(16) {
+    for chunk in hash_targets.chunks(threads.max(1)) {
         wait_if_paused(pause_ref, cancel_ref);
         if cfg.is_cancelled() {
             break;
@@ -588,9 +808,9 @@ fn run_inner(
                 }
                 let it = &items[*id];
                 let modified_ms = it.modified.map(|date| date.timestamp_millis());
-                if let Some(hash) = cache.and_then(|cache| {
-                    cache.content_hash(&it.path, it.size, modified_ms)
-                }) {
+                if let Some(hash) =
+                    cache.and_then(|cache| cache.content_hash(&it.path, it.size, modified_ms))
+                {
                     return Some((*id, hash, true));
                 }
                 hash::file_hash_cancellable(&it.path, cancel_ref)
@@ -598,12 +818,7 @@ fn run_inner(
                     .flatten()
                     .map(|hash| {
                         if let Some(cache) = cache {
-                            cache.store_content_hash(
-                                &it.path,
-                                it.size,
-                                modified_ms,
-                                &hash,
-                            );
+                            cache.store_content_hash(&it.path, it.size, modified_ms, &hash);
                         }
                         (*id, hash, false)
                     })
@@ -757,8 +972,8 @@ fn run_inner(
                         break;
                     }
                     counted += 1;
-                    let uses_embeddings = items[ai].embedding.is_some()
-                        && items[bj].embedding.is_some();
+                    let uses_embeddings =
+                        items[ai].embedding.is_some() && items[bj].embedding.is_some();
                     let sim = if let (Some(ea), Some(eb)) =
                         (items[ai].embedding.as_ref(), items[bj].embedding.as_ref())
                     {
@@ -864,16 +1079,21 @@ fn extract_item(
     ffprobe: Option<&Path>,
     ffmpeg: Option<&Path>,
     cache: Option<&dyn ScanCache>,
-) -> Option<MediaItem> {
+    embedding: Option<(&crate::config::EmbeddingConfig, &str)>,
+    embeddings_enabled: &AtomicBool,
+) -> Option<(MediaItem, Option<Vec<f32>>, bool)> {
+    let _ = embedding;
+    let _ = embeddings_enabled;
     let kind = classify(&cand.extension);
     let mut item = MediaItem::new(index, cand.path.clone(), kind, cand.size);
+    #[allow(unused_mut)]
+    let mut embedding_tensor: Option<Vec<f32>> = None;
     let (modified, created) = metadata::times(&cand.path);
     item.modified = modified;
     let modified_ms = modified.map(|date| date.timestamp_millis());
 
-    let cached_metadata = cache.and_then(|cache| {
-        cache.metadata(&cand.path, cand.size, modified_ms)
-    });
+    let cached_metadata =
+        cache.and_then(|cache| cache.metadata(&cand.path, cand.size, modified_ms));
     let mut metadata_ready = false;
     let mut has_audio = kind == MediaKind::Audio;
     if let Some(meta) = cached_metadata {
@@ -915,15 +1135,50 @@ fn extract_item(
             if below_min_dimensions(cfg, &item) {
                 return None;
             }
-            match cache.and_then(|cache| {
-                cache.fingerprint(&cand.path, cand.size, modified_ms, cfg.grid)
-            }) {
-                Some(fp) => {
+            let cached_fp = cache
+                .and_then(|cache| cache.fingerprint(&cand.path, cand.size, modified_ms, cfg.grid));
+            #[cfg(feature = "embeddings")]
+            let cached_embedding = embedding.and_then(|(_, model_key)| {
+                cache.and_then(|cache| {
+                    cache.embedding(&cand.path, model_key, cand.size, modified_ms)
+                })
+            });
+            #[cfg(not(feature = "embeddings"))]
+            let cached_embedding: Option<Vec<f32>> = None;
+
+            if let Some(fp) = cached_fp {
                     item.fingerprint = Some(fp);
                     item.fingerprint_cached = true;
+                if let Some(vector) = cached_embedding {
+                    item.embedding = Some(vector);
+                    item.embedding_cached = true;
+                } else {
+                    // The fingerprint is cached but the embedding is not, so
+                    // decode once for the model only.
+                    #[cfg(feature = "embeddings")]
+                    if embeddings_enabled.load(Ordering::Relaxed) {
+                        if let Some((ecfg, _)) = embedding {
+                            match fingerprint::load_oriented(&cand.path) {
+                                Ok(image) => {
+                                    embedding_tensor = Some(crate::embeddings::preprocess_dynamic(
+                                        &image,
+                                        ecfg.input_size.max(32),
+                                        ecfg.mean,
+                                        ecfg.std,
+                                    ));
+                                }
+                                Err(error) => crate::log_error(format_args!(
+                                    "UMDF: could not decode {} for its embedding: {error}",
+                                    cand.path.display()
+                                )),
+                            }
+                        }
                 }
-                None => match fingerprint::load_fingerprint(&cand.path, cfg.grid) {
-                    Ok(fp) => {
+                }
+            } else {
+                match fingerprint::load_oriented(&cand.path) {
+                    Ok(image) => {
+                        let fp = fingerprint::from_dynamic_image(&image, cfg.grid);
                         if let Some(cache) = cache {
                             cache.store_fingerprint(
                                 &cand.path,
@@ -934,9 +1189,26 @@ fn extract_item(
                             );
                         }
                         item.fingerprint = Some(fp);
+                        if let Some(vector) = cached_embedding {
+                            item.embedding = Some(vector);
+                            item.embedding_cached = true;
+                        } else {
+                            #[cfg(feature = "embeddings")]
+                            if embeddings_enabled.load(Ordering::Relaxed) {
+                                if let Some((ecfg, _)) = embedding {
+                                    // Same decode as the fingerprint above.
+                                    embedding_tensor = Some(crate::embeddings::preprocess_dynamic(
+                                        &image,
+                                        ecfg.input_size.max(32),
+                                        ecfg.mean,
+                                        ecfg.std,
+                                    ));
+                                }
+                            }
+                        }
                     }
                     Err(e) => item.extract_error = Some(e.to_string()),
-                },
+                }
             }
         }
         MediaKind::Video | MediaKind::Audio => {
@@ -1035,7 +1307,8 @@ fn extract_item(
         MediaKind::Other => {}
     }
 
-    Some(item)
+    let embedding_cached = item.embedding_cached;
+    Some((item, embedding_tensor, embedding_cached))
 }
 
 fn ms_to_datetime(ms: i64) -> Option<chrono::DateTime<chrono::Utc>> {

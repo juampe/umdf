@@ -4,6 +4,29 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-09
+
+### Changed
+
+- Perceptual fingerprints are now 32x32 instead of 75x75. Each cached
+  fingerprint drops from 11,250 to 2,048 bytes (5.5x smaller), which reduces
+  disk reads, RAM and comparison cost. A new `fp_version` column invalidates
+  old rows automatically and rebuilds them once, without clearing the cache.
+- Before extraction, the cache loads the fingerprint, metadata, content-hash,
+  audio-signature and active-model embedding rows for the scanned files into
+  memory. Extraction no longer issues one SQLite query per file; on a warm
+  cache the workers only decode new or changed files.
+- All cache writes go through a dedicated writer thread that commits batches of
+  up to 256 rows (or every 200 ms) in a single transaction. Reads use the WAL
+  connection pool with `mmap_size` and the prepared-statement cache, so writers
+  never block the Rayon workers.
+- Extraction keeps `2 x threads` images in flight instead of a fixed batch of
+  12, so every core is used and a slow image does not idle the pool.
+- When semantic search is enabled, each image is decoded once for both the
+  perceptual fingerprint and the model tensor. A bounded worker runs GPU
+  batches while the CPU decodes the next chunk; the stage label shows
+  `CPU + GPU` while both are active.
+
 ## [0.5.2] - 2026-11-09
 
 ### Fixed

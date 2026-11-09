@@ -90,6 +90,9 @@ pub struct MediaItem {
     /// Optional semantic embedding (L2-normalised). Requires the `embeddings`
     /// feature; `None` otherwise.
     pub embedding: Option<Vec<f32>>,
+    /// True when the embedding came from the cache instead of inference.
+    #[serde(skip)]
+    pub embedding_cached: bool,
 
     /// Human readable reason why the file was skipped during extraction.
     pub extract_error: Option<String>,
@@ -118,6 +121,7 @@ impl MediaItem {
             media_signature_cached: false,
             video_frame_cached: false,
             embedding: None,
+            embedding_cached: false,
             extract_error: None,
         }
     }

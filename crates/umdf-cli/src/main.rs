@@ -57,8 +57,8 @@ struct Cli {
     #[arg(long, default_value_t = 0)]
     min_size: u64,
 
-    /// Fingerprint grid edge (75 is the default resample size).
-    #[arg(long, default_value_t = 75)]
+    /// Fingerprint grid edge (32 stores 2 KB per image).
+    #[arg(long, default_value_t = 32)]
     grid: u32,
 
     /// Similarity metric: dpf (pixel tolerance) | ssim | sign | pearson | legacy.

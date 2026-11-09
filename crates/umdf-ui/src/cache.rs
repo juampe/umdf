@@ -8,18 +8,133 @@
 //! modification time and the grid/model that produced them, so editing or
 //! replacing a file invalidates its entry automatically.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, RwLock};
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use umdf_core::scan::ScanCache;
 use umdf_core::{CachedMetadata, Fingerprint};
 
+/// Bump when the fingerprint algorithm or its storage encoding changes.
+/// Old rows are ignored and rebuilt once, without deleting the whole cache.
+const FP_VERSION: i64 = 2;
+/// Rows accumulated by the single writer before it commits a transaction.
+const WRITE_BATCH: usize = 256;
+/// Maximum time a write waits for a batch before being committed.
+const WRITE_INTERVAL: Duration = Duration::from_millis(200);
+/// SQLite memory map per connection. With 32x32 fingerprints the whole cache
+/// of a 113k-image library fits here, so reads hit the OS page cache.
+const MMAP_BYTES: i64 = 1024 * 1024 * 1024;
+
+#[derive(Clone)]
+struct CachedFingerprint {
+    size: u64,
+    modified: Option<i64>,
+    grid: u32,
+    fingerprint: Fingerprint,
+}
+
+#[derive(Clone)]
+struct CachedMetadataEntry {
+    size: u64,
+    modified: Option<i64>,
+    metadata: CachedMetadata,
+}
+
+#[derive(Clone)]
+struct CachedEmbedding {
+    size: u64,
+    modified: Option<i64>,
+    values: Vec<f32>,
+}
+
+#[derive(Clone)]
+struct CachedText {
+    size: u64,
+    modified: Option<i64>,
+    value: String,
+}
+
+/// In-memory view of the cache for the files of the current scan.
+///
+/// When `active` is true a missing entry means "not cached", so the worker
+/// threads never fall back to SQLite. The single writer updates these maps as
+/// it commits, which keeps repeated scans warm without a second disk read.
+#[derive(Default)]
+struct MemoryCache {
+    active: bool,
+    fingerprints: HashMap<String, CachedFingerprint>,
+    metadata: HashMap<String, CachedMetadataEntry>,
+    embeddings: HashMap<(String, String), CachedEmbedding>,
+    content_hashes: HashMap<String, CachedText>,
+    media_signatures: HashMap<(String, String), CachedText>,
+}
+
+/// One value queued for the single writer thread.
+enum WriteOp {
+    Fingerprint {
+        key: String,
+        size: u64,
+        modified: Option<i64>,
+        grid: u32,
+        mean: i16,
+        values: Vec<i16>,
+    },
+    Metadata {
+        key: String,
+        size: u64,
+        modified: Option<i64>,
+        metadata: CachedMetadata,
+    },
+    ContentHash {
+        key: String,
+        size: u64,
+        modified: Option<i64>,
+        hash: String,
+    },
+    MediaSignature {
+        key: String,
+        params: String,
+        size: u64,
+        modified: Option<i64>,
+        signature: String,
+    },
+    VideoFrame {
+        key: String,
+        at_ms: i64,
+        grid: u32,
+        size: u64,
+        modified: Option<i64>,
+        mean: i16,
+        values: Vec<i16>,
+    },
+    Embedding {
+        key: String,
+        model: String,
+        size: u64,
+        modified: Option<i64>,
+        values: Vec<f32>,
+    },
+    Flush(Sender<()>),
+    Shutdown,
+}
+
+struct WriterHandle {
+    tx: std::sync::mpsc::SyncSender<WriteOp>,
+    join: Option<JoinHandle<()>>,
+}
+
 pub struct CacheDb {
     pool: Mutex<Vec<Connection>>,
     path: PathBuf,
+    memory: Arc<RwLock<MemoryCache>>,
+    writer: Mutex<Option<WriterHandle>>,
 }
 
 /// A connection borrowed from the pool. Returning it on drop keeps SQLite
@@ -136,17 +251,15 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     };
     let fingerprint_rows: Vec<(i64, String, String, String)> = {
-        let mut stmt =
-            conn.prepare("SELECT rowid, path, created_at FROM fingerprint_cache")?;
+        let mut stmt = conn.prepare("SELECT rowid, path, created_at FROM fingerprint_cache")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get(0)?, row.get(1)?, String::new(), row.get(2)?))
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>()?
     };
     let embedding_rows: Vec<(i64, String, String, String)> = {
-        let mut stmt = conn.prepare(
-            "SELECT rowid, path, model, created_at FROM embedding_cache",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT rowid, path, model, created_at FROM embedding_cache")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?;
@@ -197,6 +310,347 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
     tx.pragma_update(None, "user_version", 1)?;
     tx.commit()?;
     Ok(())
+}
+
+fn execute_op(tx: &Connection, op: &WriteOp) -> rusqlite::Result<()> {
+    match op {
+        WriteOp::Fingerprint {
+            key,
+            size,
+            modified,
+            grid,
+            mean,
+            values,
+        } => {
+            let bytes = encode_i16(values);
+            tx.prepare_cached(
+                "INSERT INTO fingerprint_cache(
+                     path, size, modified, grid, fp_version, mean, data)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(path) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     grid = excluded.grid,
+                     fp_version = excluded.fp_version,
+                     mean = excluded.mean,
+                     data = excluded.data,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![
+                key,
+                *size as i64,
+                modified,
+                *grid as i64,
+                FP_VERSION,
+                *mean as i64,
+                bytes
+            ])?;
+        }
+        WriteOp::Metadata {
+            key,
+            size,
+            modified,
+            metadata,
+        } => {
+            tx.prepare_cached(
+                "INSERT INTO metadata_cache(
+                     path, size, modified, width, height, created, exif_taken,
+                     exif_fields, exif_camera, duration, has_audio)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                 ON CONFLICT(path) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     width = excluded.width,
+                     height = excluded.height,
+                     created = excluded.created,
+                     exif_taken = excluded.exif_taken,
+                     exif_fields = excluded.exif_fields,
+                     exif_camera = excluded.exif_camera,
+                     duration = excluded.duration,
+                     has_audio = excluded.has_audio,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![
+                key,
+                *size as i64,
+                modified,
+                metadata.width.map(|v| v as i64),
+                metadata.height.map(|v| v as i64),
+                metadata.created_ms,
+                metadata.exif_taken_ms,
+                metadata.exif_fields as i64,
+                metadata.exif_camera as i64,
+                metadata.duration_ms.map(|v| v as i64),
+                metadata.has_audio as i64,
+            ])?;
+        }
+        WriteOp::ContentHash {
+            key,
+            size,
+            modified,
+            hash,
+        } => {
+            tx.prepare_cached(
+                "INSERT INTO content_hash_cache(path, size, modified, hash)
+                 VALUES(?1, ?2, ?3, ?4)
+                 ON CONFLICT(path) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     hash = excluded.hash,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![key, *size as i64, modified, hash])?;
+        }
+        WriteOp::MediaSignature {
+            key,
+            params: params_key,
+            size,
+            modified,
+            signature,
+        } => {
+            tx.prepare_cached(
+                "INSERT INTO media_signature_cache(
+                     path, params, size, modified, signature)
+                 VALUES(?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(path, params) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     signature = excluded.signature,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![key, params_key, *size as i64, modified, signature])?;
+        }
+        WriteOp::VideoFrame {
+            key,
+            at_ms,
+            grid,
+            size,
+            modified,
+            mean,
+            values,
+        } => {
+            let bytes = encode_i16(values);
+            tx.prepare_cached(
+                "INSERT INTO video_frame_cache(
+                     path, at_ms, grid, fp_version, size, modified, mean, data)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT(path, at_ms, grid) DO UPDATE SET
+                     fp_version = excluded.fp_version,
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     mean = excluded.mean,
+                     data = excluded.data,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![
+                key,
+                *at_ms,
+                *grid as i64,
+                FP_VERSION,
+                *size as i64,
+                modified,
+                *mean as i64,
+                bytes
+            ])?;
+        }
+        WriteOp::Embedding {
+            key,
+            model,
+            size,
+            modified,
+            values,
+        } => {
+            let bytes = encode_f32(values);
+            tx.prepare_cached(
+                "INSERT INTO embedding_cache(
+                     path, model, size, modified, dims, data)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(path, model) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     dims = excluded.dims,
+                     data = excluded.data,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![
+                key,
+                model,
+                *size as i64,
+                modified,
+                values.len() as i64,
+                bytes
+            ])?;
+        }
+        WriteOp::Flush(_) | WriteOp::Shutdown => {}
+    }
+    Ok(())
+}
+
+fn store_in_memory(memory: &Arc<RwLock<MemoryCache>>, op: &WriteOp) {
+    let Ok(mut mem) = memory.write() else { return };
+    match op {
+        WriteOp::Fingerprint {
+            key,
+            size,
+            modified,
+            grid,
+            mean,
+            values,
+        } => {
+            mem.fingerprints.insert(
+                key.clone(),
+                CachedFingerprint {
+                    size: *size,
+                    modified: *modified,
+                    grid: *grid,
+                    fingerprint: Fingerprint {
+                        size: *grid,
+                        mean: *mean,
+                        values: values.clone(),
+                    },
+                },
+            );
+        }
+        WriteOp::Metadata {
+            key,
+            size,
+            modified,
+            metadata,
+        } => {
+            mem.metadata.insert(
+                key.clone(),
+                CachedMetadataEntry {
+                    size: *size,
+                    modified: *modified,
+                    metadata: metadata.clone(),
+                },
+            );
+        }
+        WriteOp::ContentHash {
+            key,
+            size,
+            modified,
+            hash,
+        } => {
+            mem.content_hashes.insert(
+                key.clone(),
+                CachedText {
+                    size: *size,
+                    modified: *modified,
+                    value: hash.clone(),
+                },
+            );
+        }
+        WriteOp::MediaSignature {
+            key,
+            params,
+            size,
+            modified,
+            signature,
+        } => {
+            mem.media_signatures.insert(
+                (key.clone(), params.clone()),
+                CachedText {
+                    size: *size,
+                    modified: *modified,
+                    value: signature.clone(),
+                },
+            );
+        }
+        WriteOp::VideoFrame { .. } => {}
+        WriteOp::Embedding {
+            key,
+            model,
+            size,
+            modified,
+            values,
+        } => {
+            mem.embeddings.insert(
+                (key.clone(), model.clone()),
+                CachedEmbedding {
+                    size: *size,
+                    modified: *modified,
+                    values: values.clone(),
+                },
+            );
+        }
+        WriteOp::Flush(_) | WriteOp::Shutdown => {}
+    }
+}
+
+fn commit_ops(conn: &mut Connection, ops: &[WriteOp], memory: &Arc<RwLock<MemoryCache>>) {
+    if ops.is_empty() {
+        return;
+    }
+    let result = (|| -> rusqlite::Result<()> {
+        // The writer is the only thread that writes, so the unchecked
+        // transaction needs no runtime borrow guard and lets the prepared
+        // statement cache live on the connection.
+        let tx = conn.unchecked_transaction()?;
+        for op in ops {
+            execute_op(&tx, op)?;
+        }
+        tx.commit()
+    })();
+    if let Err(error) = result {
+        log_writer_error(&error);
+        return;
+    }
+    // Keep the warm in-memory view in sync with the committed batch.
+    for op in ops {
+        store_in_memory(memory, op);
+    }
+}
+
+fn log_writer_error(error: &rusqlite::Error) {
+    umdf_core::log_error(format_args!("UMDF: cache writer error: {error}"));
+}
+
+/// Single writer thread: every insert/update goes through this channel and is
+/// committed in batches, so the extraction workers never wait for SQLite.
+fn writer_loop(path: PathBuf, rx: Receiver<WriteOp>, memory: Arc<RwLock<MemoryCache>>) {
+    let mut conn = match CacheDb::open_connection(&path) {
+        Ok(conn) => conn,
+        Err(error) => {
+            umdf_core::log_error(format_args!(
+                "UMDF: cache writer could not open {}: {error}",
+                path.display()
+            ));
+            return;
+        }
+    };
+    let _ = conn.busy_timeout(Duration::from_secs(30));
+    let mut pending: Vec<WriteOp> = Vec::with_capacity(WRITE_BATCH);
+    loop {
+        match rx.recv_timeout(WRITE_INTERVAL) {
+            Ok(WriteOp::Shutdown) => {
+                commit_ops(&mut conn, &pending, &memory);
+                break;
+            }
+            Ok(WriteOp::Flush(ack)) => {
+                commit_ops(&mut conn, &pending, &memory);
+                pending.clear();
+                let _ = ack.send(());
+            }
+            Ok(op) => {
+                pending.push(op);
+                if pending.len() >= WRITE_BATCH {
+                    commit_ops(&mut conn, &pending, &memory);
+                    pending.clear();
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                if !pending.is_empty() {
+                    commit_ops(&mut conn, &pending, &memory);
+                    pending.clear();
+                }
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                commit_ops(&mut conn, &pending, &memory);
+                break;
+            }
+        }
+    }
 }
 
 impl CacheDb {
@@ -250,14 +704,20 @@ impl CacheDb {
     }
 
     fn open_connection(path: &Path) -> Result<Connection> {
-        let conn = Connection::open(path)
-            .with_context(|| format!("opening {}", path.display()))?;
+        let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
+        // WAL is a database property: set it once in `open_at` instead of
+        // acquiring a lock every time a pooled connection is created.
         conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = NORMAL;
+            "PRAGMA synchronous = NORMAL;
              PRAGMA temp_store = MEMORY;
              PRAGMA busy_timeout = 5000;",
         )?;
+        // Best effort: a filesystem that cannot memory-map the database must
+        // not prevent the cache from opening.
+        let _ = conn.execute_batch(&format!(
+            "PRAGMA mmap_size = {MMAP_BYTES};
+             PRAGMA cache_size = -16384;"
+        ));
         Ok(conn)
     }
 
@@ -279,6 +739,7 @@ impl CacheDb {
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
         let conn = Self::open_connection(&path)?;
+        conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -288,6 +749,7 @@ impl CacheDb {
                  size INTEGER NOT NULL,
                  modified INTEGER,
                  grid INTEGER NOT NULL,
+                 fp_version INTEGER NOT NULL DEFAULT 1,
                  mean INTEGER NOT NULL,
                  data BLOB NOT NULL,
                  created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -342,6 +804,7 @@ impl CacheDb {
                  path TEXT NOT NULL,
                  at_ms INTEGER NOT NULL,
                  grid INTEGER NOT NULL,
+                 fp_version INTEGER NOT NULL DEFAULT 1,
                  size INTEGER NOT NULL,
                  modified INTEGER,
                  mean INTEGER NOT NULL,
@@ -351,11 +814,328 @@ impl CacheDb {
              );",
         )
         .context("creating cache schema")?;
+        // Existing databases predate `fp_version`. Adding the column with a
+        // default of 1 makes every old row miss FP_VERSION (2) once, so the
+        // fingerprints are rebuilt with the new grid/algorithm.
+        let _ = conn.execute_batch(
+            "ALTER TABLE fingerprint_cache
+                 ADD COLUMN fp_version INTEGER NOT NULL DEFAULT 1;",
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE video_frame_cache
+                 ADD COLUMN fp_version INTEGER NOT NULL DEFAULT 1;",
+        );
         migrate_keys_for(&conn, cfg!(windows)).context("migrating cache keys")?;
+
+        // Bounded: if the disk cannot keep up, extraction waits instead of
+        // queueing hundreds of megabytes of fingerprints in RAM.
+        let (write_tx, write_rx) = mpsc::sync_channel(8192);
+        let memory = Arc::new(RwLock::new(MemoryCache::default()));
+        let writer_memory = memory.clone();
+        let writer_path = path.clone();
+        let join = std::thread::Builder::new()
+            .name("umdf-cache-writer".to_string())
+            .spawn(move || writer_loop(writer_path, write_rx, writer_memory))
+            .context("starting cache writer")?;
+
         Ok(Self {
             pool: Mutex::new(vec![conn]),
             path,
+            memory,
+            writer: Mutex::new(Some(WriterHandle {
+                tx: write_tx,
+                join: Some(join),
+            })),
         })
+    }
+
+    fn enqueue(&self, op: WriteOp) {
+        if let Ok(guard) = self.writer.lock() {
+            if let Some(writer) = guard.as_ref() {
+                let _ = writer.tx.send(op);
+            }
+        }
+    }
+
+    /// Commit every queued write and wait for the writer to finish the batch.
+    pub fn flush(&self) {
+        let Ok(guard) = self.writer.lock() else {
+            return;
+        };
+        let Some(writer) = guard.as_ref() else { return };
+        let (ack_tx, ack_rx) = mpsc::channel();
+        if writer.tx.send(WriteOp::Flush(ack_tx)).is_ok() {
+            let _ = ack_rx.recv_timeout(Duration::from_secs(30));
+        }
+    }
+
+    /// Load the cache index and blobs for these files into memory.
+    ///
+    /// A 32x32 fingerprint is 2 KB, so warming a 113k-image library costs
+    /// roughly 226 MB of RAM and removes every fingerprint query from the
+    /// extraction loop. Rows that changed (size, mtime, grid or version) are
+    /// not loaded, so the workers recompute them once.
+    pub fn preload(&self, paths: &[PathBuf], model: Option<&str>) {
+        if paths.is_empty() {
+            return;
+        }
+        // Invalidate the previous warm view before loading the new one, so a
+        // failed preload falls back to SQLite instead of using stale entries.
+        if let Ok(mut current) = self.memory.write() {
+            *current = MemoryCache::default();
+        }
+        let Some(conn) = self.checkout() else { return };
+        let wanted: HashSet<String> = paths.iter().map(|path| cache_key(path)).collect();
+        let mut memory = MemoryCache {
+            active: true,
+            ..MemoryCache::default()
+        };
+        // A fresh or cleared cache has nothing to warm. Skipping the chunked
+        // queries saves a few thousand round trips on the first scan.
+        let any_cached = [
+            "fingerprint_cache",
+            "metadata_cache",
+            "embedding_cache",
+            "content_hash_cache",
+            "media_signature_cache",
+        ]
+        .iter()
+        .any(|table| {
+            conn.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {table})"),
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+                != 0
+        });
+        if !any_cached {
+            if let Ok(mut current) = self.memory.write() {
+                *current = memory;
+            }
+            return;
+        }
+        // Keep `IN (...)` lists well below SQLite's variable limit.
+        const CHUNK: usize = 400;
+        let keys: Vec<&String> = wanted.iter().collect();
+        for chunk in keys.chunks(CHUNK) {
+            let placeholders = vec!["?"; chunk.len()].join(",");
+
+            let sql = format!(
+                "SELECT path, size, modified, grid, mean, data
+                 FROM fingerprint_cache
+                 WHERE path IN ({placeholders}) AND fp_version = ?{}",
+                chunk.len() + 1
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                let mut binds: Vec<&dyn rusqlite::ToSql> = chunk
+                    .iter()
+                    .map(|key| *key as &dyn rusqlite::ToSql)
+                    .collect();
+                binds.push(&FP_VERSION);
+                if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(binds), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, Vec<u8>>(5)?,
+                    ))
+                }) {
+                    for row in rows.flatten() {
+                        let (key, size, modified, grid, mean, bytes) = row;
+                        if grid <= 0 {
+                            continue;
+                        }
+                        let values = decode_i16(&bytes);
+                        if values.len() != (grid as usize).pow(2) {
+                            continue;
+                        }
+                        memory.fingerprints.insert(
+                            key,
+                            CachedFingerprint {
+                                size: size.max(0) as u64,
+                                modified,
+                                grid: grid as u32,
+                                fingerprint: Fingerprint {
+                                    size: grid as u32,
+                                    mean: mean.clamp(i16::MIN as i64, i16::MAX as i64) as i16,
+                                    values,
+                                },
+                            },
+                        );
+                    }
+                }
+            }
+
+            let sql = format!(
+                "SELECT path, size, modified, width, height, created, exif_taken,
+                        exif_fields, exif_camera, duration, has_audio
+                 FROM metadata_cache WHERE path IN ({placeholders})"
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                if let Ok(rows) =
+                    stmt.query_map(rusqlite::params_from_iter(chunk.iter().copied()), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, Option<i64>>(2)?,
+                            row.get::<_, Option<i64>>(3)?,
+                            row.get::<_, Option<i64>>(4)?,
+                            row.get::<_, Option<i64>>(5)?,
+                            row.get::<_, Option<i64>>(6)?,
+                            row.get::<_, i64>(7)?,
+                            row.get::<_, i64>(8)?,
+                            row.get::<_, Option<i64>>(9)?,
+                            row.get::<_, i64>(10)?,
+                        ))
+                    })
+                {
+                    for row in rows.flatten() {
+                        let (
+                            key,
+                            size,
+                            modified,
+                            width,
+                            height,
+                            created,
+                            exif_taken,
+                            exif_fields,
+                            exif_camera,
+                            duration,
+                            has_audio,
+                        ) = row;
+                        memory.metadata.insert(
+                            key,
+                            CachedMetadataEntry {
+                                size: size.max(0) as u64,
+                                modified,
+                                metadata: CachedMetadata {
+                                    width: width.and_then(|v| u32::try_from(v).ok()),
+                                    height: height.and_then(|v| u32::try_from(v).ok()),
+                                    created_ms: created,
+                                    exif_taken_ms: exif_taken,
+                                    exif_fields: exif_fields.max(0) as u32,
+                                    exif_camera: exif_camera != 0,
+                                    duration_ms: duration.and_then(|v| u64::try_from(v).ok()),
+                                    has_audio: has_audio != 0,
+                                },
+                            },
+                        );
+                    }
+                }
+            }
+
+            // Only the active model is useful to this scan; loading every
+            // historical embedding would multiply memory for no benefit.
+            if let Some(active_model) = model {
+                let sql = format!(
+                    "SELECT path, model, size, modified, dims, data
+                     FROM embedding_cache
+                     WHERE path IN ({placeholders}) AND model = ?{}",
+                    chunk.len() + 1
+                );
+                if let Ok(mut stmt) = conn.prepare(&sql) {
+                    let mut binds: Vec<&dyn rusqlite::ToSql> = chunk
+                        .iter()
+                        .map(|key| *key as &dyn rusqlite::ToSql)
+                        .collect();
+                    binds.push(&active_model);
+                    if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(binds), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, i64>(2)?,
+                            row.get::<_, Option<i64>>(3)?,
+                            row.get::<_, i64>(4)?,
+                            row.get::<_, Vec<u8>>(5)?,
+                        ))
+                    }) {
+                        for row in rows.flatten() {
+                            let (key, model, size, modified, dims, bytes) = row;
+                            if dims <= 0 {
+                                continue;
+                            }
+                            let values = decode_f32(&bytes);
+                            if values.len() != dims as usize {
+                                continue;
+                            }
+                            memory.embeddings.insert(
+                                (key, model),
+                                CachedEmbedding {
+                                    size: size.max(0) as u64,
+                                    modified,
+                                    values,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+
+            let sql = format!(
+                "SELECT path, size, modified, hash
+                 FROM content_hash_cache WHERE path IN ({placeholders})"
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                if let Ok(rows) =
+                    stmt.query_map(rusqlite::params_from_iter(chunk.iter().copied()), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, Option<i64>>(2)?,
+                            row.get::<_, String>(3)?,
+                        ))
+        })
+                {
+                    for row in rows.flatten() {
+                        let (key, size, modified, hash) = row;
+                        memory.content_hashes.insert(
+                            key,
+                            CachedText {
+                                size: size.max(0) as u64,
+                                modified,
+                                value: hash,
+                            },
+                        );
+                    }
+                }
+            }
+
+            let sql = format!(
+                "SELECT path, params, size, modified, signature
+                 FROM media_signature_cache WHERE path IN ({placeholders})"
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                if let Ok(rows) =
+                    stmt.query_map(rusqlite::params_from_iter(chunk.iter().copied()), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, i64>(2)?,
+                            row.get::<_, Option<i64>>(3)?,
+                            row.get::<_, String>(4)?,
+                        ))
+                    })
+                {
+                    for row in rows.flatten() {
+                        let (key, params, size, modified, signature) = row;
+                        memory.media_signatures.insert(
+                            (key, params),
+                            CachedText {
+                                size: size.max(0) as u64,
+                                modified,
+                                value: signature,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        if let Ok(mut current) = self.memory.write() {
+            *current = memory;
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -405,6 +1185,7 @@ impl CacheDb {
 
     /// Drop every cached value. The configuration is untouched.
     pub fn clear(&self) -> Result<()> {
+        self.flush();
         let conn = self
             .checkout()
             .ok_or_else(|| anyhow::anyhow!("cache connection unavailable"))?;
@@ -416,6 +1197,9 @@ impl CacheDb {
              DELETE FROM media_signature_cache;
              DELETE FROM video_frame_cache;",
         )?;
+        if let Ok(mut memory) = self.memory.write() {
+            *memory = MemoryCache::default();
+        }
         Ok(())
     }
 
@@ -426,19 +1210,32 @@ impl CacheDb {
         modified: Option<i64>,
         grid: u32,
     ) -> Option<Fingerprint> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .fingerprints
+                    .get(&key)
+                    .filter(|entry| {
+                        entry.size == size && entry.modified == modified && entry.grid == grid
+                    })
+                    .map(|entry| entry.fingerprint.clone());
+            }
+        }
         let conn = self.checkout()?;
-        let (cached_size, cached_modified, cached_grid, mean, bytes) = conn
+        let (cached_size, cached_modified, cached_grid, version, mean, bytes) = conn
             .query_row(
-                "SELECT size, modified, grid, mean, data
+                "SELECT size, modified, grid, fp_version, mean, data
                  FROM fingerprint_cache WHERE path = ?1",
-                params![cache_key(path)],
+                params![key],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
                         row.get::<_, Option<i64>>(1)?,
                         row.get::<_, i64>(2)?,
                         row.get::<_, i64>(3)?,
-                        row.get::<_, Vec<u8>>(4)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, Vec<u8>>(5)?,
                     ))
                 },
             )
@@ -447,6 +1244,7 @@ impl CacheDb {
             || cached_modified != modified
             || cached_grid as u32 != grid
             || cached_grid <= 0
+            || version != FP_VERSION
         {
             return None;
         }
@@ -469,27 +1267,14 @@ impl CacheDb {
         grid: u32,
         fingerprint: &Fingerprint,
     ) {
-        let Some(conn) = self.checkout() else { return };
-        let bytes = encode_i16(&fingerprint.values);
-        let _ = conn.execute(
-            "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(path) DO UPDATE SET
-                 size = excluded.size,
-                 modified = excluded.modified,
-                 grid = excluded.grid,
-                 mean = excluded.mean,
-                 data = excluded.data,
-                 created_at = datetime('now')",
-            params![
-                cache_key(path),
-                size as i64,
+        self.enqueue(WriteOp::Fingerprint {
+            key: cache_key(path),
+            size,
                 modified,
-                grid as i64,
-                fingerprint.mean as i64,
-                bytes
-            ],
-        );
+            grid,
+            mean: fingerprint.mean,
+            values: fingerprint.values.clone(),
+        });
     }
 
     fn get_metadata(
@@ -498,6 +1283,16 @@ impl CacheDb {
         size: u64,
         modified: Option<i64>,
     ) -> Option<CachedMetadata> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .metadata
+                    .get(&key)
+                    .filter(|entry| entry.size == size && entry.modified == modified)
+                    .map(|entry| entry.metadata.clone());
+            }
+        }
         let conn = self.checkout()?;
         let row = conn
             .query_row(
@@ -521,8 +1316,18 @@ impl CacheDb {
                 },
             )
             .ok()?;
-        let (cached_size, cached_modified, width, height, created, exif_taken,
-            exif_fields, exif_camera, duration, has_audio) = row;
+        let (
+            cached_size,
+            cached_modified,
+            width,
+            height,
+            created,
+            exif_taken,
+            exif_fields,
+            exif_camera,
+            duration,
+            has_audio,
+        ) = row;
         if cached_size as u64 != size || cached_modified != modified {
             return None;
         }
@@ -545,52 +1350,37 @@ impl CacheDb {
         modified: Option<i64>,
         metadata: &CachedMetadata,
     ) {
-        let Some(conn) = self.checkout() else { return };
-        let _ = conn.execute(
-            "INSERT INTO metadata_cache(
-                 path, size, modified, width, height, created, exif_taken,
-                 exif_fields, exif_camera, duration, has_audio)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-             ON CONFLICT(path) DO UPDATE SET
-                 size = excluded.size,
-                 modified = excluded.modified,
-                 width = excluded.width,
-                 height = excluded.height,
-                 created = excluded.created,
-                 exif_taken = excluded.exif_taken,
-                 exif_fields = excluded.exif_fields,
-                 exif_camera = excluded.exif_camera,
-                 duration = excluded.duration,
-                 has_audio = excluded.has_audio,
-                 created_at = datetime('now')",
-            params![
-                cache_key(path),
-                size as i64,
+        self.enqueue(WriteOp::Metadata {
+            key: cache_key(path),
+            size,
                 modified,
-                metadata.width.map(|v| v as i64),
-                metadata.height.map(|v| v as i64),
-                metadata.created_ms,
-                metadata.exif_taken_ms,
-                metadata.exif_fields as i64,
-                metadata.exif_camera as i64,
-                metadata.duration_ms.map(|v| v as i64),
-                metadata.has_audio as i64,
-            ],
-        );
+            metadata: metadata.clone(),
+        });
     }
 
-    fn get_content_hash(
-        &self,
-        path: &Path,
-        size: u64,
-        modified: Option<i64>,
-    ) -> Option<String> {
+    fn get_content_hash(&self, path: &Path, size: u64, modified: Option<i64>) -> Option<String> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .content_hashes
+                    .get(&key)
+                    .filter(|entry| entry.size == size && entry.modified == modified)
+                    .map(|entry| entry.value.clone());
+            }
+        }
         let conn = self.checkout()?;
         let (cached_size, cached_modified, hash) = conn
             .query_row(
                 "SELECT size, modified, hash FROM content_hash_cache WHERE path = ?1",
-                params![cache_key(path)],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, String>(2)?)),
+                params![key],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .ok()?;
         if cached_size as u64 == size && cached_modified == modified {
@@ -600,22 +1390,13 @@ impl CacheDb {
         }
     }
 
-    fn put_content_hash(
-        &self,
-        path: &Path,
-        size: u64,
-        modified: Option<i64>,
-        hash: &str,
-    ) {
-        let Some(conn) = self.checkout() else { return };
-        let _ = conn.execute(
-            "INSERT INTO content_hash_cache(path, size, modified, hash)
-             VALUES(?1, ?2, ?3, ?4)
-             ON CONFLICT(path) DO UPDATE SET
-                 size = excluded.size, modified = excluded.modified,
-                 hash = excluded.hash, created_at = datetime('now')",
-            params![cache_key(path), size as i64, modified, hash],
-        );
+    fn put_content_hash(&self, path: &Path, size: u64, modified: Option<i64>, hash: &str) {
+        self.enqueue(WriteOp::ContentHash {
+            key: cache_key(path),
+            size,
+            modified,
+            hash: hash.to_string(),
+        });
     }
 
     fn get_media_signature(
@@ -625,13 +1406,29 @@ impl CacheDb {
         modified: Option<i64>,
         params_key: &str,
     ) -> Option<String> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .media_signatures
+                    .get(&(key, params_key.to_string()))
+                    .filter(|entry| entry.size == size && entry.modified == modified)
+                    .map(|entry| entry.value.clone());
+            }
+        }
         let conn = self.checkout()?;
         let (cached_size, cached_modified, signature) = conn
             .query_row(
                 "SELECT size, modified, signature FROM media_signature_cache
                  WHERE path = ?1 AND params = ?2",
-                params![cache_key(path), params_key],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, String>(2)?)),
+                params![key, params_key],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .ok()?;
         if cached_size as u64 == size && cached_modified == modified {
@@ -649,15 +1446,13 @@ impl CacheDb {
         params_key: &str,
         signature: &str,
     ) {
-        let Some(conn) = self.checkout() else { return };
-        let _ = conn.execute(
-            "INSERT INTO media_signature_cache(path, params, size, modified, signature)
-             VALUES(?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(path, params) DO UPDATE SET
-                 size = excluded.size, modified = excluded.modified,
-                 signature = excluded.signature, created_at = datetime('now')",
-            params![cache_key(path), params_key, size as i64, modified, signature],
-        );
+        self.enqueue(WriteOp::MediaSignature {
+            key: cache_key(path),
+            params: params_key.to_string(),
+            size,
+            modified,
+            signature: signature.to_string(),
+        });
     }
 
     fn get_video_frame(
@@ -670,9 +1465,9 @@ impl CacheDb {
     ) -> Option<Fingerprint> {
         let at_ms = (at_secs * 1000.0).round() as i64;
         let conn = self.checkout()?;
-        let (cached_size, cached_modified, mean, bytes) = conn
+        let (cached_size, cached_modified, version, mean, bytes) = conn
             .query_row(
-                "SELECT size, modified, mean, data FROM video_frame_cache
+                "SELECT size, modified, fp_version, mean, data FROM video_frame_cache
                  WHERE path = ?1 AND at_ms = ?2 AND grid = ?3",
                 params![cache_key(path), at_ms, grid as i64],
                 |row| {
@@ -680,12 +1475,17 @@ impl CacheDb {
                         row.get::<_, i64>(0)?,
                         row.get::<_, Option<i64>>(1)?,
                         row.get::<_, i64>(2)?,
-                        row.get::<_, Vec<u8>>(3)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, Vec<u8>>(4)?,
                     ))
                 },
             )
             .ok()?;
-        if cached_size as u64 != size || cached_modified != modified || grid == 0 {
+        if cached_size as u64 != size
+            || cached_modified != modified
+            || grid == 0
+            || version != FP_VERSION
+        {
             return None;
         }
         let values = decode_i16(&bytes);
@@ -708,26 +1508,15 @@ impl CacheDb {
         grid: u32,
         fingerprint: &Fingerprint,
     ) {
-        let Some(conn) = self.checkout() else { return };
-        let at_ms = (at_secs * 1000.0).round() as i64;
-        let bytes = encode_i16(&fingerprint.values);
-        let _ = conn.execute(
-            "INSERT INTO video_frame_cache(path, at_ms, grid, size, modified, mean, data)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(path, at_ms, grid) DO UPDATE SET
-                 size = excluded.size, modified = excluded.modified,
-                 mean = excluded.mean, data = excluded.data,
-                 created_at = datetime('now')",
-            params![
-                cache_key(path),
-                at_ms,
-                grid as i64,
-                size as i64,
+        self.enqueue(WriteOp::VideoFrame {
+            key: cache_key(path),
+            at_ms: (at_secs * 1000.0).round() as i64,
+            grid,
+            size,
                 modified,
-                fingerprint.mean as i64,
-                bytes
-            ],
-        );
+            mean: fingerprint.mean,
+            values: fingerprint.values.clone(),
+        });
     }
 
     fn get_embedding(
@@ -737,12 +1526,22 @@ impl CacheDb {
         size: u64,
         modified: Option<i64>,
     ) -> Option<Vec<f32>> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .embeddings
+                    .get(&(key, model.to_string()))
+                    .filter(|entry| entry.size == size && entry.modified == modified)
+                    .map(|entry| entry.values.clone());
+            }
+        }
         let conn = self.checkout()?;
         let (cached_size, cached_modified, dims, bytes) = conn
             .query_row(
                 "SELECT size, modified, dims, data
                  FROM embedding_cache WHERE path = ?1 AND model = ?2",
-                params![cache_key(path), model],
+                params![key, model],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
@@ -771,30 +1570,44 @@ impl CacheDb {
         modified: Option<i64>,
         values: &[f32],
     ) {
-        let Some(conn) = self.checkout() else { return };
-        let bytes = encode_f32(values);
-        let _ = conn.execute(
-            "INSERT INTO embedding_cache(path, model, size, modified, dims, data)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(path, model) DO UPDATE SET
-                 size = excluded.size,
-                 modified = excluded.modified,
-                 dims = excluded.dims,
-                 data = excluded.data,
-                 created_at = datetime('now')",
-            params![
-                cache_key(path),
-                model,
-                size as i64,
+        self.enqueue(WriteOp::Embedding {
+            key: cache_key(path),
+            model: model.to_string(),
+            size,
                 modified,
-                values.len() as i64,
-                bytes
-            ],
-        );
+            values: values.to_vec(),
+        });
+    }
+}
+
+impl Drop for CacheDb {
+    fn drop(&mut self) {
+        let Ok(mut guard) = self.writer.lock() else {
+            return;
+        };
+        let Some(mut writer) = guard.take() else {
+            return;
+        };
+        let (ack_tx, ack_rx) = mpsc::channel();
+        if writer.tx.send(WriteOp::Flush(ack_tx)).is_ok() {
+            let _ = ack_rx.recv_timeout(Duration::from_secs(30));
+        }
+        let _ = writer.tx.send(WriteOp::Shutdown);
+        if let Some(join) = writer.join.take() {
+            let _ = join.join();
+        }
     }
 }
 
 impl ScanCache for CacheDb {
+    fn preload(&self, paths: &[PathBuf], model: Option<&str>) {
+        CacheDb::preload(self, paths, model)
+    }
+
+    fn flush(&self) {
+        CacheDb::flush(self)
+    }
+
     fn fingerprint(
         &self,
         path: &Path,
@@ -816,12 +1629,7 @@ impl ScanCache for CacheDb {
         self.put_fingerprint(path, size, modified_ms, grid, fingerprint)
     }
 
-    fn metadata(
-        &self,
-        path: &Path,
-        size: u64,
-        modified_ms: Option<i64>,
-    ) -> Option<CachedMetadata> {
+    fn metadata(&self, path: &Path, size: u64, modified_ms: Option<i64>) -> Option<CachedMetadata> {
         self.get_metadata(path, size, modified_ms)
     }
 
@@ -835,22 +1643,11 @@ impl ScanCache for CacheDb {
         self.put_metadata(path, size, modified_ms, metadata)
     }
 
-    fn content_hash(
-        &self,
-        path: &Path,
-        size: u64,
-        modified_ms: Option<i64>,
-    ) -> Option<String> {
+    fn content_hash(&self, path: &Path, size: u64, modified_ms: Option<i64>) -> Option<String> {
         self.get_content_hash(path, size, modified_ms)
     }
 
-    fn store_content_hash(
-        &self,
-        path: &Path,
-        size: u64,
-        modified_ms: Option<i64>,
-        hash: &str,
-    ) {
+    fn store_content_hash(&self, path: &Path, size: u64, modified_ms: Option<i64>, hash: &str) {
         self.put_content_hash(path, size, modified_ms, hash)
     }
 
@@ -981,10 +1778,7 @@ mod tests {
             normalize_key(r"\\?\UNC\Server\Share\A.JPG", true),
             r"\\server\share\a.jpg"
         );
-        assert_eq!(
-            normalize_key("/Photos/A.JPG", false),
-            "/Photos/A.JPG"
-        );
+        assert_eq!(normalize_key("/Photos/A.JPG", false), "/Photos/A.JPG");
     }
 
     #[test]
@@ -994,15 +1788,17 @@ mod tests {
             let conn = db.checkout().unwrap();
             let data = encode_i16(&[1, 2, 3, 4]);
             conn.execute(
-                "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data, created_at)
-                 VALUES(?1, 10, 100, 2, 0, ?2, '2026-01-01 00:00:00')",
-                params![r"\\?\B:\Photos\A.JPG", data],
+                "INSERT INTO fingerprint_cache(
+                     path, size, modified, grid, fp_version, mean, data, created_at)
+                 VALUES(?1, 10, 100, 2, ?3, 0, ?2, '2026-01-01 00:00:00')",
+                params![r"\\?\B:\Photos\A.JPG", data, FP_VERSION],
             )
             .unwrap();
             conn.execute(
-                "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data, created_at)
-                 VALUES(?1, 10, 100, 2, 0, ?2, '2026-01-02 00:00:00')",
-                params![r"B:/Photos/a.jpg", data],
+                "INSERT INTO fingerprint_cache(
+                     path, size, modified, grid, fp_version, mean, data, created_at)
+                 VALUES(?1, 10, 100, 2, ?3, 0, ?2, '2026-01-02 00:00:00')",
+                params![r"B:/Photos/a.jpg", data, FP_VERSION],
             )
             .unwrap();
             // Same file under two spellings for two different embedding
@@ -1025,7 +1821,9 @@ mod tests {
             conn.pragma_update(None, "user_version", 0).unwrap();
             migrate_keys_for(&conn, true).unwrap();
             let count: i64 = conn
-                .query_row("SELECT COUNT(*) FROM fingerprint_cache", [], |row| row.get(0))
+                .query_row("SELECT COUNT(*) FROM fingerprint_cache", [], |row| {
+                    row.get(0)
+                })
                 .unwrap();
             assert_eq!(count, 1);
             let stored: String = conn
@@ -1067,6 +1865,7 @@ mod tests {
         let file = Path::new("/media/a.mp4");
 
         db.put_content_hash(file, 10, Some(100), "abc123");
+        db.flush();
         assert_eq!(
             db.get_content_hash(file, 10, Some(100)),
             Some("abc123".to_string())
@@ -1074,6 +1873,7 @@ mod tests {
         assert!(db.get_content_hash(file, 10, Some(101)).is_none());
 
         db.put_media_signature(file, 10, Some(100), "audio|5|5", "sig");
+        db.flush();
         assert_eq!(
             db.get_media_signature(file, 10, Some(100), "audio|5|5"),
             Some("sig".to_string())
@@ -1088,6 +1888,7 @@ mod tests {
             values: vec![1, 2, 3, 4],
         };
         db.put_video_frame(file, 10, Some(100), 1.5, 2, &fingerprint);
+        db.flush();
         assert_eq!(
             db.get_video_frame(file, 10, Some(100), 1.5, 2),
             Some(fingerprint)
@@ -1114,6 +1915,7 @@ mod tests {
         };
         assert!(db.get_metadata(image, 10, Some(100)).is_none());
         db.put_metadata(image, 10, Some(100), &metadata);
+        db.flush();
         let back = db.get_metadata(image, 10, Some(100)).unwrap();
         assert_eq!(back.width, Some(1600));
         assert_eq!(back.height, Some(1200));
@@ -1136,6 +1938,7 @@ mod tests {
         };
         assert!(db.get_fingerprint(image, 10, Some(100), 2).is_none());
         db.put_fingerprint(image, 10, Some(100), 2, &fingerprint);
+        db.flush();
         assert_eq!(
             db.get_fingerprint(image, 10, Some(100), 2),
             Some(fingerprint.clone())
@@ -1156,17 +1959,187 @@ mod tests {
         let image = Path::new("/photos/b.jpg");
         let vector = vec![0.1f32, -0.25, 0.5, 0.75];
         db.put_embedding(image, "/models/clip.onnx", 20, None, &vector);
+        db.flush();
         assert_eq!(
             db.get_embedding(image, "/models/clip.onnx", 20, None),
             Some(vector.clone())
         );
-        assert!(db.get_embedding(image, "/models/other.onnx", 20, None).is_none());
-        assert!(db.get_embedding(image, "/models/clip.onnx", 21, None).is_none());
+        assert!(db
+            .get_embedding(image, "/models/other.onnx", 20, None)
+            .is_none());
+        assert!(db
+            .get_embedding(image, "/models/clip.onnx", 21, None)
+            .is_none());
         let stats = db.stats();
         assert_eq!(stats.embeddings, 1);
         assert_eq!(stats.bytes, 16);
         assert_eq!(db.clear().unwrap(), ());
         assert_eq!(db.stats(), CacheStats::default());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn old_schema_is_upgraded_without_losing_the_database() {
+        let path = std::env::temp_dir().join(format!(
+            "umdf-cache-old-schema-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE fingerprint_cache (
+                     path TEXT PRIMARY KEY,
+                     size INTEGER NOT NULL,
+                     modified INTEGER,
+                     grid INTEGER NOT NULL,
+                     mean INTEGER NOT NULL,
+                     data BLOB NOT NULL,
+                     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                 );",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data)
+                 VALUES(?1, 10, 100, 75, 0, ?2)",
+                params![cache_key(Path::new("/photos/a.jpg")), encode_i16(&[1, 2, 3])],
+            )
+            .unwrap();
+        }
+        let db = CacheDb::open_at(path.clone()).unwrap();
+        // The row survives, but its old version is a miss so the new grid is
+        // rebuilt on the next scan.
+        assert!(db
+            .get_fingerprint(Path::new("/photos/a.jpg"), 10, Some(100), 75)
+            .is_none());
+        db.preload(&[PathBuf::from("/photos/a.jpg")], None);
+        assert!(db
+            .get_fingerprint(Path::new("/photos/a.jpg"), 10, Some(100), 75)
+            .is_none());
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn preload_answers_from_memory_and_isolates_paths() {
+        let (path, db) = temp_db("preload");
+        let a = Path::new("/photos/a.jpg");
+        let b = Path::new("/photos/b.jpg");
+        let fp = Fingerprint {
+            size: 2,
+            mean: 1,
+            values: vec![1, 2, 3, 4],
+        };
+        db.put_fingerprint(a, 10, Some(100), 2, &fp);
+        db.put_fingerprint(b, 10, Some(100), 2, &fp);
+        db.flush();
+
+        db.preload(&[a.to_path_buf()], None);
+        assert_eq!(db.get_fingerprint(a, 10, Some(100), 2), Some(fp));
+        // `b` exists in SQLite but was not part of this scan: the warm view
+        // reports a miss so the worker recomputes it.
+        assert!(db.get_fingerprint(b, 10, Some(100), 2).is_none());
+        // A changed file also misses without touching SQLite.
+        assert!(db.get_fingerprint(a, 11, Some(100), 2).is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn old_fingerprint_version_is_ignored_by_preload() {
+        let (path, db) = temp_db("fpversion");
+        let image = Path::new("/photos/a.jpg");
+        {
+            let conn = db.checkout().unwrap();
+            conn.execute(
+                "INSERT INTO fingerprint_cache(
+                     path, size, modified, grid, fp_version, mean, data)
+                 VALUES(?1, 10, 100, 2, 1, 0, ?2)",
+                params![cache_key(image), encode_i16(&[1, 2, 3, 4])],
+            )
+            .unwrap();
+        }
+        db.preload(&[image.to_path_buf()], None);
+        assert!(db.get_fingerprint(image, 10, Some(100), 2).is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn second_scan_is_served_from_the_warm_fingerprint_cache() {
+        let dir = std::env::temp_dir().join(format!(
+            "umdf-warm-scan-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let make = |seed: u32| {
+            image::GrayImage::from_fn(64, 64, |x, y| {
+                image::Luma([((x * 7 + y * 3 + seed * 29) % 256) as u8])
+            })
+        };
+        for (name, seed) in [("a.png", 0), ("b.png", 0), ("c.png", 1), ("d.png", 2)] {
+            make(seed).save(dir.join(name)).unwrap();
+        }
+
+        let (path, db) = temp_db("warm");
+        let mut cfg = umdf_core::ScanConfig::default();
+        cfg.folders = vec![dir.clone()];
+        cfg.pixel_tolerance = 0;
+        cfg.similarity_threshold = 100.0;
+
+        let first = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).expect("first scan");
+        assert_eq!(first.items.len(), 4);
+        assert_eq!(first.stats.fingerprints_computed, 4);
+
+        let second =
+            umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).expect("second scan");
+        assert_eq!(second.items.len(), 4);
+        assert_eq!(second.stats.fingerprints_from_cache, 4);
+        assert_eq!(second.stats.fingerprints_computed, 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Manual benchmark: `cargo test -p umdf-ui warm_scan_benchmark -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn warm_scan_benchmark() {
+        let dir = std::env::temp_dir().join(format!("umdf-warm-bench-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let total = 5_000usize;
+        for i in 0..total {
+            let seed = (i % 97) as u32;
+            let img = image::GrayImage::from_fn(96, 96, |x, y| {
+                image::Luma([((x * 7 + y * 3 + seed * 29) % 256) as u8])
+            });
+            img.save(dir.join(format!("{i:05}.png"))).unwrap();
+        }
+        let (path, db) = temp_db("warm-bench");
+        let mut cfg = umdf_core::ScanConfig::default();
+        cfg.folders = vec![dir.clone()];
+        cfg.pixel_tolerance = 0;
+        cfg.similarity_threshold = 100.0;
+
+        let first = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();
+        let second = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();
+        println!(
+            "files={} first_extract={}ms computed={} second_extract={}ms cached={}",
+            first.items.len(),
+            first.stats.extract_ms,
+            first.stats.fingerprints_computed,
+            second.stats.extract_ms,
+            second.stats.fingerprints_from_cache,
+        );
+        assert_eq!(second.stats.fingerprints_from_cache, total);
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_file(path);
     }
 }
