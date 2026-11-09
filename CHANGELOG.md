@@ -29,6 +29,10 @@ All notable changes to UMDF are documented here. The format follows
   perceptual fingerprint and the model tensor. A bounded worker runs GPU
   batches while the CPU decodes the next chunk; the stage label shows
   `CPU + GPU` while both are active.
+- The comparison stage rejects a pair as soon as it cannot reach the required
+  similarity, precomputes aspect ratios and parallelises pair counting. A
+  90 % threshold on a dissimilar pair now inspects roughly 10 % of the grid
+  instead of all 1,024 cells.
 
 ## [0.5.2] - 2026-11-09
 

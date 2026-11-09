@@ -141,22 +141,72 @@ pub fn similarity(a: &Fingerprint, b: &Fingerprint, metric: Metric, tolerance: u
     }
 }
 
+/// Similarity with an early exit for metrics where a cheap upper bound is
+/// available. The result is only guaranteed to be exact when it is at or above
+/// `min_percent`; below it the function may return `0.0`.
+pub fn similarity_at_least(
+    a: &Fingerprint,
+    b: &Fingerprint,
+    metric: Metric,
+    tolerance: u8,
+    min_percent: f32,
+) -> Option<f32> {
+    debug_assert_eq!(a.size, b.size);
+    match metric {
+        Metric::PixelTolerance => Some(pixel_tolerance_similarity_at_least(
+            a,
+            b,
+            tolerance,
+            min_percent,
+        )),
+        _ => similarity(a, b, metric, tolerance),
+    }
+}
+
 /// Percentage of cells whose *raw* grey value differs by at most `tolerance`.
 ///
 /// Pixel-difference tolerance: resample both pictures and count how many
 /// cells are within the tolerance. UMDF compares luminance.
 pub fn pixel_tolerance_similarity(a: &Fingerprint, b: &Fingerprint, tolerance: u8) -> f32 {
+    pixel_tolerance_similarity_at_least(a, b, tolerance, 0.0)
+}
+
+/// Like [`pixel_tolerance_similarity`], but returns `0.0` as soon as the pair
+/// cannot reach `min_percent`.
+///
+/// Most pairs in a large library are dissimilar. Counting all 1,024 cells for
+/// every one of billions of pairs is the dominant cost of the comparison
+/// stage; stopping after the allowed number of mismatches makes the common
+/// case roughly one order of magnitude cheaper.
+pub fn pixel_tolerance_similarity_at_least(
+    a: &Fingerprint,
+    b: &Fingerprint,
+    tolerance: u8,
+    min_percent: f32,
+) -> f32 {
     let n = a.values.len().min(b.values.len());
     if n == 0 {
         return 100.0;
     }
-    let tol = tolerance as i16;
+    let tol = tolerance as i32;
+    let allowed_mismatches = if min_percent <= 0.0 {
+        usize::MAX
+    } else {
+        (((100.0 - min_percent.clamp(0.0, 100.0)) / 100.0) * n as f32).floor()
+            as usize
+    };
     let mut matching = 0usize;
+    let mut mismatches = 0usize;
     for i in 0..n {
         let da = (a.values[i] + a.mean) as i32;
         let db = (b.values[i] + b.mean) as i32;
-        if (da - db).abs() <= tol as i32 {
+        if (da - db).abs() <= tol {
             matching += 1;
+        } else {
+            mismatches += 1;
+            if mismatches > allowed_mismatches {
+                return 0.0;
+            }
         }
     }
     (matching as f32 / n as f32) * 100.0
@@ -320,6 +370,24 @@ mod tests {
         // never reaches its acceptance threshold. Verify it on a full grid.
         let big = half_half();
         assert_eq!(similarity(&big, &big, Metric::LegacySignAgreement, 0), Some(100.0));
+    }
+
+    #[test]
+    fn tolerance_early_exit_matches_the_full_score_above_threshold() {
+        let a = half_half();
+        let mut b = a.clone();
+        // 10 of 400 cells differ: 97.5 %, above a 90 % threshold.
+        for value in b.values.iter_mut().take(10) {
+            *value = -100;
+        }
+        let full = pixel_tolerance_similarity(&a, &b, 0);
+        assert!((full - 97.5).abs() < 1e-3);
+        assert_eq!(pixel_tolerance_similarity_at_least(&a, &b, 0, 90.0), full);
+
+        // Far below the threshold: the early exit avoids scanning all cells.
+        let c = fp(vec![100; 400], 20);
+        assert!(pixel_tolerance_similarity(&a, &c, 0) < 60.0);
+        assert_eq!(pixel_tolerance_similarity_at_least(&a, &c, 0, 90.0), 0.0);
     }
 
     #[test]

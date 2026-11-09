@@ -897,42 +897,66 @@ fn run_inner(
             .filter(|i| i.fingerprint.is_some() && i.width.is_some() && i.height.is_some())
             .map(|i| i.id)
             .collect();
+        // Aspect ratios are recomputed for every pair otherwise: billions of
+        // divisions in a large library.
+        let ratios: Vec<f64> = items
+            .iter()
+            .map(|item| match (item.width, item.height) {
+                (Some(w), Some(h)) => aspect_ratio(w, h),
+                _ => 1.0,
+            })
+            .collect();
         // Sort by aspect ratio so the 1.5x gate becomes a sliding window.
         index.sort_by(|a, b| {
-            let ra = aspect_ratio(items[*a].width.unwrap(), items[*a].height.unwrap());
-            let rb = aspect_ratio(items[*b].width.unwrap(), items[*b].height.unwrap());
-            ra.partial_cmp(&rb).unwrap_or(std::cmp::Ordering::Equal)
+            ratios[*a]
+                .partial_cmp(&ratios[*b])
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        let embedding_threshold = cfg
+            .embeddings
+            .as_ref()
+            .map(|e| e.threshold * 100.0)
+            .unwrap_or(cfg.similarity_threshold);
 
         // Count compatible pairs first (cheap, cancellable) so the progress
         // bar has a total, then compare them streaming. This avoids building a
         // Vec with potentially billions of pairs and keeps Stop responsive.
-        let mut total_pairs: u64 = 0;
-        'count: for i in 0..index.len() {
-            wait_if_paused(pause_ref, cancel_ref);
-            if cfg.is_cancelled() {
-                break;
-            }
-            let ai = index[i];
-            let ra = aspect_ratio(items[ai].width.unwrap(), items[ai].height.unwrap());
-            let mut inner = 0usize;
-            for &bj in &index[i + 1..] {
-                inner += 1;
-                if inner % 4096 == 0 && cfg.is_cancelled() {
-                    break 'count;
+        // The count is parallel because a large library can have billions of
+        // outer windows even before any pixel is compared.
+        let total_pairs: u64 = (0..index.len())
+            .into_par_iter()
+            .map(|i| {
+                if cfg.is_cancelled() {
+                    return 0;
                 }
-                let rb = aspect_ratio(items[bj].width.unwrap(), items[bj].height.unwrap());
-                if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
-                    break;
+                let ai = index[i];
+                let ra = ratios[ai];
+                let ai_hash = items[ai].content_hash.as_deref();
+                let mut count = 0u64;
+                let mut inner = 0usize;
+                for &bj in &index[i + 1..] {
+                    inner += 1;
+                    if inner % 4096 == 0 {
+                        wait_if_paused(pause_ref, cancel_ref);
+                        if cfg.is_cancelled() {
+                            break;
+                        }
+                    }
+                    let rb = ratios[bj];
+                    if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
+                        break;
+                    }
+                    if let Some(hash) = ai_hash {
+                        if items[bj].content_hash.as_deref() == Some(hash) {
+                            continue;
+                        }
+                    }
+                    count += 1;
                 }
-                if items[ai].content_hash.is_some()
-                    && items[ai].content_hash == items[bj].content_hash
-                {
-                    continue;
-                }
-                total_pairs += 1;
-            }
-        }
+                count
+            })
+            .sum();
 
         emit(
             tx,
@@ -955,50 +979,50 @@ fn run_inner(
                     return (0, local);
                 }
                 let ai = index[i];
-                let ra = aspect_ratio(items[ai].width.unwrap(), items[ai].height.unwrap());
+                let ra = ratios[ai];
+                let ai_hash = items[ai].content_hash.as_deref();
+                let ai_embedding = items[ai].embedding.as_ref();
+                let ai_fingerprint = items[ai].fingerprint.as_ref();
                 let mut seen = 0usize;
                 for &bj in &index[i + 1..] {
-                    let rb = aspect_ratio(items[bj].width.unwrap(), items[bj].height.unwrap());
+                    let rb = ratios[bj];
                     if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
                         break;
                     }
-                    if items[ai].content_hash.is_some()
-                        && items[ai].content_hash == items[bj].content_hash
-                    {
-                        continue;
+                    if let Some(hash) = ai_hash {
+                        if items[bj].content_hash.as_deref() == Some(hash) {
+                            continue;
+                        }
                     }
                     seen += 1;
                     if seen % 256 == 0 && cfg.is_cancelled() {
                         break;
                     }
                     counted += 1;
-                    let uses_embeddings =
-                        items[ai].embedding.is_some() && items[bj].embedding.is_some();
-                    let sim = if let (Some(ea), Some(eb)) =
-                        (items[ai].embedding.as_ref(), items[bj].embedding.as_ref())
+                    let bj_embedding = items[bj].embedding.as_ref();
+                    let (sim, threshold) = if let (Some(ea), Some(eb)) =
+                        (ai_embedding, bj_embedding)
                     {
-                        fingerprint::cosine_percent(ea, eb)
+                        (
+                            fingerprint::cosine_percent(ea, eb),
+                            embedding_threshold,
+                        )
                     } else {
-                        let (Some(fa), Some(fb)) = (
-                            items[ai].fingerprint.as_ref(),
-                            items[bj].fingerprint.as_ref(),
-                        ) else {
-                            continue;
-                        };
-                        let Some(similarity) =
-                            fingerprint::similarity(fa, fb, cfg.metric, cfg.pixel_tolerance)
+                        let (Some(fa), Some(fb)) = (ai_fingerprint, items[bj].fingerprint.as_ref())
                         else {
                             continue;
                         };
-                        similarity
-                    };
-                    let threshold = if uses_embeddings {
-                        cfg.embeddings
-                            .as_ref()
-                            .map(|e| e.threshold * 100.0)
-                            .unwrap_or(cfg.similarity_threshold)
-                    } else {
-                        cfg.similarity_threshold
+                        let threshold = cfg.similarity_threshold;
+                        let Some(similarity) = fingerprint::similarity_at_least(
+                            fa,
+                            fb,
+                            cfg.metric,
+                            cfg.pixel_tolerance,
+                            threshold,
+                        ) else {
+                            continue;
+                        };
+                        (similarity, threshold)
                     };
                     if sim >= threshold {
                         local.push(Match {
