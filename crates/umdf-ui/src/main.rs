@@ -318,6 +318,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(ui) = ui_handle.upgrade() {
                 save_ui_settings(&ui, &settings, &folders);
             }
+            let _ = slint::quit_event_loop();
             slint::CloseRequestResponse::HideWindow
         });
     }
