@@ -153,14 +153,68 @@ pub fn similarity_at_least(
 ) -> Option<f32> {
     debug_assert_eq!(a.size, b.size);
     match metric {
-        Metric::PixelTolerance => Some(pixel_tolerance_similarity_at_least(
+        Metric::PixelTolerance => Some(structured_pixel_tolerance_similarity_at_least(
             a,
             b,
             tolerance,
             min_percent,
         )),
+        Metric::Ssim => {
+            // SSIM's stabilisation constant makes two flat grids look almost
+            // identical; require some real contrast first.
+            if fingerprint_stddev(a) < 3.0 || fingerprint_stddev(b) < 3.0 {
+                Some(0.0)
+            } else {
+                Some(ssim(a, b))
+            }
+        }
         _ => similarity(a, b, metric, tolerance),
     }
+}
+
+/// `dpf` plus a structural sanity check.
+///
+/// A raw pixel-tolerance score alone accepts any two nearly black (or nearly
+/// flat) images: almost every cell is within ten grey levels simply because
+/// both images have no contrast. Requiring a minimum variance and a positive
+/// Pearson correlation removes those false positives while keeping brightness
+/// and contrast changes (which do not alter the correlation) acceptable.
+pub fn structured_pixel_tolerance_similarity_at_least(
+    a: &Fingerprint,
+    b: &Fingerprint,
+    tolerance: u8,
+    min_percent: f32,
+) -> f32 {
+    let score = pixel_tolerance_similarity_at_least(a, b, tolerance, min_percent);
+    if score < min_percent {
+        return 0.0;
+    }
+    if fingerprint_stddev(a) < 3.0 || fingerprint_stddev(b) < 3.0 {
+        return 0.0;
+    }
+    if pearson(a, b) < 40.0 {
+        return 0.0;
+    }
+    score
+}
+
+/// Standard deviation of the mean-normalised grid (contrast proxy).
+pub fn fingerprint_stddev(fp: &Fingerprint) -> f64 {
+    let n = fp.values.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let mean = fp.values.iter().map(|v| *v as f64).sum::<f64>() / n as f64;
+    let variance = fp
+        .values
+        .iter()
+        .map(|v| {
+            let delta = *v as f64 - mean;
+            delta * delta
+        })
+        .sum::<f64>()
+        / n as f64;
+    variance.sqrt()
 }
 
 /// Percentage of cells whose *raw* grey value differs by at most `tolerance`.
@@ -338,10 +392,9 @@ pub fn pearson(a: &Fingerprint, b: &Fingerprint) -> f32 {
         saa += x * x;
         sbb += y * y;
     }
-    if saa == 0.0 && sbb == 0.0 {
-        return 100.0;
-    }
-    if saa == 0.0 || sbb == 0.0 {
+    // Two flat grids have no structure to correlate. Treating them as
+    // identical was the source of the dark-image false positives.
+    if saa < 1e-9 || sbb < 1e-9 {
         return 0.0;
     }
     let r = sab / (saa.sqrt() * sbb.sqrt());
@@ -388,6 +441,49 @@ mod tests {
         let c = fp(vec![100; 400], 20);
         assert!(pixel_tolerance_similarity(&a, &c, 0) < 60.0);
         assert_eq!(pixel_tolerance_similarity_at_least(&a, &c, 0, 90.0), 0.0);
+    }
+
+    #[test]
+    fn flat_dark_images_are_not_perceptual_matches() {
+        // Two nearly black photos: almost every raw cell is within 10 levels,
+        // but there is no structure to compare.
+        let a = Fingerprint {
+            size: 32,
+            mean: 7,
+            values: vec![0; 1024],
+        };
+        let b = Fingerprint {
+            size: 32,
+            mean: 8,
+            values: vec![0; 1024],
+        };
+        assert_eq!(pixel_tolerance_similarity(&a, &b, 10), 100.0);
+        assert_eq!(pearson(&a, &b), 0.0);
+        assert_eq!(
+            structured_pixel_tolerance_similarity_at_least(&a, &b, 10, 90.0),
+            0.0
+        );
+    }
+
+    #[test]
+    fn structured_pair_survives_brightness_changes() {
+        let values: Vec<i16> = (0..1024)
+            .map(|i| ((i * 37) % 120) as i16 - 60)
+            .collect();
+        let a = Fingerprint {
+            size: 32,
+            mean: 100,
+            values: values.clone(),
+        };
+        let b = Fingerprint {
+            size: 32,
+            mean: 105,
+            values,
+        };
+        assert!(fingerprint_stddev(&a) > 20.0);
+        assert!(pearson(&a, &b) > 99.0);
+        let score = structured_pixel_tolerance_similarity_at_least(&a, &b, 10, 90.0);
+        assert_eq!(score, 100.0);
     }
 
     #[test]

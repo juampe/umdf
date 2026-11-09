@@ -26,11 +26,44 @@
 //! }
 //! ```
 
-/// Write a diagnostic to stderr without panicking when the process has no
-/// console (for example a Windows GUI application).
+/// Write a diagnostic to stderr and to `umdf.log` next to the configuration.
+///
+/// A Windows GUI has no console, so stderr alone loses every warning. The log
+/// file also records the phase timings of each scan, which makes it possible
+/// to tell a slow walk, extraction, comparison or grouping apart.
 pub fn log_error(args: std::fmt::Arguments<'_>) {
     use std::io::Write;
-    let _ = writeln!(std::io::stderr(), "{args}");
+    let text = format!("{args}");
+    let _ = writeln!(std::io::stderr(), "{text}");
+
+    let path = log_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{timestamp}] {text}");
+    }
+}
+
+fn log_path() -> std::path::PathBuf {
+    #[cfg(windows)]
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("APPDATA").map(std::path::PathBuf::from));
+    #[cfg(not(windows))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".config"))
+        });
+    base.unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("umdf")
+        .join("umdf.log")
 }
 
 pub mod action;

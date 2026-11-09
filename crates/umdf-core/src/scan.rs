@@ -135,6 +135,26 @@ pub trait ScanCache: Send + Sync {
     ) {
     }
 
+    /// Reason why a previous decode of this unchanged file failed. Caching
+    /// failures prevents corrupt/empty files from being retried on every scan.
+    fn failure(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn store_failure(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _reason: &str,
+    ) {
+    }
+
     /// Cached whole-file SHA-256 for an unchanged file.
     fn content_hash(
         &self,
@@ -919,64 +939,59 @@ fn run_inner(
             .map(|e| e.threshold * 100.0)
             .unwrap_or(cfg.similarity_threshold);
 
-        // Count compatible pairs first (cheap, cancellable) so the progress
-        // bar has a total, then compare them streaming. This avoids building a
-        // Vec with potentially billions of pairs and keeps Stop responsive.
-        // The count is parallel because a large library can have billions of
-        // outer windows even before any pixel is compared.
-        let total_pairs: u64 = (0..index.len())
-            .into_par_iter()
-            .map(|i| {
-                if cfg.is_cancelled() {
-                    return 0;
-                }
-                let ai = index[i];
-                let ra = ratios[ai];
-                let ai_hash = items[ai].content_hash.as_deref();
-                let mut count = 0u64;
-                let mut inner = 0usize;
-                for &bj in &index[i + 1..] {
-                    inner += 1;
-                    if inner % 4096 == 0 {
-                        wait_if_paused(pause_ref, cancel_ref);
-                        if cfg.is_cancelled() {
-                            break;
-                        }
-                    }
-                    let rb = ratios[bj];
-                    if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
-                        break;
-                    }
-                    if let Some(hash) = ai_hash {
-                        if items[bj].content_hash.as_deref() == Some(hash) {
-                            continue;
-                        }
-                    }
-                    count += 1;
-                }
-                count
-            })
-            .sum();
-
+        // Upper bound for the progress bar. Counting the exact number of
+        // compatible pairs first would traverse every window twice; on a large
+        // library that is billions of iterations before any pixel is compared.
+        let max_pairs = (index.len() as u64)
+            .saturating_mul(index.len().saturating_sub(1) as u64)
+            / 2;
         emit(
             tx,
             Progress::Comparing {
                 done: 0,
-                total: total_pairs as usize,
+                total: max_pairs as usize,
             },
         );
+
+        // The comparison can run for minutes on a large library. A small
+        // progress thread turns the atomic counter into UI updates instead of
+        // leaving the bar at 0 until the whole stage finishes.
+        let compared = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let progress_stop = std::sync::Arc::new(AtomicBool::new(false));
+        let progress_thread = if max_pairs > 2_000_000 {
+            tx.cloned().map(|tx| {
+                let compared = compared.clone();
+                let stop = progress_stop.clone();
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        let done = compared.load(Ordering::Relaxed) as usize;
+                        if tx
+                            .send(Progress::Comparing {
+                                done,
+                                total: max_pairs as usize,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                })
+            })
+        } else {
+            None
+        };
 
         // Parallelise over the outer index (one Rayon region) instead of
         // spawning a parallel region per window. Nested regions scale badly
         // once the pool exceeds the number of chunks.
-        let results: Vec<(u64, Vec<Match>)> = (0..index.len())
+        let results: Vec<Vec<Match>> = (0..index.len())
             .into_par_iter()
             .map(|i| {
                 let mut local: Vec<Match> = Vec::new();
-                let mut counted: u64 = 0;
                 wait_if_paused(pause_ref, cancel_ref);
                 if cfg.is_cancelled() {
-                    return (0, local);
+                    return local;
                 }
                 let ai = index[i];
                 let ra = ratios[ai];
@@ -984,6 +999,7 @@ fn run_inner(
                 let ai_embedding = items[ai].embedding.as_ref();
                 let ai_fingerprint = items[ai].fingerprint.as_ref();
                 let mut seen = 0usize;
+                let mut pending: u64 = 0;
                 for &bj in &index[i + 1..] {
                     let rb = ratios[bj];
                     if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
@@ -998,7 +1014,11 @@ fn run_inner(
                     if seen % 256 == 0 && cfg.is_cancelled() {
                         break;
                     }
-                    counted += 1;
+                    pending += 1;
+                    if pending >= 1024 {
+                        compared.fetch_add(pending, Ordering::Relaxed);
+                        pending = 0;
+                    }
                     let bj_embedding = items[bj].embedding.as_ref();
                     let (sim, threshold) = if let (Some(ea), Some(eb)) =
                         (ai_embedding, bj_embedding)
@@ -1033,23 +1053,29 @@ fn run_inner(
                         });
                     }
                 }
-                (counted, local)
+                compared.fetch_add(pending, Ordering::Relaxed);
+                local
             })
             .collect();
 
-        let mut compared: u64 = 0;
-        for (counted, found) in results {
-            compared += counted;
+        progress_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = progress_thread {
+            let _ = handle.join();
+        }
+        let compared_total = compared.load(Ordering::Relaxed);
+        for found in results {
             matches.extend(found);
         }
+        // The exact compatible-pair count is only known after the pass; fill
+        // the comparison segment of the bar once it has finished.
         emit(
             tx,
             Progress::Comparing {
-                done: compared as usize,
-                total: total_pairs as usize,
+                done: max_pairs as usize,
+                total: max_pairs as usize,
             },
         );
-        stats.pairs_compared = compared;
+        stats.pairs_compared = compared_total;
     }
 
     stats.compare_ms = compare_started.elapsed().as_millis();
@@ -1084,6 +1110,17 @@ fn run_inner(
         .iter()
         .filter(|item| item.extract_error.is_some())
         .count();
+    crate::log_error(format_args!(
+        "UMDF: scan complete: files={} extract={}ms hash={}ms compare={}ms group={}ms total={}ms pairs={} errors={}",
+        stats.files_scanned,
+        stats.extract_ms,
+        stats.hash_ms,
+        stats.compare_ms,
+        stats.group_ms,
+        stats.elapsed_ms,
+        stats.pairs_compared,
+        stats.extract_errors,
+    ));
     emit(tx, Progress::Finished);
 
     Ok(ScanReport {
@@ -1200,6 +1237,12 @@ fn extract_item(
                         }
                 }
                 }
+            } else if let Some(reason) =
+                cache.and_then(|cache| cache.failure(&cand.path, cand.size, modified_ms))
+            {
+                // An empty or corrupt file is not decoded again until its
+                // size or modification time changes.
+                item.extract_error = Some(reason);
             } else {
                 match fingerprint::load_oriented(&cand.path) {
                     Ok(image) => {
@@ -1232,7 +1275,18 @@ fn extract_item(
                             }
                         }
                     }
-                    Err(e) => item.extract_error = Some(e.to_string()),
+                    Err(e) => {
+                        let reason = e.to_string();
+                        if let Some(cache) = cache {
+                            cache.store_failure(
+                                &cand.path,
+                                cand.size,
+                                modified_ms,
+                                &reason,
+                            );
+                        }
+                        item.extract_error = Some(reason);
+                    }
                 }
             }
         }

@@ -74,6 +74,8 @@ struct MemoryCache {
     embeddings: HashMap<(String, String), CachedEmbedding>,
     content_hashes: HashMap<String, CachedText>,
     media_signatures: HashMap<(String, String), CachedText>,
+    video_frames: HashMap<(String, i64, u32), CachedFingerprint>,
+    failures: HashMap<String, CachedText>,
 }
 
 /// One value queued for the single writer thread.
@@ -91,6 +93,12 @@ enum WriteOp {
         size: u64,
         modified: Option<i64>,
         metadata: CachedMetadata,
+    },
+    Failure {
+        key: String,
+        size: u64,
+        modified: Option<i64>,
+        reason: String,
     },
     ContentHash {
         key: String,
@@ -384,6 +392,23 @@ fn execute_op(tx: &Connection, op: &WriteOp) -> rusqlite::Result<()> {
                 metadata.has_audio as i64,
             ])?;
         }
+        WriteOp::Failure {
+            key,
+            size,
+            modified,
+            reason,
+        } => {
+            tx.prepare_cached(
+                "INSERT INTO failure_cache(path, size, modified, reason)
+                 VALUES(?1, ?2, ?3, ?4)
+                 ON CONFLICT(path) DO UPDATE SET
+                     size = excluded.size,
+                     modified = excluded.modified,
+                     reason = excluded.reason,
+                     created_at = datetime('now')",
+            )?
+            .execute(params![key, *size as i64, modified, reason])?;
+        }
         WriteOp::ContentHash {
             key,
             size,
@@ -526,6 +551,21 @@ fn store_in_memory(memory: &Arc<RwLock<MemoryCache>>, op: &WriteOp) {
                 },
             );
         }
+        WriteOp::Failure {
+            key,
+            size,
+            modified,
+            reason,
+        } => {
+            mem.failures.insert(
+                key.clone(),
+                CachedText {
+                    size: *size,
+                    modified: *modified,
+                    value: reason.clone(),
+                },
+            );
+        }
         WriteOp::ContentHash {
             key,
             size,
@@ -557,7 +597,29 @@ fn store_in_memory(memory: &Arc<RwLock<MemoryCache>>, op: &WriteOp) {
                 },
             );
         }
-        WriteOp::VideoFrame { .. } => {}
+        WriteOp::VideoFrame {
+            key,
+            at_ms,
+            grid,
+            size,
+            modified,
+            mean,
+            values,
+        } => {
+            mem.video_frames.insert(
+                (key.clone(), *at_ms, *grid),
+                CachedFingerprint {
+                    size: *size,
+                    modified: *modified,
+                    grid: *grid,
+                    fingerprint: Fingerprint {
+                        size: *grid,
+                        mean: *mean,
+                        values: values.clone(),
+                    },
+                },
+            );
+        }
         WriteOp::Embedding {
             key,
             model,
@@ -784,6 +846,13 @@ impl CacheDb {
              );
              CREATE INDEX IF NOT EXISTS metadata_cache_created
                  ON metadata_cache(created_at);
+             CREATE TABLE IF NOT EXISTS failure_cache (
+                 path TEXT PRIMARY KEY,
+                 size INTEGER NOT NULL,
+                 modified INTEGER,
+                 reason TEXT NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
              CREATE TABLE IF NOT EXISTS content_hash_cache (
                  path TEXT PRIMARY KEY,
                  size INTEGER NOT NULL,
@@ -879,13 +948,39 @@ impl CacheDb {
         if paths.is_empty() {
             return;
         }
+        let started = std::time::Instant::now();
+        let wanted: HashSet<String> = paths.iter().map(|path| cache_key(path)).collect();
+        // Re-scans in the same session already have the warm view. Keep it
+        // unless the folder changed substantially; missing entries still miss
+        // and are recomputed normally.
+        if let Ok(current) = self.memory.read() {
+            if current.active {
+                let covered = wanted
+                    .iter()
+                    .filter(|key| {
+                        current.fingerprints.contains_key(*key)
+                            || current.metadata.contains_key(*key)
+                            || current.failures.contains_key(*key)
+                    })
+                    .count();
+                if covered * 10 >= wanted.len() * 9 {
+                    drop(current);
+                    umdf_core::log_error(format_args!(
+                        "UMDF: cache preload: reusing warm view for {} files ({} cached), {} ms",
+                        wanted.len(),
+                        covered,
+                        started.elapsed().as_millis()
+                    ));
+                    return;
+                }
+            }
+        }
         // Invalidate the previous warm view before loading the new one, so a
         // failed preload falls back to SQLite instead of using stale entries.
         if let Ok(mut current) = self.memory.write() {
             *current = MemoryCache::default();
         }
         let Some(conn) = self.checkout() else { return };
-        let wanted: HashSet<String> = paths.iter().map(|path| cache_key(path)).collect();
         let mut memory = MemoryCache {
             active: true,
             ..MemoryCache::default()
@@ -898,6 +993,8 @@ impl CacheDb {
             "embedding_cache",
             "content_hash_cache",
             "media_signature_cache",
+            "video_frame_cache",
+            "failure_cache",
         ]
         .iter()
         .any(|table| {
@@ -913,6 +1010,11 @@ impl CacheDb {
             if let Ok(mut current) = self.memory.write() {
                 *current = memory;
             }
+            umdf_core::log_error(format_args!(
+                "UMDF: cache preload: {} candidates, empty cache, {} ms",
+                paths.len(),
+                started.elapsed().as_millis()
+            ));
             return;
         }
         // Keep `IN (...)` lists well below SQLite's variable limit.
@@ -1104,6 +1206,84 @@ impl CacheDb {
             }
 
             let sql = format!(
+                "SELECT path, size, modified, reason
+                 FROM failure_cache WHERE path IN ({placeholders})"
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                if let Ok(rows) =
+                    stmt.query_map(rusqlite::params_from_iter(chunk.iter().copied()), |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, Option<i64>>(2)?,
+                            row.get::<_, String>(3)?,
+                        ))
+                    })
+                {
+                    for row in rows.flatten() {
+                        let (key, size, modified, reason) = row;
+                        memory.failures.insert(
+                            key,
+                            CachedText {
+                                size: size.max(0) as u64,
+                                modified,
+                                value: reason,
+                            },
+                        );
+                    }
+                }
+            }
+
+            let sql = format!(
+                "SELECT path, at_ms, grid, size, modified, mean, data
+                 FROM video_frame_cache
+                 WHERE path IN ({placeholders}) AND fp_version = ?{}",
+                chunk.len() + 1
+            );
+            if let Ok(mut stmt) = conn.prepare(&sql) {
+                let mut binds: Vec<&dyn rusqlite::ToSql> = chunk
+                    .iter()
+                    .map(|key| *key as &dyn rusqlite::ToSql)
+                    .collect();
+                binds.push(&FP_VERSION);
+                if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(binds), |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, Option<i64>>(4)?,
+                        row.get::<_, i64>(5)?,
+                        row.get::<_, Vec<u8>>(6)?,
+                    ))
+                }) {
+                    for row in rows.flatten() {
+                        let (key, at_ms, grid, size, modified, mean, bytes) = row;
+                        if grid <= 0 {
+                            continue;
+                        }
+                        let values = decode_i16(&bytes);
+                        if values.len() != (grid as usize).pow(2) {
+                            continue;
+                        }
+                        memory.video_frames.insert(
+                            (key, at_ms, grid as u32),
+                            CachedFingerprint {
+                                size: size.max(0) as u64,
+                                modified,
+                                grid: grid as u32,
+                                fingerprint: Fingerprint {
+                                    size: grid as u32,
+                                    mean: mean.clamp(i16::MIN as i64, i16::MAX as i64) as i16,
+                                    values,
+                                },
+                            },
+                        );
+                    }
+                }
+            }
+
+            let sql = format!(
                 "SELECT path, params, size, modified, signature
                  FROM media_signature_cache WHERE path IN ({placeholders})"
             );
@@ -1133,6 +1313,14 @@ impl CacheDb {
                 }
             }
         }
+        umdf_core::log_error(format_args!(
+            "UMDF: cache preload: {} candidates, {} fingerprints, {} metadata, {} embeddings, {} ms",
+            paths.len(),
+            memory.fingerprints.len(),
+            memory.metadata.len(),
+            memory.embeddings.len(),
+            started.elapsed().as_millis()
+        ));
         if let Ok(mut current) = self.memory.write() {
             *current = memory;
         }
@@ -1193,6 +1381,7 @@ impl CacheDb {
             "DELETE FROM fingerprint_cache;
              DELETE FROM embedding_cache;
              DELETE FROM metadata_cache;
+             DELETE FROM failure_cache;
              DELETE FROM content_hash_cache;
              DELETE FROM media_signature_cache;
              DELETE FROM video_frame_cache;",
@@ -1358,6 +1547,47 @@ impl CacheDb {
         });
     }
 
+    fn get_failure(&self, path: &Path, size: u64, modified: Option<i64>) -> Option<String> {
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .failures
+                    .get(&key)
+                    .filter(|entry| entry.size == size && entry.modified == modified)
+                    .map(|entry| entry.value.clone());
+            }
+        }
+        let conn = self.checkout()?;
+        let (cached_size, cached_modified, reason) = conn
+            .query_row(
+                "SELECT size, modified, reason FROM failure_cache WHERE path = ?1",
+                params![key],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .ok()?;
+        if cached_size as u64 == size && cached_modified == modified {
+            Some(reason)
+        } else {
+            None
+        }
+    }
+
+    fn put_failure(&self, path: &Path, size: u64, modified: Option<i64>, reason: &str) {
+        self.enqueue(WriteOp::Failure {
+            key: cache_key(path),
+            size,
+            modified,
+            reason: reason.to_string(),
+        });
+    }
+
     fn get_content_hash(&self, path: &Path, size: u64, modified: Option<i64>) -> Option<String> {
         let key = cache_key(path);
         if let Ok(mem) = self.memory.read() {
@@ -1464,12 +1694,24 @@ impl CacheDb {
         grid: u32,
     ) -> Option<Fingerprint> {
         let at_ms = (at_secs * 1000.0).round() as i64;
+        let key = cache_key(path);
+        if let Ok(mem) = self.memory.read() {
+            if mem.active {
+                return mem
+                    .video_frames
+                    .get(&(key.clone(), at_ms, grid))
+                    .filter(|entry| {
+                        entry.size == size && entry.modified == modified && entry.grid == grid
+                    })
+                    .map(|entry| entry.fingerprint.clone());
+            }
+        }
         let conn = self.checkout()?;
         let (cached_size, cached_modified, version, mean, bytes) = conn
             .query_row(
                 "SELECT size, modified, fp_version, mean, data FROM video_frame_cache
                  WHERE path = ?1 AND at_ms = ?2 AND grid = ?3",
-                params![cache_key(path), at_ms, grid as i64],
+                params![key, at_ms, grid as i64],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
@@ -1641,6 +1883,20 @@ impl ScanCache for CacheDb {
         metadata: &CachedMetadata,
     ) {
         self.put_metadata(path, size, modified_ms, metadata)
+    }
+
+    fn failure(&self, path: &Path, size: u64, modified_ms: Option<i64>) -> Option<String> {
+        self.get_failure(path, size, modified_ms)
+    }
+
+    fn store_failure(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        reason: &str,
+    ) {
+        self.put_failure(path, size, modified_ms, reason)
     }
 
     fn content_hash(&self, path: &Path, size: u64, modified_ms: Option<i64>) -> Option<String> {
@@ -2020,6 +2276,27 @@ mod tests {
             .get_fingerprint(Path::new("/photos/a.jpg"), 10, Some(100), 75)
             .is_none());
         drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn failed_decodes_are_cached_and_invalidate_on_change() {
+        let (path, db) = temp_db("failure");
+        let image = Path::new("/photos/broken.jpg");
+        assert!(db.get_failure(image, 0, Some(100)).is_none());
+        db.put_failure(image, 0, Some(100), "empty image");
+        db.flush();
+        assert_eq!(
+            db.get_failure(image, 0, Some(100)),
+            Some("empty image".to_string())
+        );
+        assert!(db.get_failure(image, 1, Some(100)).is_none());
+        assert!(db.get_failure(image, 0, Some(101)).is_none());
+        db.preload(&[image.to_path_buf()], None);
+        assert_eq!(
+            db.get_failure(image, 0, Some(100)),
+            Some("empty image".to_string())
+        );
         let _ = std::fs::remove_file(path);
     }
 

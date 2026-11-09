@@ -4,6 +4,43 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-11-09
+
+### Fixed
+
+- `dpf` no longer groups nearly black or flat images just because every cell
+  is within the grey tolerance. A match now also needs a minimum contrast and
+  a positive Pearson correlation, so two unrelated night photos are rejected.
+  The same contrast check protects SSIM from flat-grid false positives.
+- Decode failures are cached by path, size and modification time. Empty or
+  corrupt files are no longer decoded again on every scan; they are retried
+  automatically when the file changes.
+- The comparison stage no longer counts every pair in a separate first pass.
+  It uses the theoretical maximum for the progress bar, reports progress while
+  comparing, and avoids billions of duplicate iterations on large libraries.
+
+### Added
+
+- UI: draggable splitter between the match list and the preview, an
+  expand/restore button, automatic side-by-side preview when the panel is wide
+  enough, and a full-window lightbox when clicking either preview image.
+- Preview images are generated at 1280x960 for the lightbox instead of
+  480x360; the small cache still bounds memory.
+- The preview explanation now aligns to the top, removing the empty vertical
+  gap above the images.
+- `umdf.log` next to the configuration records scan phase timings (extract,
+  hash, compare, group, total) and cache preload timings. A Windows GUI has no
+  console, so previously these diagnostics were lost.
+
+### Changed
+
+- Cache preload is skipped when the in-session warm view already covers at
+  least 90 % of the selected files.
+- Video-frame fingerprints are preloaded with the rest of the cache instead of
+  issuing one SQLite query per video.
+- The match list columns are slightly narrower so the preview can grow without
+  overflowing a 1280px window.
+
 ## [0.6.0] - 2026-11-09
 
 ### Changed
