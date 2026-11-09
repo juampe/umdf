@@ -4,6 +4,18 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-11-09
+
+### Fixed
+
+- `cache.db` used a single SQLite connection protected by a mutex. Extraction
+  workers (up to 12) queued for every metadata/fingerprint read, so CPU and disk
+  stayed almost idle while the scan appeared stuck. The cache now uses a pool of
+  up to 32 WAL connections with `busy_timeout`; reads run concurrently and writes
+  no longer serialize the whole scan.
+- The pool is shared by fingerprint, metadata, content-hash, audio-signature and
+  video-frame lookups.
+
 ## [0.5.1] - 2026-11-09
 
 ### Changed

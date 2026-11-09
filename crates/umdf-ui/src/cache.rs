@@ -8,6 +8,7 @@
 //! modification time and the grid/model that produced them, so editing or
 //! replacing a file invalidates its entry automatically.
 
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -17,8 +18,36 @@ use umdf_core::scan::ScanCache;
 use umdf_core::{CachedMetadata, Fingerprint};
 
 pub struct CacheDb {
-    conn: Mutex<Connection>,
+    pool: Mutex<Vec<Connection>>,
     path: PathBuf,
+}
+
+/// A connection borrowed from the pool. Returning it on drop keeps SQLite
+/// reads concurrent across Rayon workers instead of serialising everything on
+/// one mutex.
+struct PooledConn<'a> {
+    db: &'a CacheDb,
+    conn: Option<Connection>,
+}
+
+impl Deref for PooledConn<'_> {
+    type Target = Connection;
+
+    fn deref(&self) -> &Connection {
+        self.conn.as_ref().expect("pooled connection")
+    }
+}
+
+impl Drop for PooledConn<'_> {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            if let Ok(mut pool) = self.db.pool.lock() {
+                if pool.len() < 32 {
+                    pool.push(conn);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -220,13 +249,36 @@ impl CacheDb {
         }
     }
 
+    fn open_connection(path: &Path) -> Result<Connection> {
+        let conn = Connection::open(path)
+            .with_context(|| format!("opening {}", path.display()))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA temp_store = MEMORY;
+             PRAGMA busy_timeout = 5000;",
+        )?;
+        Ok(conn)
+    }
+
+    fn checkout(&self) -> Option<PooledConn<'_>> {
+        let conn = self.pool.lock().ok()?.pop();
+        let conn = match conn {
+            Some(conn) => conn,
+            None => Self::open_connection(&self.path).ok()?,
+        };
+        Some(PooledConn {
+            db: self,
+            conn: Some(conn),
+        })
+    }
+
     pub fn open_at(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
-        let conn = Connection::open(&path)
-            .with_context(|| format!("opening {}", path.display()))?;
+        let conn = Self::open_connection(&path)?;
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -301,7 +353,7 @@ impl CacheDb {
         .context("creating cache schema")?;
         migrate_keys_for(&conn, cfg!(windows)).context("migrating cache keys")?;
         Ok(Self {
-            conn: Mutex::new(conn),
+            pool: Mutex::new(vec![conn]),
             path,
         })
     }
@@ -311,7 +363,7 @@ impl CacheDb {
     }
 
     pub fn stats(&self) -> CacheStats {
-        let Ok(conn) = self.conn.lock() else {
+        let Some(conn) = self.checkout() else {
             return CacheStats::default();
         };
         let fingerprints = conn
@@ -353,7 +405,9 @@ impl CacheDb {
 
     /// Drop every cached value. The configuration is untouched.
     pub fn clear(&self) -> Result<()> {
-        let conn = self.conn.lock().map_err(|_| anyhow::anyhow!("cache lock poisoned"))?;
+        let conn = self
+            .checkout()
+            .ok_or_else(|| anyhow::anyhow!("cache connection unavailable"))?;
         conn.execute_batch(
             "DELETE FROM fingerprint_cache;
              DELETE FROM embedding_cache;
@@ -372,7 +426,7 @@ impl CacheDb {
         modified: Option<i64>,
         grid: u32,
     ) -> Option<Fingerprint> {
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let (cached_size, cached_modified, cached_grid, mean, bytes) = conn
             .query_row(
                 "SELECT size, modified, grid, mean, data
@@ -415,7 +469,7 @@ impl CacheDb {
         grid: u32,
         fingerprint: &Fingerprint,
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let bytes = encode_i16(&fingerprint.values);
         let _ = conn.execute(
             "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data)
@@ -444,7 +498,7 @@ impl CacheDb {
         size: u64,
         modified: Option<i64>,
     ) -> Option<CachedMetadata> {
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let row = conn
             .query_row(
                 "SELECT size, modified, width, height, created, exif_taken,
@@ -491,7 +545,7 @@ impl CacheDb {
         modified: Option<i64>,
         metadata: &CachedMetadata,
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let _ = conn.execute(
             "INSERT INTO metadata_cache(
                  path, size, modified, width, height, created, exif_taken,
@@ -531,7 +585,7 @@ impl CacheDb {
         size: u64,
         modified: Option<i64>,
     ) -> Option<String> {
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let (cached_size, cached_modified, hash) = conn
             .query_row(
                 "SELECT size, modified, hash FROM content_hash_cache WHERE path = ?1",
@@ -553,7 +607,7 @@ impl CacheDb {
         modified: Option<i64>,
         hash: &str,
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let _ = conn.execute(
             "INSERT INTO content_hash_cache(path, size, modified, hash)
              VALUES(?1, ?2, ?3, ?4)
@@ -571,7 +625,7 @@ impl CacheDb {
         modified: Option<i64>,
         params_key: &str,
     ) -> Option<String> {
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let (cached_size, cached_modified, signature) = conn
             .query_row(
                 "SELECT size, modified, signature FROM media_signature_cache
@@ -595,7 +649,7 @@ impl CacheDb {
         params_key: &str,
         signature: &str,
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let _ = conn.execute(
             "INSERT INTO media_signature_cache(path, params, size, modified, signature)
              VALUES(?1, ?2, ?3, ?4, ?5)
@@ -615,7 +669,7 @@ impl CacheDb {
         grid: u32,
     ) -> Option<Fingerprint> {
         let at_ms = (at_secs * 1000.0).round() as i64;
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let (cached_size, cached_modified, mean, bytes) = conn
             .query_row(
                 "SELECT size, modified, mean, data FROM video_frame_cache
@@ -654,7 +708,7 @@ impl CacheDb {
         grid: u32,
         fingerprint: &Fingerprint,
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let at_ms = (at_secs * 1000.0).round() as i64;
         let bytes = encode_i16(&fingerprint.values);
         let _ = conn.execute(
@@ -683,7 +737,7 @@ impl CacheDb {
         size: u64,
         modified: Option<i64>,
     ) -> Option<Vec<f32>> {
-        let conn = self.conn.lock().ok()?;
+        let conn = self.checkout()?;
         let (cached_size, cached_modified, dims, bytes) = conn
             .query_row(
                 "SELECT size, modified, dims, data
@@ -717,7 +771,7 @@ impl CacheDb {
         modified: Option<i64>,
         values: &[f32],
     ) {
-        let Ok(conn) = self.conn.lock() else { return };
+        let Some(conn) = self.checkout() else { return };
         let bytes = encode_f32(values);
         let _ = conn.execute(
             "INSERT INTO embedding_cache(path, model, size, modified, dims, data)
@@ -937,7 +991,7 @@ mod tests {
     fn migrates_extended_and_drive_letter_keys() {
         let (path, db) = temp_db("migrate");
         {
-            let conn = db.conn.lock().unwrap();
+            let conn = db.checkout().unwrap();
             let data = encode_i16(&[1, 2, 3, 4]);
             conn.execute(
                 "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data, created_at)
