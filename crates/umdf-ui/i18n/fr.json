@@ -44,6 +44,11 @@
     "models_threshold": "Similarité",
     "models_none": "Aucun modèle installé. Téléchargez-en un ci-dessous.",
     "models_clear_cache": "Vider le cache",
+    "runtime_title": "Moteur IA",
+    "runtime_check": "Vérifier",
+    "runtime_install": "Installer le runtime CUDA",
+    "runtime_open": "Ouvrir le dossier du runtime",
+    "runtime_restart": "Redémarrez UMDF pour utiliser le nouveau runtime.",
     "semantic_unavailable": "La recherche sémantique n'est pas incluse dans cette compilation. Compilez avec --features embeddings et ONNX Runtime.",
     "opt_tolerance": "Tolérance de gris",
     "trash_all": "Mettre tous les doublons à la corbeille",
@@ -60,6 +65,7 @@
     "col_size": "Taille",
     "empty_list": "La liste des correspondances est vide.",
     "preview": "Aperçu",
+    "save_layout": "Enregistrer la vue",
     "original": "Original",
     "duplicate": "Doublon",
     "move_destination": "Dossier de destination",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• Les vidéos affichent l'image utilisée pour l'empreinte ; le bouton ▶ ouvre la vidéo dans le lecteur du système.",
+      "kind": 1
+    },
+    {
       "text": "• Audio : 5 s de PCM décodé hachées ; un remuxage ou un changement de métadonnées conserve la correspondance ; une réencodage avec perte non.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Clavier : ↑/↓ sélectionnent, Suppr/Delete supprime.",
+      "text": "• Clavier : ↑/↓ sélectionnent, Entrée ouvre l'aperçu agrandi, Échap le ferme, Suppr/Delete supprime.",
       "kind": 2
     },
     {

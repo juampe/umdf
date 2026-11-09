@@ -44,6 +44,11 @@
     "models_threshold": "유사도",
     "models_none": "설치된 모델이 없습니다. 아래에서 다운로드하세요.",
     "models_clear_cache": "캐시 지우기",
+    "runtime_title": "AI 엔진",
+    "runtime_check": "확인",
+    "runtime_install": "CUDA 런타임 설치",
+    "runtime_open": "런타임 폴더 열기",
+    "runtime_restart": "새 런타임을 사용하려면 UMDF를 다시 시작하세요.",
     "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
     "opt_tolerance": "픽셀 허용 오차",
     "trash_all": "모든 중복을 휴지통으로",
@@ -60,6 +65,7 @@
     "col_size": "크기",
     "empty_list": "일치 목록이 비어 있습니다.",
     "preview": "미리보기",
+    "save_layout": "레이아웃 저장",
     "original": "원본",
     "duplicate": "중복",
     "move_destination": "이동 대상 폴더",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• 동영상은 지문에 사용된 프레임을 표시합니다. ▶ 버튼은 시스템 플레이어에서 동영상을 엽니다.",
+      "kind": 1
+    },
+    {
       "text": "• 오디오: 디코딩된 PCM 5초를 해시합니다. 재먹싱/재태깅은 일치하지만 손실 재인코딩은 일치하지 않습니다.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• 키보드: ↑/↓ 선택, Del/Delete 삭제.",
+      "text": "• 키보드: ↑/↓ 선택, Enter 확대 미리보기 열기, Esc 닫기, Del/Delete 삭제.",
       "kind": 2
     },
     {

@@ -44,6 +44,11 @@
     "models_threshold": "Similitud",
     "models_none": "No hay modelos instalados. Descarga uno abajo.",
     "models_clear_cache": "Vaciar caché",
+    "runtime_title": "Motor de IA",
+    "runtime_check": "Verificar",
+    "runtime_install": "Instalar runtime CUDA",
+    "runtime_open": "Abrir carpeta del runtime",
+    "runtime_restart": "Reinicia UMDF para usar el nuevo runtime.",
     "semantic_unavailable": "Esta compilación no incluye búsqueda semántica. Compila con --features embeddings y ONNX Runtime.",
     "opt_tolerance": "Tolerancia de gris",
     "trash_all": "A la papelera",
@@ -60,6 +65,7 @@
     "col_size": "Tamaño",
     "empty_list": "La lista de coincidencias está vacía.",
     "preview": "Vista previa",
+    "save_layout": "Guardar vista",
     "original": "Original",
     "duplicate": "Duplicado",
     "move_destination": "Carpeta de destino",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• Los vídeos muestran el frame usado para la huella; el botón ▶ abre el vídeo en el reproductor del sistema.",
+      "kind": 1
+    },
+    {
       "text": "• Audio: se hashean 5 s de PCM decodificado; re-muxear o re-etiquetar conserva la coincidencia; recodificar con pérdida no.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Teclado: ↑/↓ seleccionan, Supr/Delete borra.",
+      "text": "• Teclado: ↑/↓ selecciona, Intro abre la vista ampliada, Esc la cierra, Supr/Borrar elimina.",
       "kind": 2
     },
     {

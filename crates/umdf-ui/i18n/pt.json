@@ -44,6 +44,11 @@
     "models_threshold": "Semelhança",
     "models_none": "Ainda não há modelos instalados. Transfira um abaixo.",
     "models_clear_cache": "Limpar cache",
+    "runtime_title": "Motor de IA",
+    "runtime_check": "Verificar",
+    "runtime_install": "Instalar runtime CUDA",
+    "runtime_open": "Abrir pasta do runtime",
+    "runtime_restart": "Reinicie o UMDF para usar o novo runtime.",
     "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolerância de cinza",
     "trash_all": "Mover todos os duplicados para o lixo",
@@ -60,6 +65,7 @@
     "col_size": "Tamanho",
     "empty_list": "A lista de correspondências está vazia.",
     "preview": "Pré-visualização",
+    "save_layout": "Guardar vista",
     "original": "Original",
     "duplicate": "Duplicado",
     "move_destination": "Pasta de destino",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• Os vídeos mostram o frame usado para a assinatura; o botão ▶ abre o vídeo no reprodutor do sistema.",
+      "kind": 1
+    },
+    {
       "text": "• Áudio: 5 s de PCM descodificado com hash; remuxar ou reetiquetar mantém a correspondência; recodificar com perdas não.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Teclado: ↑/↓ selecionam, Del/Delete elimina.",
+      "text": "• Teclado: ↑/↓ seleciona, Enter abre a vista ampliada, Esc fecha-a, Del/Delete elimina.",
       "kind": 2
     },
     {

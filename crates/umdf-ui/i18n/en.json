@@ -44,6 +44,11 @@
     "models_threshold": "Similarity",
     "models_none": "No models installed yet. Download one below.",
     "models_clear_cache": "Clear cache",
+    "runtime_title": "AI engine",
+    "runtime_check": "Check",
+    "runtime_install": "Install CUDA runtime",
+    "runtime_open": "Open runtime folder",
+    "runtime_restart": "Restart UMDF to use the new runtime.",
     "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
     "opt_tolerance": "Pixel tolerance",
     "trash_all": "Trash all duplicates",
@@ -60,6 +65,7 @@
     "col_size": "Size",
     "empty_list": "The match list is empty.",
     "preview": "Preview",
+    "save_layout": "Save layout",
     "original": "Original",
     "duplicate": "Duplicate",
     "move_destination": "Move destination",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• Videos show the frame used for the fingerprint; the ▶ button opens the video in the system player.",
+      "kind": 1
+    },
+    {
       "text": "• Audio: 5 s of decoded PCM hashed; re-muxed or retagged files match; lossy re-encoding does not.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Keyboard: ↑/↓ select, Del/Delete removes.",
+      "text": "• Keyboard: ↑/↓ select, Enter opens the enlarged preview, Esc closes it, Del/Delete removes.",
       "kind": 2
     },
     {

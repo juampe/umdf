@@ -44,6 +44,11 @@
     "models_threshold": "Somiglianza",
     "models_none": "Nessun modello installato. Scaricane uno qui sotto.",
     "models_clear_cache": "Svuota cache",
+    "runtime_title": "Motore IA",
+    "runtime_check": "Verifica",
+    "runtime_install": "Installa runtime CUDA",
+    "runtime_open": "Apri cartella runtime",
+    "runtime_restart": "Riavvia UMDF per usare il nuovo runtime.",
     "semantic_unavailable": "La ricerca semantica non è inclusa in questa build. Compila con --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolleranza di grigio",
     "trash_all": "Sposta tutti i duplicati nel cestino",
@@ -60,6 +65,7 @@
     "col_size": "Dimensione",
     "empty_list": "L'elenco delle corrispondenze è vuoto.",
     "preview": "Anteprima",
+    "save_layout": "Salva vista",
     "original": "Originale",
     "duplicate": "Duplicato",
     "move_destination": "Cartella di destinazione",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• I video mostrano il fotogramma usato per l'impronta; il pulsante ▶ apre il video nel lettore di sistema.",
+      "kind": 1
+    },
+    {
       "text": "• Audio: 5 s di PCM decodificato con hash; remux o retag conservano la corrispondenza; la ricodifica con perdita no.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Tastiera: ↑/↓ selezionano, Canc/Delete elimina.",
+      "text": "• Tastiera: ↑/↓ seleziona, Invio apre l'anteprima ingrandita, Esc la chiude, Canc/Delete elimina.",
       "kind": 2
     },
     {

@@ -44,6 +44,11 @@
     "models_threshold": "Ähnlichkeit",
     "models_none": "Noch keine Modelle installiert. Laden Sie unten eines herunter.",
     "models_clear_cache": "Cache leeren",
+    "runtime_title": "KI-Motor",
+    "runtime_check": "Prüfen",
+    "runtime_install": "CUDA-Runtime installieren",
+    "runtime_open": "Runtime-Ordner öffnen",
+    "runtime_restart": "UMDF neu starten, um die neue Runtime zu verwenden.",
     "semantic_unavailable": "Die semantische Suche ist in diesem Build nicht enthalten. Kompilieren Sie mit --features embeddings und ONNX Runtime.",
     "opt_tolerance": "Graustufen-Toleranz",
     "trash_all": "Alle Duplikate in den Papierkorb",
@@ -60,6 +65,7 @@
     "col_size": "Größe",
     "empty_list": "Die Trefferliste ist leer.",
     "preview": "Vorschau",
+    "save_layout": "Ansicht speichern",
     "original": "Original",
     "duplicate": "Duplikat",
     "move_destination": "Zielordner",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• Videos zeigen das für den Fingerabdruck verwendete Bild; die Schaltfläche ▶ öffnet das Video im Systemplayer.",
+      "kind": 1
+    },
+    {
       "text": "• Audio: 5 s dekodiertes PCM werden gehasht; Remuxen oder Retaggen bleibt eine Übereinstimmung, verlustbehaftetes Neukodieren nicht.",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• Tastatur: ↑/↓ auswählen, Entf/Delete löscht.",
+      "text": "• Tastatur: ↑/↓ wählt aus, Enter öffnet die vergrößerte Vorschau, Esc schließt sie, Entf/Delete löscht.",
       "kind": 2
     },
     {

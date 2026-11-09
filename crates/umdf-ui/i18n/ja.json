@@ -44,6 +44,11 @@
     "models_threshold": "類似度",
     "models_none": "モデルがインストールされていません。下からダウンロードしてください。",
     "models_clear_cache": "キャッシュをクリア",
+    "runtime_title": "AI エンジン",
+    "runtime_check": "確認",
+    "runtime_install": "CUDA ランタイムをインストール",
+    "runtime_open": "ランタイムフォルダーを開く",
+    "runtime_restart": "新しいランタイムを使用するには UMDF を再起動してください。",
     "semantic_unavailable": "このビルドにはセマンティック検索が含まれていません。--features embeddings と ONNX Runtime で再ビルドしてください。",
     "opt_tolerance": "ピクセル許容値",
     "trash_all": "すべての重複をゴミ箱へ",
@@ -60,6 +65,7 @@
     "col_size": "サイズ",
     "empty_list": "一致リストは空です。",
     "preview": "プレビュー",
+    "save_layout": "レイアウトを保存",
     "original": "オリジナル",
     "duplicate": "重複",
     "move_destination": "移動先フォルダー",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• 動画は指紋に使用したフレームを表示します。▶ ボタンでシステムのプレーヤーで開きます。",
+      "kind": 1
+    },
+    {
       "text": "• オーディオ: デコードした PCM 5 秒をハッシュ化。再マックスや再タグ付けは一致しますが、非可逆再エンコードは一致しません。",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• キーボード: ↑/↓ で選択、Del/Delete で削除。",
+      "text": "• キーボード: ↑/↓ で選択、Enter で拡大プレビューを開き、Esc で閉じ、Del/Delete で削除します。",
       "kind": 2
     },
     {

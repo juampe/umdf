@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::Instant;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
@@ -104,6 +104,11 @@ fn threads_index(threads: usize) -> i32 {
 // Initial batch; the rest are generated lazily from the ListView viewport.
 const MAX_THUMBNAIL_ROWS: usize = 100;
 
+/// ffmpeg is resolved once; video thumbnails and previews use the same frame
+/// position as the scanner (1 s by default).
+static FFMPEG: OnceLock<Option<PathBuf>> = OnceLock::new();
+static FFPROBE: OnceLock<Option<PathBuf>> = OnceLock::new();
+
 /// Raw RGBA thumbnail/preview data (definitely `Send`, unlike `slint::Image`).
 type ThumbData = (u32, u32, Vec<u8>);
 type PreviewData = (u32, u32, Vec<u8>, String);
@@ -153,6 +158,8 @@ fn main() -> anyhow::Result<()> {
         }
     });
     let ui_models: Arc<Mutex<Vec<UiModel>>> = Arc::new(Mutex::new(Vec::new()));
+    let _ = FFMPEG.set(umdf_core::media::find_tool(&["ffmpeg", "ffmpeg.exe"]));
+    let _ = FFPROBE.set(umdf_core::media::find_tool(&["ffprobe", "ffprobe.exe"]));
 
     let boot_lang = settings
         .lock()
@@ -177,7 +184,9 @@ fn main() -> anyhow::Result<()> {
         !umdf_core::embeddings::runtime_available();
     #[cfg(not(feature = "embeddings"))]
     let runtime_missing = false;
-    ui.set_embeddings_supported(cfg!(feature = "embeddings") && !runtime_missing);
+    // Keep the AI settings (and the runtime installer) reachable even when the
+    // runtime is missing; the warning below explains how to install it.
+    ui.set_embeddings_supported(cfg!(feature = "embeddings"));
     ui.set_semantic_runtime_missing(runtime_missing);
     #[cfg(feature = "embeddings")]
     {
@@ -271,6 +280,11 @@ fn main() -> anyhow::Result<()> {
         }
     }
     refresh_models(&ui, &settings, &ui_models, lang.get());
+    {
+        let (status, details) = runtime_report(boot_lang);
+        ui.set_runtime_status(status.into());
+        ui.set_runtime_details(details.into());
+    }
 
     ui.set_preview_left_info(boot.no_picture().into());
     ui.set_preview_right_info(boot.no_picture().into());
@@ -296,6 +310,17 @@ fn main() -> anyhow::Result<()> {
     ui.set_folders_label(boot.folders_label(folders.borrow().len()).into());
     ui.set_status(boot.status_ready().into());
     save_ui_settings(&ui, &settings, &folders);
+    {
+        let ui_handle = ui.as_weak();
+        let settings = settings.clone();
+        let folders = folders.clone();
+        ui.window().on_close_requested(move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                save_ui_settings(&ui, &settings, &folders);
+            }
+            slint::CloseRequestResponse::HideWindow
+        });
+    }
     let browser_path: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(current_dir()));
     let cancel = Arc::new(AtomicBool::new(false));
     let paused = Arc::new(AtomicBool::new(false));
@@ -854,6 +879,98 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
+    {
+        let ui_handle = ui.as_weak();
+        let lang = lang.clone();
+        ui.on_check_runtime(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let (status, details) = runtime_report(lang.get());
+            ui.set_runtime_status(status.into());
+            ui.set_runtime_details(details.into());
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        ui.on_open_runtime_folder(move || {
+            let _ = ui_handle.upgrade();
+            #[cfg(feature = "embeddings")]
+            if let Some(dir) = umdf_core::embeddings::cuda_runtime_dir() {
+                open_folder(&dir);
+            }
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        #[allow(unused_variables)]
+        let lang = lang.clone();
+        ui.on_install_cuda_runtime(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            #[cfg(not(feature = "embeddings"))]
+            {
+                ui.set_models_status("AI runtime is not included in this build".into());
+                return;
+            }
+            #[cfg(all(feature = "embeddings", not(windows)))]
+            {
+                ui.set_models_status("CUDA runtime auto-install is only available on Windows".into());
+                return;
+            }
+            #[cfg(all(feature = "embeddings", windows))]
+            {
+                let tr = Tr::new(lang.get());
+                ui.set_models_status(format!("{}…", tr.strings().runtime_install).into());
+                let ui_weak = ui_handle.clone();
+                let lang = lang.clone();
+                std::thread::spawn(move || {
+                    let result = (|| -> anyhow::Result<()> {
+                        let zip = std::env::temp_dir().join("umdf-ort-gpu.zip");
+                        models::download(cuda_ort_url(), &zip)?;
+                        let dir = umdf_core::embeddings::cuda_runtime_dir()
+                            .ok_or_else(|| anyhow::anyhow!("no runtime directory"))?;
+                        std::fs::create_dir_all(&dir)?;
+                        let tmp = std::env::temp_dir().join("umdf-ort-gpu");
+                        let script = format!(
+                            "$ErrorActionPreference='Stop'; $tmp='{}'; if (Test-Path $tmp) {{ Remove-Item -Recurse -Force $tmp }}; Expand-Archive -LiteralPath '{}' -DestinationPath $tmp -Force; Get-ChildItem -Path $tmp -Recurse -Filter 'onnxruntime*.dll' | Copy-Item -Destination '{}' -Force",
+                            tmp.to_string_lossy().replace('\'', "''"),
+                            zip.to_string_lossy().replace('\'', "''"),
+                            dir.to_string_lossy().replace('\'', "''"),
+                        );
+                        let status = std::process::Command::new("powershell")
+                            .args([
+                                "-NoProfile",
+                                "-ExecutionPolicy",
+                                "Bypass",
+                                "-Command",
+                                &script,
+                            ])
+                            .status()?;
+                        if !status.success() {
+                            anyhow::bail!("PowerShell extraction failed");
+                        }
+                        Ok(())
+                    })();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        let Some(ui) = ui_weak.upgrade() else { return };
+                        let tr = Tr::new(lang.get());
+                        match result {
+                            Ok(()) => {
+                                let (status, details) = runtime_report(lang.get());
+                                ui.set_runtime_status(status.into());
+                                ui.set_runtime_details(details.into());
+                                ui.set_models_status(tr.strings().runtime_restart.clone());
+                            }
+                            Err(error) => {
+                                ui.set_models_status(
+                                    format!("CUDA runtime install failed: {error}").into(),
+                                );
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    }
+
     // ---- folder list --------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
@@ -940,6 +1057,8 @@ fn main() -> anyhow::Result<()> {
             ui.set_selected_row(index);
             ui.set_keep_confidence(row.keep_confidence.clone());
             ui.set_keep_reason(row.keep_reason.clone());
+            ui.set_preview_left_playable(is_video_path(row.original_path.as_str()));
+            ui.set_preview_right_playable(is_video_path(row.duplicate_path.as_str()));
 
             // Latest request wins: rapid arrow-key navigation discards the
             // results of previous selections instead of queueing decodes.
@@ -1264,6 +1383,24 @@ fn main() -> anyhow::Result<()> {
     }
 
     // ---- per-row actions ----------------------------------------------------
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        ui.on_play_preview(move |left| {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let index = ui.get_selected_row();
+            if index < 0 {
+                return;
+            }
+            let Some(row) = rows.row_data(index as usize) else { return };
+            let path = if left {
+                row.original_path.to_string()
+            } else {
+                row.duplicate_path.to_string()
+            };
+            open_media(&path);
+        });
+    }
     {
         let ui_handle = ui.as_weak();
         let rows = rows.clone();
@@ -2262,9 +2399,20 @@ fn describe_string(path: &str) -> String {
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| path.to_string());
     let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-    let dims = image::image_dimensions(p)
-        .map(|(w, h)| format!("{w} x {h}"))
-        .unwrap_or_else(|_| "-".to_string());
+    let dims = match image::image_dimensions(p) {
+        Ok((w, h)) => format!("{w} x {h}"),
+        Err(_) => FFPROBE
+            .get()
+            .and_then(|tool| tool.as_ref())
+            .and_then(|ffprobe| {
+                umdf_core::media::probe(ffprobe, p, &AtomicBool::new(false)).ok()
+            })
+            .and_then(|probe| match (probe.width, probe.height) {
+                (Some(w), Some(h)) => Some(format!("{w} x {h}")),
+                _ => None,
+            })
+            .unwrap_or_else(|| "-".to_string()),
+    };
     format!("{name}\n{dims} · {}", human_bytes(size))
 }
 
@@ -2276,6 +2424,161 @@ fn rgba_to_image(w: u32, h: u32, data: &[u8]) -> slint::Image {
     slint::Image::from_rgba8(buffer)
 }
 
+#[cfg(feature = "embeddings")]
+fn on_path(names: &[&str]) -> bool {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    if let Some(extra) = std::env::var_os("LD_LIBRARY_PATH") {
+        dirs.extend(std::env::split_paths(&extra));
+    }
+    dirs.iter()
+        .any(|dir| names.iter().any(|name| dir.join(name).is_file()))
+}
+
+#[cfg(feature = "embeddings")]
+fn runtime_report(lang: Lang) -> (String, String) {
+    let status = umdf_core::embeddings::runtime_status();
+    let provider = umdf_core::embeddings::cuda_provider_available();
+    let nvidia = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,driver_version", "--format=csv,noheader"])
+        .output()
+        .map(|output| output.status.success() && !output.stdout.is_empty())
+        .unwrap_or(false);
+    let cudnn = on_path(&[
+        "cudnn64_9.dll",
+        "cudnn64_8.dll",
+        "cublas64_13.dll",
+        "cublas64_12.dll",
+        "libcudnn.so.9",
+        "libcudnn.so.8",
+    ]);
+    let ffmpeg = FFMPEG.get().and_then(|tool| tool.as_ref()).is_some();
+    let yes = |value: bool| if value { "OK" } else { "NO" };
+    let head = match (lang, status) {
+        (Lang::Es, "CUDA") => "CUDA listo",
+        (Lang::Es, "CPU") => "CPU (GPU no instalada)",
+        (Lang::Es, _) => "runtime no encontrado",
+        (_, "CUDA") => "CUDA ready",
+        (_, "CPU") => "CPU (GPU not installed)",
+        (_, _) => "runtime not found",
+    };
+    let details = match lang {
+        Lang::Es => format!(
+            "ONNX: {status} · proveedor CUDA: {} · NVIDIA: {} · cuDNN/cuBLAS: {} · ffmpeg: {}",
+            yes(provider),
+            yes(nvidia),
+            yes(cudnn),
+            yes(ffmpeg)
+        ),
+        _ => format!(
+            "ONNX: {status} · CUDA provider: {} · NVIDIA: {} · cuDNN/cuBLAS: {} · ffmpeg: {}",
+            yes(provider),
+            yes(nvidia),
+            yes(cudnn),
+            yes(ffmpeg)
+        ),
+    };
+    (head.to_string(), details)
+}
+
+#[cfg(not(feature = "embeddings"))]
+fn runtime_report(lang: Lang) -> (String, String) {
+    let head = match lang {
+        Lang::Es => "Motor IA: no incluido en esta compilación",
+        _ => "AI engine: not included in this build",
+    };
+    (head.to_string(), String::new())
+}
+
+#[cfg(feature = "embeddings")]
+fn open_folder(path: &Path) {
+    let _ = std::fs::create_dir_all(path);
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("explorer").arg(path).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(path).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+}
+
+#[cfg(all(feature = "embeddings", windows))]
+fn cuda_ort_url() -> &'static str {
+    // The NVIDIA installer exposes the supported CUDA major in its banner.
+    let cuda13 = std::process::Command::new("nvidia-smi")
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains("CUDA Version: 13"))
+        .unwrap_or(false);
+    if cuda13 {
+        "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-win-x64-gpu_cuda13-1.31.1.zip"
+    } else {
+        "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-win-x64-gpu_cuda12-1.31.1.zip"
+    }
+}
+
+fn is_video_path(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .map(|ext| umdf_core::config::is_video_ext(&ext.to_string_lossy()))
+        .unwrap_or(false)
+}
+
+/// Open a media file with the system default application. The GUI cannot embed
+/// a full video player in Slint, but the exact preview frame is shown and this
+/// button opens the original file for playback.
+fn open_media(path: &str) {
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(path)
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(path).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+    }
+}
+
+/// Decode an image, or extract the scanner's video frame with ffmpeg.
+fn load_media_image(path: &Path) -> Option<image::DynamicImage> {
+    if let Ok(img) = image::open(path) {
+        return Some(img);
+    }
+    if !is_video_path(&path.to_string_lossy()) {
+        return None;
+    }
+    let ffmpeg = FFMPEG.get().and_then(|tool| tool.as_ref())?;
+    for seconds in ["1", "0"] {
+        let output = std::process::Command::new(ffmpeg)
+            .args(["-loglevel", "error", "-ss", seconds, "-i"])
+            .arg(path)
+            .args([
+                "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-",
+            ])
+            .output()
+            .ok()?;
+        if !output.status.success() || output.stdout.is_empty() {
+            continue;
+        }
+        if let Ok(img) = image::load_from_memory(&output.stdout) {
+            return Some(img);
+        }
+    }
+    None
+}
+
 fn thumb_data(
     path: &str,
     cache: &Mutex<HashMap<String, Option<ThumbData>>>,
@@ -2284,7 +2587,7 @@ fn thumb_data(
         return value.clone();
     }
     let value = (|| {
-        let img = image::open(path).ok()?;
+        let img = load_media_image(Path::new(path))?;
         let thumb = img.thumbnail(52, 52).to_rgba8();
         let (w, h) = thumb.dimensions();
         Some((w, h, thumb.into_raw()))
@@ -2306,7 +2609,7 @@ fn preview_data(
         return value.clone();
     }
     let value = (|| {
-        let img = image::open(path).ok()?;
+        let img = load_media_image(Path::new(path))?;
         // Large enough for the full-window lightbox, still cheap to keep in
         // the small preview cache (24 entries).
         let thumb = img.thumbnail(1280, 960).to_rgba8();

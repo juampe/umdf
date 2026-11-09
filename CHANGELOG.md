@@ -4,6 +4,33 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.3] - 2026-11-09
+
+### Added
+
+- Video thumbnails and previews. The list and the preview use the same frame
+  as the scanner (1 s by default); a ▶ button in each preview opens the video in
+  the system player. Videos now show a real thumbnail instead of a blank tile.
+- Models → AI engine panel: "Check" shows the ONNX runtime, CUDA provider,
+  NVIDIA driver, cuDNN/cuBLAS PATH and ffmpeg status; "Install CUDA runtime"
+  downloads ONNX Runtime 1.31.1 GPU (CUDA 13 or 12, detected with nvidia-smi),
+  extracts it into `%LOCALAPPDATA%\umdf\runtime\cuda` and tells the user to
+  restart; "Open runtime folder" opens that folder. CUDA/cuDNN themselves remain
+  NVIDIA installers.
+- "Save layout" button in the preview header; the layout is also saved when the
+  window closes.
+- Keyboard: Enter opens the enlarged preview; Esc closes it. The existing
+  ↑/↓, Delete and mouse-wheel navigation remains.
+
+### Changed
+
+- The Models… button is available even when no model is selected or the runtime
+  is missing, so the AI engine can be configured before enabling semantics.
+- A user-installed runtime in `%LOCALAPPDATA%\umdf\runtime\cuda` takes
+  precedence over the bundled CPU runtime.
+- Help now lists keyboard shortcuts, video frame/playback behaviour, the 32x32
+  grid and the CUDA/cuDNN/GPU-runtime steps.
+
 ## [0.6.2] - 2026-11-09
 
 ### Fixed

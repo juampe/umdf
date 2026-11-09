@@ -44,6 +44,11 @@
     "models_threshold": "相似度",
     "models_none": "尚未安装模型。请在下方下载。",
     "models_clear_cache": "清空缓存",
+    "runtime_title": "AI 引擎",
+    "runtime_check": "检查",
+    "runtime_install": "安装 CUDA 运行时",
+    "runtime_open": "打开运行时文件夹",
+    "runtime_restart": "重启 UMDF 以使用新运行时。",
     "semantic_unavailable": "此版本不包含语义搜索。请使用 --features embeddings 和 ONNX Runtime 重新编译。",
     "opt_tolerance": "像素容差",
     "trash_all": "全部移至回收站",
@@ -60,6 +65,7 @@
     "col_size": "大小",
     "empty_list": "匹配列表为空。",
     "preview": "预览",
+    "save_layout": "保存布局",
     "original": "原图",
     "duplicate": "重复",
     "move_destination": "移动目标文件夹",
@@ -211,6 +217,10 @@
       "kind": 2
     },
     {
+      "text": "• 视频显示用于指纹的帧；▶ 按钮在系统播放器中打开视频。",
+      "kind": 1
+    },
+    {
       "text": "• 音频：对 5 秒解码 PCM 计算哈希；重新封装或更改标签仍可匹配，有损重新编码则不会。",
       "kind": 2
     },
@@ -355,7 +365,7 @@
       "kind": 2
     },
     {
-      "text": "• 键盘：↑/↓ 选择，Del/Delete 删除。",
+      "text": "• 键盘：↑/↓ 选择，回车打开放大预览，Esc 关闭，Del/Delete 删除。",
       "kind": 2
     },
     {

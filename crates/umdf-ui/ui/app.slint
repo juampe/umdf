@@ -94,6 +94,11 @@ export struct Strings {
     models_threshold: string,
     models_none: string,
     models_clear_cache: string,
+    runtime_title: string,
+    runtime_check: string,
+    runtime_install: string,
+    runtime_open: string,
+    runtime_restart: string,
     semantic_unavailable: string,
     semantic_runtime_missing: string,
     opt_tolerance: string,
@@ -114,6 +119,7 @@ export struct Strings {
     empty_list: string,
 
     preview: string,
+    save_layout: string,
     original: string,
     duplicate: string,
     move_destination: string,
@@ -353,7 +359,9 @@ component PreviewPane inherits Rectangle {
     in property <string> heading;
     in property <image> source;
     in property <string> info;
+    in property <bool> playable: false;
     callback open();
+    callback play();
 
     background: transparent;
     horizontal-stretch: 1;
@@ -362,11 +370,22 @@ component PreviewPane inherits Rectangle {
     VerticalLayout {
         spacing: 4px;
 
-        Text {
-            text: root.heading;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 600;
+        HorizontalLayout {
+            spacing: 4px;
+            Text {
+                text: root.heading;
+                color: Theme.text;
+                font-size: 11px;
+                font-weight: 600;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            if root.playable : FlatButton {
+                label: "▶";
+                minw: 28px;
+                bg: Theme.soft;
+                clicked => { root.play(); }
+            }
         }
         Rectangle {
             vertical-stretch: 1;
@@ -542,6 +561,8 @@ export component AppWindow inherits Window {
     in-out property <bool> models-open: false;
     in-out property <[ModelRow]> model-rows;
     in-out property <string> models-status: "";
+    in-out property <string> runtime-status: "";
+    in-out property <string> runtime-details: "";
     in-out property <string> models-db: "";
     in-out property <string> models-counters: "";
     in-out property <string> models-dir: "models";
@@ -558,6 +579,8 @@ export component AppWindow inherits Window {
     in-out property <image> preview-right;
     in-out property <string> preview-left-info: "";
     in-out property <string> preview-right-info: "";
+    in-out property <bool> preview-left-playable: false;
+    in-out property <bool> preview-right-playable: false;
     in-out property <string> keep-confidence: "";
     in-out property <string> keep-reason: "";
 
@@ -572,6 +595,7 @@ export component AppWindow inherits Window {
 
     callback persist-settings();
     callback request-thumbnails(offset: length, height: length);
+    callback play-preview(left: bool);
     callback start();
     callback stop();
     callback toggle-pause();
@@ -598,6 +622,9 @@ export component AppWindow inherits Window {
     callback save-model-settings();
     callback close-models();
     callback open-models();
+    callback check-runtime();
+    callback install-cuda-runtime();
+    callback open-runtime-folder();
     callback clear-cache();
     callback trash-row(int);
     callback move-row(int);
@@ -628,6 +655,13 @@ export component AppWindow inherits Window {
         height: 100%;
         focus-on-click: false;
         key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                if (root.lightbox-open) {
+                    root.lightbox-open = false;
+                    return accept;
+                }
+                return reject;
+            }
             if (root.browser-open || root.help-open) {
                 return reject;
             }
@@ -642,6 +676,12 @@ export component AppWindow inherits Window {
             if (event.text == Key.Delete) {
                 if (root.selected-row >= 0) {
                     root.delete-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.Return) {
+                if (root.selected-row >= 0) {
+                    root.lightbox-open = true;
                 }
                 return accept;
             }
@@ -965,7 +1005,7 @@ export component AppWindow inherits Window {
                                         font-size: 9px;
                                         wrap: word-wrap;
                                     }
-                                    if root.embeddings-supported && root.semantic-enabled : HorizontalLayout {
+                                    if root.embeddings-supported : HorizontalLayout {
                                         spacing: 6px;
                                         Text {
                                             text: root.semantic-summary;
@@ -982,7 +1022,7 @@ export component AppWindow inherits Window {
                                             clicked => { root.open-models(); }
                                         }
                                     }
-                                    if root.embeddings-supported && root.semantic-enabled && root.semantic-runtime != "" : Text {
+                                    if root.embeddings-supported && root.semantic-runtime != "" : Text {
                                         text: root.semantic-runtime;
                                         color: root.semantic-runtime-cpu ? Theme.danger : Theme.muted;
                                         font-size: 9px;
@@ -1238,6 +1278,12 @@ export component AppWindow inherits Window {
                             }
                             Rectangle { horizontal-stretch: 1; }
                             FlatButton {
+                                label: root.strings.save_layout;
+                                minw: 0;
+                                bg: Theme.soft;
+                                clicked => { root.persist-settings(); }
+                            }
+                            FlatButton {
                                 label: root.preview-width > 420px ? "⤡" : "⤢";
                                 minw: 30px;
                                 bg: Theme.soft;
@@ -1276,13 +1322,17 @@ export component AppWindow inherits Window {
                                     heading: "";
                                     source: root.preview-left;
                                     info: root.preview-left-info;
-                                    open => { root.lightbox-open = true; }
+                                    playable: root.preview-left-playable;
+                                    play => { root.play-preview(true); }
+                                    open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
                                     heading: root.strings.duplicate;
                                     source: root.preview-right;
                                     info: root.preview-right-info;
-                                    open => { root.lightbox-open = true; }
+                                    playable: root.preview-right-playable;
+                                    play => { root.play-preview(false); }
+                                    open => { root.lightbox-open = true; scope.focus(); }
                                 }
                             }
                             if root.preview-width < 420px : VerticalLayout {
@@ -1291,13 +1341,17 @@ export component AppWindow inherits Window {
                                     heading: "";
                                     source: root.preview-left;
                                     info: root.preview-left-info;
-                                    open => { root.lightbox-open = true; }
+                                    playable: root.preview-left-playable;
+                                    play => { root.play-preview(true); }
+                                    open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
                                     heading: root.strings.duplicate;
                                     source: root.preview-right;
                                     info: root.preview-right-info;
-                                    open => { root.lightbox-open = true; }
+                                    playable: root.preview-right-playable;
+                                    play => { root.play-preview(false); }
+                                    open => { root.lightbox-open = true; scope.focus(); }
                                 }
                             }
                         }
@@ -1396,6 +1450,20 @@ export component AppWindow inherits Window {
                 border-width: 1px;
                 border-color: Theme.border;
 
+                lb-focus := FocusScope {
+                    width: 0;
+                    height: 0;
+                    init => { self.focus(); }
+                    key-pressed(event) => {
+                        if (event.text == Key.Escape) {
+                            root.lightbox-open = false;
+                            scope.focus();
+                            return accept;
+                        }
+                        return reject;
+                    }
+                }
+
                 VerticalLayout {
                     padding: 14px;
                     spacing: 8px;
@@ -1414,7 +1482,10 @@ export component AppWindow inherits Window {
                             label: "✕";
                             minw: 36px;
                             bg: Theme.soft;
-                            clicked => { root.lightbox-open = false; }
+                            clicked => {
+                                root.lightbox-open = false;
+                                scope.focus();
+                            }
                         }
                     }
 
@@ -1424,12 +1495,16 @@ export component AppWindow inherits Window {
                             heading: root.strings.original;
                             source: root.preview-left;
                             info: root.preview-left-info;
+                            playable: root.preview-left-playable;
+                            play => { root.play-preview(true); }
                             open => {}
                         }
                         PreviewPane {
                             heading: root.strings.duplicate;
                             source: root.preview-right;
                             info: root.preview-right-info;
+                            playable: root.preview-right-playable;
+                            play => { root.play-preview(false); }
                             open => {}
                         }
                     }
@@ -1573,6 +1648,54 @@ export component AppWindow inherits Window {
                     spacing: 8px;
                     Text { text: root.strings.models_title; color: Theme.text; font-size: 18px; font-weight: 700; }
                     Text { text: root.strings.models_help; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
+
+                    Rectangle {
+                        background: Theme.soft;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 8px;
+                            spacing: 4px;
+                            HorizontalLayout {
+                                spacing: 6px;
+                                Text { text: root.strings.runtime_title; color: Theme.text; font-size: 11px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: root.runtime-status; color: Theme.accent; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                            }
+                            Text {
+                                text: root.runtime-details;
+                                color: Theme.muted;
+                                font-size: 10px;
+                                wrap: word-wrap;
+                                height: 32px;
+                                vertical-alignment: top;
+                                overflow: elide;
+                            }
+                            HorizontalLayout {
+                                spacing: 6px;
+                                FlatButton {
+                                    label: root.strings.runtime_check;
+                                    minw: 86px;
+                                    bg: Theme.card;
+                                    clicked => { root.check-runtime(); }
+                                }
+                                FlatButton {
+                                    label: root.strings.runtime_install;
+                                    minw: 150px;
+                                    fg: Theme.accent_text;
+                                    bg: Theme.accent;
+                                    hover: Theme.accent_hover;
+                                    clicked => { root.install-cuda-runtime(); }
+                                }
+                                FlatButton {
+                                    label: root.strings.runtime_open;
+                                    minw: 140px;
+                                    bg: Theme.card;
+                                    clicked => { root.open-runtime-folder(); }
+                                }
+                            }
+                        }
+                    }
 
                     VerticalLayout {
                         spacing: 3px;

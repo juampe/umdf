@@ -79,6 +79,11 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
 }
 
 
+/// First user-writable runtime folder (CUDA by convention).
+pub fn cuda_runtime_dir() -> Option<PathBuf> {
+    user_runtime_dirs().into_iter().next()
+}
+
 /// Runtime folders a user can populate without touching the installation:
 /// `%LOCALAPPDATA%\umdf\runtime\cuda` on Windows, `~/.local/share/umdf/runtime/cuda`
 /// on Linux and `~/Library/Application Support/umdf/runtime/cuda` on macOS.
