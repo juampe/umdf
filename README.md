@@ -143,8 +143,11 @@ policies remain available: `dimensions`, `filesize`, `earlierdate`,
 | `legacy` | legacy sign-agreement metric kept for comparison |
 
 `dpf` resamples both pictures to 32×32 and counts the fraction of cells whose
-gray level differs by at most `--tolerance` (default 10). Raise it for edited
-copies (red-eye correction, recompression); lower it for strict archives.
+gray level differs by at most `--tolerance` (default 10). A pair must also have
+real contrast (standard deviation ≥ 3) and a positive Pearson correlation
+(≥ 40 %), so two unrelated dark frames do not match just because both are
+nearly black. Raise the tolerance for edited copies (red-eye correction,
+recompression); lower it for strict archives.
 
 ## Video and audio
 
