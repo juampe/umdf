@@ -12,28 +12,33 @@ global Theme {
     in-out property <bool> dark: false;
 
     out property <color> bg: dark ? #0b1220 : #f3f4f6;
-    out property <color> card: dark ? #111827 : #ffffff;
-    out property <color> soft: dark ? #0f172a : #f8fafc;
-    out property <color> soft2: dark ? #1e293b : #f1f5f9;
-    out property <color> text: dark ? #e5e7eb : #0f172a;
+    out property <color> card: dark ? #151f32 : #ffffff;
+    out property <color> soft: dark ? #1e293b : #f8fafc;
+    out property <color> soft2: dark ? #1b263b : #f1f5f9;
+    out property <color> text: dark ? #f8fafc : #0f172a;
     out property <color> text2: dark ? #cbd5e1 : #334155;
-    out property <color> muted: dark ? #94a3b8 : #64748b;
-    out property <color> faint: dark ? #64748b : #94a3b8;
-    out property <color> line: dark ? #1f2937 : #e5e7eb;
-    out property <color> line_soft: dark ? #172033 : #f1f5f9;
-    out property <color> hover: dark ? #1f2937 : #eef2f7;
+    out property <color> muted: dark ? #cbd5e1 : #64748b;
+    out property <color> faint: dark ? #94a3b8 : #94a3b8;
+    out property <color> line: dark ? #26334d : #e5e7eb;
+    out property <color> line_soft: dark ? #1e2a40 : #f1f5f9;
+    out property <color> border: dark ? #26334d : #e5e7eb;
+    out property <color> border_elevated: dark ? #334155 : #e2e8f0;
+    out property <color> hover: dark ? #243247 : #eef2f7;
     out property <color> accent: #2563eb;
     out property <color> accent_hover: #1d4ed8;
     out property <color> accent_text: #ffffff;
-    out property <color> selected: dark ? #16294a : #eff6ff;
+    out property <color> selected: dark ? #1d2f4f : #eff6ff;
     out property <color> danger: dark ? #f87171 : #b91c1c;
     out property <color> danger_bg: dark ? #2a1518 : #fef2f2;
     out property <color> danger_hover: dark ? #3a1b1f : #fee2e2;
     out property <color> warn_bg: dark ? #2d2416 : #fff7ed;
     out property <color> warn_text: dark ? #fdba74 : #9a3412;
     out property <color> folder: #f59e0b;
-    out property <color> backdrop: #0f172a99;
-    out property <color> thumb_bg: dark ? #0f172a : #f1f5f9;
+    out property <color> backdrop: dark ? #0b1220cc : #0f172a66;
+    out property <color> thumb_bg: dark ? #1e293b : #f1f5f9;
+    out property <color> disabled_bg: dark ? #1e293b : #f1f5f9;
+    out property <color> disabled_line: dark ? #2d3b52 : #cbd5e1;
+    out property <color> disabled_text: dark ? #64748b : #94a3b8;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,15 +184,18 @@ component FlatButton inherits Rectangle {
     height: 32px;
     min-width: minw;
     border-radius: 8px;
-    opacity: enabled ? 1.0 : 0.35;
-    background: ta.pressed ? hover : (ta.has-hover && enabled ? hover : bg);
+    border-width: enabled ? 0px : 1px;
+    border-color: Theme.disabled_line;
+    background: !enabled
+        ? Theme.disabled_bg
+        : (ta.pressed ? hover : (ta.has-hover ? hover : bg));
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: 10px;
+        padding-right: 10px;
         Text {
             text: label;
-            color: fg;
+            color: enabled ? fg : Theme.disabled_text;
             font-size: 12px;
             font-weight: 600;
             vertical-alignment: center;
@@ -719,6 +727,8 @@ export component AppWindow inherits Window {
                     width: 300px;
                     background: Theme.card;
                     border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.border;
                     VerticalLayout {
                         padding: 12px;
                         spacing: 8px;
@@ -789,13 +799,15 @@ export component AppWindow inherits Window {
                             spacing: 6px;
                             FlatButton {
                                 label: root.strings.remove_selected;
-                                minw: 130px;
+                                minw: 0;
+                                horizontal-stretch: 1;
                                 enabled: root.folder-selected >= 0;
                                 clicked => { root.remove-folder(); }
                             }
                             FlatButton {
                                 label: root.strings.clear_all;
-                                minw: 130px;
+                                minw: 0;
+                                horizontal-stretch: 1;
                                 clicked => { root.clear-folders(); }
                             }
                         }
@@ -902,6 +914,8 @@ export component AppWindow inherits Window {
                     horizontal-stretch: 1;
                     background: Theme.card;
                     border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.border;
                     VerticalLayout {
                         padding: 12px;
                         spacing: 6px;
@@ -916,8 +930,12 @@ export component AppWindow inherits Window {
                             height: 6px;
                             border-radius: 3px;
                             background: Theme.line_soft;
+                            clip: true;
                             Rectangle {
+                                x: 0;
+                                y: 0;
                                 width: parent.width * (root.progress / 100.0);
+                                height: parent.height;
                                 background: Theme.accent;
                                 border-radius: 3px;
                             }
@@ -1066,6 +1084,8 @@ export component AppWindow inherits Window {
                     width: 340px;
                     background: Theme.card;
                     border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.border;
                     VerticalLayout {
                         padding: 12px;
                         padding-bottom: 16px;

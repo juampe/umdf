@@ -73,6 +73,17 @@ pub fn modified(path: &Path) -> Option<DateTime<Utc>> {
         .and_then(system_time_to_utc)
 }
 
+/// Read modification and creation times with a single `stat` call.
+pub fn times(path: &Path) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return (None, None);
+    };
+    (
+        meta.modified().ok().and_then(system_time_to_utc),
+        meta.created().ok().and_then(system_time_to_utc),
+    )
+}
+
 pub fn created(path: &Path) -> Option<DateTime<Utc>> {
     std::fs::metadata(path)
         .ok()?

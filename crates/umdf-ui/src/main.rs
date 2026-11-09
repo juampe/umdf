@@ -1546,11 +1546,12 @@ fn update_cache_label(ui: &AppWindow, cache: &CacheDb) {
     let stats = cache.stats();
     ui.set_models_db(
         format!(
-            "config.toml: {} · cache.db: {} ({} fingerprints · {} embeddings · {})",
+            "config.toml: {} · cache.db: {} ({} fingerprints · {} embeddings · {} metadata · {})",
             Settings::path().display(),
             cache.path().display(),
             stats.fingerprints,
             stats.embeddings,
+            stats.metadata,
             human_bytes(stats.bytes)
         )
         .into(),

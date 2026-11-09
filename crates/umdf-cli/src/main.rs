@@ -217,6 +217,8 @@ fn main() -> anyhow::Result<()> {
                 "fingerprints_computed": report.stats.fingerprints_computed,
                 "embeddings_from_cache": report.stats.embeddings_from_cache,
                 "embeddings_computed": report.stats.embeddings_computed,
+                "metadata_from_cache": report.stats.metadata_from_cache,
+                "metadata_computed": report.stats.metadata_computed,
                 "pairs_compared": report.stats.pairs_compared,
                 "duplicates_found": report.stats.duplicates_found,
                 "groups": report.stats.groups,

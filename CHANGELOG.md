@@ -4,6 +4,30 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-09
+
+### Added
+
+- `metadata_cache` in `cache.db`: width, height, EXIF date, EXIF field count,
+  camera flag, creation time, media duration and audio flag. An unchanged file
+  no longer re-reads its header, EXIF or ffprobe output on the next scan.
+- The Models manager cache line and the CLI JSON include metadata-cache counts.
+
+### Changed
+
+- Dark theme contrast: brighter primary/secondary text, bordered cards and
+  fields, and disabled buttons with a visible outline instead of faded blobs.
+- Main columns have a subtle border; the left folder buttons stretch to fit.
+- The progress bar is explicitly anchored at the left edge and grows to the
+  right.
+
+### Performance
+
+- One `stat` per file provides both modification and creation times.
+- A second scan of an unchanged folder skips fingerprint decoding, image
+  headers, EXIF and ffprobe: in the test folder it went from 10.0 s to 0.3 s
+  with 38/39 files served from cache.
+
 ## [0.3.9] - 2026-11-09
 
 ### Fixed

@@ -25,6 +25,20 @@ impl MediaKind {
     }
 }
 
+/// File metadata that does not require decoding pixels. Cached by path, size
+/// and modification time so an unchanged file is not read again.
+#[derive(Debug, Clone, Default)]
+pub struct CachedMetadata {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub created_ms: Option<i64>,
+    pub exif_taken_ms: Option<i64>,
+    pub exif_fields: u32,
+    pub exif_camera: bool,
+    pub duration_ms: Option<u64>,
+    pub has_audio: bool,
+}
+
 /// One scanned file plus everything the comparison stage learned about it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaItem {
@@ -63,6 +77,9 @@ pub struct MediaItem {
     /// decoded again. Transient: it is not part of exports.
     #[serde(skip)]
     pub fingerprint_cached: bool,
+    /// True when width/height/EXIF/duration came from `metadata_cache`.
+    #[serde(skip)]
+    pub metadata_cached: bool,
 
     /// Optional semantic embedding (L2-normalised). Requires the `embeddings`
     /// feature; `None` otherwise.
@@ -91,6 +108,7 @@ impl MediaItem {
             media_signature: None,
             fingerprint: None,
             fingerprint_cached: false,
+            metadata_cached: false,
             embedding: None,
             extract_error: None,
         }

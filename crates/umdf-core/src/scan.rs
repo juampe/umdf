@@ -14,7 +14,7 @@ use crate::group;
 use crate::hash;
 use crate::media;
 use crate::metadata;
-use crate::model::{Fingerprint, Group, Match, MatchKind, MediaItem, MediaKind};
+use crate::model::{CachedMetadata, Fingerprint, Group, Match, MatchKind, MediaItem, MediaKind};
 use crate::walk;
 
 #[derive(Debug, Clone)]
@@ -57,6 +57,10 @@ pub struct Stats {
     pub embeddings_from_cache: usize,
     /// Embeddings produced by the model in this scan.
     pub embeddings_computed: usize,
+    /// Files whose dimensions/EXIF/duration came from the metadata cache.
+    pub metadata_from_cache: usize,
+    /// Files whose metadata had to be read from disk.
+    pub metadata_computed: usize,
     /// Images whose semantic embedding failed (the scan continued).
     pub embedding_errors: usize,
     pub extract_ms: u128,
@@ -93,6 +97,25 @@ pub trait ScanCache: Send + Sync {
         modified_ms: Option<i64>,
         grid: u32,
     ) -> Option<Fingerprint>;
+
+    /// Cached dimensions, EXIF and duration for an unchanged file.
+    fn metadata(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+    ) -> Option<CachedMetadata> {
+        None
+    }
+
+    fn store_metadata(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _metadata: &CachedMetadata,
+    ) {
+    }
 
     fn store_fingerprint(
         &self,
@@ -261,6 +284,13 @@ fn run_inner(
                 },
             );
             if let Some(item) = maybe {
+                if item.kind != MediaKind::Other {
+                    if item.metadata_cached {
+                        stats.metadata_from_cache += 1;
+                    } else {
+                        stats.metadata_computed += 1;
+                    }
+                }
                 if item.fingerprint.is_some() {
                     stats.files_fingerprinted += 1;
                     if item.fingerprint_cached {
@@ -730,24 +760,54 @@ fn extract_item(
 ) -> Option<MediaItem> {
     let kind = classify(&cand.extension);
     let mut item = MediaItem::new(index, cand.path.clone(), kind, cand.size);
-    item.modified = metadata::modified(&cand.path);
-    item.created = metadata::created(&cand.path);
+    let (modified, created) = metadata::times(&cand.path);
+    item.modified = modified;
+    let modified_ms = modified.map(|date| date.timestamp_millis());
+
+    let cached_metadata = cache.and_then(|cache| {
+        cache.metadata(&cand.path, cand.size, modified_ms)
+    });
+    let mut metadata_ready = false;
+    let mut has_audio = kind == MediaKind::Audio;
+    if let Some(meta) = cached_metadata {
+        item.width = meta.width;
+        item.height = meta.height;
+        item.created = meta.created_ms.and_then(ms_to_datetime);
+        item.exif_taken = meta.exif_taken_ms.and_then(ms_to_datetime);
+        item.exif_fields = meta.exif_fields;
+        item.exif_camera = meta.exif_camera;
+        item.duration_ms = meta.duration_ms;
+        has_audio = meta.has_audio;
+        item.metadata_cached = true;
+        metadata_ready = true;
+    } else {
+        item.created = created;
+    }
 
     match kind {
         MediaKind::Image => {
-            if let Some((w, h)) = metadata::image_dimensions(&cand.path) {
-                item.width = Some(w);
-                item.height = Some(h);
-            }
-            if let Some(meta) = metadata::exif_meta(&cand.path) {
-                item.exif_taken = meta.taken;
-                item.exif_fields = meta.field_count;
-                item.exif_camera = meta.camera;
+            if !metadata_ready {
+                if let Some((w, h)) = metadata::image_dimensions(&cand.path) {
+                    item.width = Some(w);
+                    item.height = Some(h);
+                }
+                if let Some(meta) = metadata::exif_meta(&cand.path) {
+                    item.exif_taken = meta.taken;
+                    item.exif_fields = meta.field_count;
+                    item.exif_camera = meta.camera;
+                }
+                if let Some(cache) = cache {
+                    cache.store_metadata(
+                        &cand.path,
+                        cand.size,
+                        modified_ms,
+                        &cached_metadata_from_item(&item, false),
+                    );
+                }
             }
             if below_min_dimensions(cfg, &item) {
                 return None;
             }
-            let modified_ms = item.modified.map(|date| date.timestamp_millis());
             match cache.and_then(|cache| {
                 cache.fingerprint(&cand.path, cand.size, modified_ms, cfg.grid)
             }) {
@@ -773,17 +833,26 @@ fn extract_item(
             }
         }
         MediaKind::Video | MediaKind::Audio => {
-            let mut has_audio = kind == MediaKind::Audio;
-            if let Some(probe_bin) = ffprobe {
-                if let Ok(p) = media::probe(probe_bin, &cand.path, cancel) {
-                    item.width = p.width;
-                    item.height = p.height;
-                    item.duration_ms = p.duration_ms;
-                    has_audio = p.has_audio;
-                    if below_min_dimensions(cfg, &item) {
-                        return None;
+            if !metadata_ready {
+                if let Some(probe_bin) = ffprobe {
+                    if let Ok(p) = media::probe(probe_bin, &cand.path, cancel) {
+                        item.width = p.width;
+                        item.height = p.height;
+                        item.duration_ms = p.duration_ms;
+                        has_audio = p.has_audio;
+                        if let Some(cache) = cache {
+                            cache.store_metadata(
+                                &cand.path,
+                                cand.size,
+                                modified_ms,
+                                &cached_metadata_from_item(&item, has_audio),
+                            );
+                        }
                     }
                 }
+            }
+            if below_min_dimensions(cfg, &item) {
+                return None;
             }
             if cfg.compare_media_content {
                 if let Some(ffmpeg) = ffmpeg {
@@ -816,6 +885,23 @@ fn extract_item(
     }
 
     Some(item)
+}
+
+fn ms_to_datetime(ms: i64) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(ms)
+}
+
+fn cached_metadata_from_item(item: &MediaItem, has_audio: bool) -> CachedMetadata {
+    CachedMetadata {
+        width: item.width,
+        height: item.height,
+        created_ms: item.created.map(|date| date.timestamp_millis()),
+        exif_taken_ms: item.exif_taken.map(|date| date.timestamp_millis()),
+        exif_fields: item.exif_fields,
+        exif_camera: item.exif_camera,
+        duration_ms: item.duration_ms,
+        has_audio,
+    }
 }
 
 fn classify(ext: &str) -> MediaKind {
@@ -891,6 +977,7 @@ mod tests {
     #[derive(Default)]
     struct MemoryCache {
         fingerprints: Mutex<HashMap<PathBuf, (u64, Option<i64>, u32, Fingerprint)>>,
+        metadata: Mutex<HashMap<PathBuf, (u64, Option<i64>, CachedMetadata)>>,
     }
 
     impl ScanCache for MemoryCache {
@@ -925,6 +1012,36 @@ mod tests {
                     path.to_path_buf(),
                     (size, modified_ms, grid, fingerprint.clone()),
                 );
+            }
+        }
+
+        fn metadata(
+            &self,
+            path: &Path,
+            size: u64,
+            modified_ms: Option<i64>,
+        ) -> Option<CachedMetadata> {
+            let cache = self.metadata.lock().ok()?;
+            cache
+                .get(path)
+                .and_then(|(cached_size, cached_modified, metadata)| {
+                    if *cached_size == size && *cached_modified == modified_ms {
+                        Some(metadata.clone())
+                    } else {
+                        None
+                    }
+                })
+        }
+
+        fn store_metadata(
+            &self,
+            path: &Path,
+            size: u64,
+            modified_ms: Option<i64>,
+            metadata: &CachedMetadata,
+        ) {
+            if let Ok(mut cache) = self.metadata.lock() {
+                cache.insert(path.to_path_buf(), (size, modified_ms, metadata.clone()));
             }
         }
 
@@ -974,11 +1091,15 @@ mod tests {
         assert_eq!(first.stats.files_fingerprinted, 2);
         assert_eq!(first.stats.fingerprints_computed, 2);
         assert_eq!(first.stats.fingerprints_from_cache, 0);
+        assert_eq!(first.stats.metadata_computed, 2);
+        assert_eq!(first.stats.metadata_from_cache, 0);
 
         let second = run_with_progress_cached(&cfg, None, Some(&cache)).unwrap();
         assert_eq!(second.stats.files_fingerprinted, 2);
         assert_eq!(second.stats.fingerprints_computed, 0);
         assert_eq!(second.stats.fingerprints_from_cache, 2);
+        assert_eq!(second.stats.metadata_computed, 0);
+        assert_eq!(second.stats.metadata_from_cache, 2);
 
         let _ = std::fs::remove_dir_all(&root);
     }

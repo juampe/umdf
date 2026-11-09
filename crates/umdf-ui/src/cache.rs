@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use umdf_core::scan::ScanCache;
-use umdf_core::Fingerprint;
+use umdf_core::{CachedMetadata, Fingerprint};
 
 pub struct CacheDb {
     conn: Mutex<Connection>,
@@ -25,6 +25,7 @@ pub struct CacheDb {
 pub struct CacheStats {
     pub fingerprints: u64,
     pub embeddings: u64,
+    pub metadata: u64,
     pub bytes: u64,
 }
 
@@ -98,6 +99,13 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
         (delete, updates)
     }
 
+    let metadata_rows: Vec<(i64, String, String, String)> = {
+        let mut stmt = conn.prepare("SELECT rowid, path, created_at FROM metadata_cache")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, String::new(), row.get(2)?))
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()?
+    };
     let fingerprint_rows: Vec<(i64, String, String, String)> = {
         let mut stmt =
             conn.prepare("SELECT rowid, path, created_at FROM fingerprint_cache")?;
@@ -118,6 +126,7 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
 
     let (fingerprint_delete, fingerprint_update) = plan(fingerprint_rows, false);
     let (embedding_delete, embedding_update) = plan(embedding_rows, true);
+    let (metadata_delete, metadata_update) = plan(metadata_rows, false);
 
     let tx = conn.unchecked_transaction()?;
     {
@@ -136,6 +145,18 @@ fn migrate_keys_for(conn: &Connection, windows: bool) -> Result<()> {
         let mut stmt = tx.prepare("DELETE FROM embedding_cache WHERE rowid = ?1")?;
         for rowid in embedding_delete {
             stmt.execute([rowid])?;
+        }
+    }
+    {
+        let mut stmt = tx.prepare("DELETE FROM metadata_cache WHERE rowid = ?1")?;
+        for rowid in metadata_delete {
+            stmt.execute([rowid])?;
+        }
+    }
+    {
+        let mut stmt = tx.prepare("UPDATE metadata_cache SET path = ?1 WHERE rowid = ?2")?;
+        for (rowid, key) in metadata_update {
+            stmt.execute(params![key, rowid])?;
         }
     }
     {
@@ -209,6 +230,7 @@ impl CacheDb {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
+             PRAGMA temp_store = MEMORY;
              CREATE TABLE IF NOT EXISTS fingerprint_cache (
                  path TEXT PRIMARY KEY,
                  size INTEGER NOT NULL,
@@ -231,7 +253,23 @@ impl CacheDb {
                  PRIMARY KEY (path, model)
              );
              CREATE INDEX IF NOT EXISTS embedding_cache_created
-                 ON embedding_cache(created_at);",
+                 ON embedding_cache(created_at);
+             CREATE TABLE IF NOT EXISTS metadata_cache (
+                 path TEXT PRIMARY KEY,
+                 size INTEGER NOT NULL,
+                 modified INTEGER,
+                 width INTEGER,
+                 height INTEGER,
+                 created INTEGER,
+                 exif_taken INTEGER,
+                 exif_fields INTEGER NOT NULL DEFAULT 0,
+                 exif_camera INTEGER NOT NULL DEFAULT 0,
+                 duration INTEGER,
+                 has_audio INTEGER NOT NULL DEFAULT 0,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE INDEX IF NOT EXISTS metadata_cache_created
+                 ON metadata_cache(created_at);",
         )
         .context("creating cache schema")?;
         migrate_keys_for(&conn, cfg!(windows)).context("migrating cache keys")?;
@@ -259,6 +297,11 @@ impl CacheDb {
                 row.get::<_, i64>(0)
             })
             .unwrap_or(0);
+        let metadata = conn
+            .query_row("SELECT COUNT(*) FROM metadata_cache", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap_or(0);
         let fingerprint_bytes = conn
             .query_row(
                 "SELECT COALESCE(SUM(LENGTH(data)), 0) FROM fingerprint_cache",
@@ -276,6 +319,7 @@ impl CacheDb {
         CacheStats {
             fingerprints: fingerprints.max(0) as u64,
             embeddings: embeddings.max(0) as u64,
+            metadata: metadata.max(0) as u64,
             bytes: (fingerprint_bytes + embedding_bytes).max(0) as u64,
         }
     }
@@ -285,7 +329,8 @@ impl CacheDb {
         let conn = self.conn.lock().map_err(|_| anyhow::anyhow!("cache lock poisoned"))?;
         conn.execute_batch(
             "DELETE FROM fingerprint_cache;
-             DELETE FROM embedding_cache;",
+             DELETE FROM embedding_cache;
+             DELETE FROM metadata_cache;",
         )?;
         Ok(())
     }
@@ -359,6 +404,93 @@ impl CacheDb {
                 grid as i64,
                 fingerprint.mean as i64,
                 bytes
+            ],
+        );
+    }
+
+    fn get_metadata(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+    ) -> Option<CachedMetadata> {
+        let conn = self.conn.lock().ok()?;
+        let row = conn
+            .query_row(
+                "SELECT size, modified, width, height, created, exif_taken,
+                        exif_fields, exif_camera, duration, has_audio
+                 FROM metadata_cache WHERE path = ?1",
+                params![cache_key(path)],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, Option<i64>>(3)?,
+                        row.get::<_, Option<i64>>(4)?,
+                        row.get::<_, Option<i64>>(5)?,
+                        row.get::<_, i64>(6)?,
+                        row.get::<_, i64>(7)?,
+                        row.get::<_, Option<i64>>(8)?,
+                        row.get::<_, i64>(9)?,
+                    ))
+                },
+            )
+            .ok()?;
+        let (cached_size, cached_modified, width, height, created, exif_taken,
+            exif_fields, exif_camera, duration, has_audio) = row;
+        if cached_size as u64 != size || cached_modified != modified {
+            return None;
+        }
+        Some(CachedMetadata {
+            width: width.and_then(|v| u32::try_from(v).ok()),
+            height: height.and_then(|v| u32::try_from(v).ok()),
+            created_ms: created,
+            exif_taken_ms: exif_taken,
+            exif_fields: exif_fields.max(0) as u32,
+            exif_camera: exif_camera != 0,
+            duration_ms: duration.and_then(|v| u64::try_from(v).ok()),
+            has_audio: has_audio != 0,
+        })
+    }
+
+    fn put_metadata(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        metadata: &CachedMetadata,
+    ) {
+        let Ok(conn) = self.conn.lock() else { return };
+        let _ = conn.execute(
+            "INSERT INTO metadata_cache(
+                 path, size, modified, width, height, created, exif_taken,
+                 exif_fields, exif_camera, duration, has_audio)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(path) DO UPDATE SET
+                 size = excluded.size,
+                 modified = excluded.modified,
+                 width = excluded.width,
+                 height = excluded.height,
+                 created = excluded.created,
+                 exif_taken = excluded.exif_taken,
+                 exif_fields = excluded.exif_fields,
+                 exif_camera = excluded.exif_camera,
+                 duration = excluded.duration,
+                 has_audio = excluded.has_audio,
+                 created_at = datetime('now')",
+            params![
+                cache_key(path),
+                size as i64,
+                modified,
+                metadata.width.map(|v| v as i64),
+                metadata.height.map(|v| v as i64),
+                metadata.created_ms,
+                metadata.exif_taken_ms,
+                metadata.exif_fields as i64,
+                metadata.exif_camera as i64,
+                metadata.duration_ms.map(|v| v as i64),
+                metadata.has_audio as i64,
             ],
         );
     }
@@ -447,6 +579,25 @@ impl ScanCache for CacheDb {
         fingerprint: &Fingerprint,
     ) {
         self.put_fingerprint(path, size, modified_ms, grid, fingerprint)
+    }
+
+    fn metadata(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+    ) -> Option<CachedMetadata> {
+        self.get_metadata(path, size, modified_ms)
+    }
+
+    fn store_metadata(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        metadata: &CachedMetadata,
+    ) {
+        self.put_metadata(path, size, modified_ms, metadata)
     }
 
     fn embedding(
@@ -609,6 +760,33 @@ mod tests {
         assert!(db
             .get_fingerprint(Path::new(r"b:\photos\a.jpg"), 10, Some(100), 2)
             .is_some());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn metadata_round_trip_and_invalidation() {
+        let (path, db) = temp_db("meta");
+        let image = Path::new("/photos/a.jpg");
+        let metadata = CachedMetadata {
+            width: Some(1600),
+            height: Some(1200),
+            created_ms: Some(1000),
+            exif_taken_ms: Some(2000),
+            exif_fields: 12,
+            exif_camera: true,
+            duration_ms: None,
+            has_audio: false,
+        };
+        assert!(db.get_metadata(image, 10, Some(100)).is_none());
+        db.put_metadata(image, 10, Some(100), &metadata);
+        let back = db.get_metadata(image, 10, Some(100)).unwrap();
+        assert_eq!(back.width, Some(1600));
+        assert_eq!(back.height, Some(1200));
+        assert_eq!(back.exif_fields, 12);
+        assert!(back.exif_camera);
+        assert!(db.get_metadata(image, 11, Some(100)).is_none());
+        assert!(db.get_metadata(image, 10, Some(101)).is_none());
+        assert_eq!(db.stats().metadata, 1);
         let _ = std::fs::remove_file(path);
     }
 
