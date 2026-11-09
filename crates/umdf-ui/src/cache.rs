@@ -2131,10 +2131,13 @@ mod tests {
         let first = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();
         let second = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();
         println!(
-            "files={} first_extract={}ms computed={} second_extract={}ms cached={}",
+            "files={} first_extract={}ms computed={} compare={}ms pairs={} groups={} second_extract={}ms cached={}",
             first.items.len(),
             first.stats.extract_ms,
             first.stats.fingerprints_computed,
+            first.stats.compare_ms,
+            first.stats.pairs_compared,
+            first.stats.groups,
             second.stats.extract_ms,
             second.stats.fingerprints_from_cache,
         );
