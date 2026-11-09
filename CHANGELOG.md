@@ -4,6 +4,21 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.9] - 2026-11-09
+
+### Fixed
+
+- The runtime label no longer claims `CUDA` when the loaded ONNX Runtime is
+  CPU-only. CUDA is shown only when `onnxruntime_providers_cuda` is present
+  next to the runtime; the bundled CPU packages show `CPU` in red when CUDA was
+  requested.
+- The model summary no longer hardcodes `CUDA`; it shows the model and input
+  size, and the actual runtime appears once embeddings start.
+- A panic in the scan thread now reports its message in the status bar and on
+  stderr instead of only `scan thread panicked`.
+- Pressing Stop during embeddings keeps the progress bar at the real position
+  instead of jumping to 100 %.
+
 ## [0.3.8] - 2026-11-09
 
 ### Fixed

@@ -49,9 +49,9 @@ Every [release](https://github.com/juampe/umdf/releases) ships:
 
 | Format | AI | Command |
 |---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.3.8_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.3.8-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.3.8-x86_64.AppImage && ./umdf-0.3.8-x86_64.AppImage` |
+| `.deb` | yes | `sudo apt install ./umdf_0.3.9_amd64.deb` |
+| `.rpm` | yes | `sudo dnf install ./umdf-0.3.9-1.x86_64.rpm` |
+| `.AppImage` | yes | `chmod +x umdf-0.3.9-x86_64.AppImage && ./umdf-0.3.9-x86_64.AppImage` |
 | `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -278,7 +278,7 @@ cosine similarity. For CLIP/SigLIP use
 `--embeddings-mean 0.48145466,0.4578275,0.40821073 --embeddings-std 0.26862954,0.26130258,0.27577711`
 and usually a lower threshold (0.85). The UI's **Models…** button hides the
 pixel metric/tolerance controls while semantic search is enabled and shows a
-compact summary (`resnet18.onnx · CUDA · 224²`).
+compact summary (`resnet18.onnx · 224²`) and the actual runtime (`CUDA`/`CPU`) once embeddings start.
 
 ## UI
 

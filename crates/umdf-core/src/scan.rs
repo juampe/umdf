@@ -23,7 +23,7 @@ pub enum Progress {
     Loaded { index: usize, total: usize, path: PathBuf },
     Embedding { done: usize, total: usize },
     /// Which execution provider the semantic model actually uses.
-    EmbeddingDevice { cuda: bool },
+    EmbeddingDevice { cuda: bool, forced_cpu: bool },
     Hashing { done: usize, total: usize },
     Comparing { done: usize, total: usize },
     Grouped { groups: usize, duplicates: usize },
@@ -382,6 +382,7 @@ fn run_inner(
                             tx,
                             Progress::EmbeddingDevice {
                                 cuda: engine.uses_cuda(),
+                                forced_cpu: engine.forced_cpu(),
                             },
                         );
                         let computed_before = stats.embeddings_computed;

@@ -73,6 +73,32 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
     fallback
 }
 
+/// Directory that contains the ONNX Runtime library in use.
+fn runtime_dir() -> Option<PathBuf> {
+    if let Some(path) = bundled_runtime() {
+        return path.parent().map(Path::to_path_buf);
+    }
+    std::env::var_os("ORT_DYLIB_PATH")
+        .map(PathBuf::from)
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+}
+
+/// ONNX Runtime CPU builds accept the CUDA execution-provider request but
+/// silently fall back to CPU. The CUDA provider ships as a separate library;
+/// its presence is the reliable signal that GPU execution is actually available.
+fn cuda_provider_available() -> bool {
+    let Some(dir) = runtime_dir() else {
+        return false;
+    };
+    #[cfg(windows)]
+    let name = "onnxruntime_providers_cuda.dll";
+    #[cfg(target_os = "linux")]
+    let name = "libonnxruntime_providers_cuda.so";
+    #[cfg(target_os = "macos")]
+    let name = "libonnxruntime_providers_cuda.dylib";
+    dir.join(name).is_file()
+}
+
 fn environment() -> &'static ort::environment::Environment {
     ENVIRONMENT.get_or_init(|| {
         let builder = match bundled_runtime() {
@@ -163,7 +189,14 @@ impl EmbeddingEngine {
 
         let mut forced_cpu = false;
         let mut used_cuda = false;
-        let session = if cfg.use_cuda {
+        let cuda_requested = cfg.use_cuda && cuda_provider_available();
+        if cfg.use_cuda && !cuda_requested {
+            crate::log_error(format_args!(
+                "UMDF: CUDA requested but onnxruntime_providers_cuda is not next to the runtime; using CPU"
+            ));
+            forced_cpu = true;
+        }
+        let session = if cuda_requested {
             match Self::build_session(&env, cfg, true) {
                 Ok(session) => {
                     used_cuda = true;

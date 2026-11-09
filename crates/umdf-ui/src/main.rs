@@ -1040,7 +1040,17 @@ fn main() -> anyhow::Result<()> {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     umdf_core::run_with_progress_cached(&cfg, Some(&ptx), Some(cache.as_ref()))
                 }))
-                .unwrap_or_else(|_| Err(anyhow::anyhow!("scan thread panicked")));
+                .unwrap_or_else(|payload| {
+                    let detail = payload
+                        .downcast_ref::<&str>()
+                        .map(|text| (*text).to_string())
+                        .or_else(|| payload.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown panic".to_string());
+                    umdf_core::log_error(format_args!(
+                        "UMDF: scan thread panicked: {detail}"
+                    ));
+                    Err(anyhow::anyhow!("scan thread panicked: {detail}"))
+                });
                 let _ = dtx.send(result.map_err(|e| e.to_string()));
             });
         });
@@ -1385,7 +1395,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_semantic_model(model.as_str().into());
             ui.set_semantic_summary(
                 format!(
-                    "{} · CUDA · 224²",
+                    "{} · 224²",
                     Path::new(model).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
                 )
                 .into(),
@@ -1658,12 +1668,7 @@ fn refresh_models(
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| active.clone());
-        let device = if ui.get_semantic_device() == 0 {
-            "CUDA"
-        } else {
-            "CPU"
-        };
-        format!("{name} · {device} · {}²", ui.get_semantic_input_size())
+        format!("{name} · {}²", ui.get_semantic_input_size())
     };
     ui.set_semantic_summary(summary.into());
 }
@@ -1726,9 +1731,9 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             };
             set_progress(ui, pct);
         }
-        Progress::EmbeddingDevice { cuda } => {
+        Progress::EmbeddingDevice { cuda, forced_cpu } => {
             ui.set_semantic_runtime(if cuda { "CUDA" } else { "CPU" }.into());
-            ui.set_semantic_runtime_cpu(!cuda);
+            ui.set_semantic_runtime_cpu(!cuda && forced_cpu);
         }
         Progress::Hashing { done, total } => {
             ui.set_stage(tr.stage_hashing(done, total).into());
