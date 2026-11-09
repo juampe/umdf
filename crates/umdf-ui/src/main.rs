@@ -921,7 +921,7 @@ fn main() -> anyhow::Result<()> {
                 let tr = Tr::new(lang.get());
                 ui.set_models_status(format!("{}…", tr.strings().runtime_install).into());
                 let ui_weak = ui_handle.clone();
-                let lang = lang.clone();
+                let lang_value = lang.get();
                 std::thread::spawn(move || {
                     let result = (|| -> anyhow::Result<()> {
                         let zip = std::env::temp_dir().join("umdf-ort-gpu.zip");
@@ -952,10 +952,10 @@ fn main() -> anyhow::Result<()> {
                     })();
                     let _ = slint::invoke_from_event_loop(move || {
                         let Some(ui) = ui_weak.upgrade() else { return };
-                        let tr = Tr::new(lang.get());
+                        let tr = Tr::new(lang_value);
                         match result {
                             Ok(()) => {
-                                let (status, details) = runtime_report(lang.get());
+                                let (status, details) = runtime_report(lang_value);
                                 ui.set_runtime_status(status.into());
                                 ui.set_runtime_details(details.into());
                                 ui.set_models_status(tr.strings().runtime_restart.clone());
@@ -2515,8 +2515,8 @@ fn cuda_ort_url() -> &'static str {
     let cuda13 = std::process::Command::new("nvidia-smi")
         .output()
         .ok()
-        .map(|output| String::from_utf8_lossy(&output.stdout).contains("CUDA Version: 13"))
-        .unwrap_or(false);
+        .map(|output| !String::from_utf8_lossy(&output.stdout).contains("CUDA Version: 12"))
+        .unwrap_or(true);
     if cuda13 {
         "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-win-x64-gpu_cuda13-1.31.1.zip"
     } else {
