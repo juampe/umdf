@@ -52,6 +52,8 @@ pub struct Settings {
     pub threads: usize,
     /// Dark theme.
     pub dark_mode: bool,
+    /// Width of the preview column in logical pixels.
+    pub preview_width: f32,
     /// Skip trash directories during scans.
     pub exclude_trash: bool,
     /// Directory names to skip when `exclude_trash` is true. Edit this list in
@@ -84,6 +86,7 @@ impl Default for Settings {
             keep_policy: "original".to_string(),
             threads: 0,
             dark_mode: false,
+            preview_width: 340.0,
             exclude_trash: true,
             trash_dirs: vec![
                 ".dtrash".to_string(),

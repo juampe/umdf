@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• Perceptuel : l'image est redimensionnée en 75×75 en niveaux de gris ; « dpf » compte les pixels dans la tolérance de gris.",
+      "text": "• Perceptuel : l'image est redimensionnée en 32×32 en niveaux de gris ; « dpf » compte les pixels dans la tolérance de gris.",
       "kind": 2
+    },
+    {
+      "text": "• Photos très sombres ou à faible contraste : augmentez la tolérance à 15–20 et abaissez le seuil à 80–85, ou utilisez ssim. Si l'image n'a pas de détail, seule une correspondance exacte SHA-256 est fiable.",
+      "kind": 1
     },
     {
       "text": "• Vidéo : ffprobe + une image à « Frame position », avec la même empreinte d'image.",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• Sémantique (optionnel) : embeddings ONNX (ResNet/CLIP/SigLIP) comparés par cosinus. Désactivé dans les compilations standard ; les paquets AI l'incluent.",
+      "text": "• Sémantique (optionnel) : embeddings ONNX (ResNet/CLIP/SigLIP) comparés par cosinus. Inclus dans le paquet AI ; activez-le dans Options.",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "Les paquets AI incluent un ONNX Runtime CPU et utilisent le CPU par défaut. Pour CUDA, pointez ORT_DYLIB_PATH vers un runtime GPU et sélectionnez CUDA ; en cas d'échec, le CPU est utilisé.",
+      "text": "Les paquets AI incluent ONNX Runtime CPU. Pour CUDA, installez CUDA + cuDNN et remplacez les DLL du dossier lib de l'application par ONNX Runtime GPU (v1.31.1) ; l'application détecte le fournisseur automatiquement. ORT_DYLIB_PATH n'est nécessaire que pour un dossier personnalisé.",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• La grille 75×75 en niveaux de gris peut échouer sur des images très sombres, à faible contraste ou majoritairement uniformes.",
+      "text": "• La grille 32×32 peut encore échouer sur des images très sombres, à faible contraste ou majoritairement uniformes. dpf exige désormais du contraste (écart-type ≥ 3) et Pearson ≥ 40 % ; les copies exactes sont trouvées par SHA-256.",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• Les compilations standard n'ont pas d'embeddings ; les paquets AI incluent un runtime CPU. CUDA nécessite un ONNX Runtime GPU externe (ORT_DYLIB_PATH).",
+      "text": "• CUDA nécessite un GPU NVIDIA, CUDA + cuDNN et ONNX Runtime GPU ; sans eux, l'application utilise le runtime CPU inclus.",
       "kind": 2
     },
     {

@@ -43,6 +43,7 @@ fn bundled_runtime() -> Option<PathBuf> {
         candidates.push(contents.join("Frameworks"));
         candidates.push(contents.join("Resources"));
     }
+    candidates.extend(user_runtime_dirs());
     candidates
         .iter()
         .find_map(|candidate| runtime_in(candidate))
@@ -77,6 +78,30 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
     fallback
 }
 
+
+/// Runtime folders a user can populate without touching the installation:
+/// `%LOCALAPPDATA%\umdf\runtime\cuda` on Windows, `~/.local/share/umdf/runtime/cuda`
+/// on Linux and `~/Library/Application Support/umdf/runtime/cuda` on macOS.
+fn user_runtime_dirs() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    #[cfg(target_os = "linux")]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|home| PathBuf::from(home).join(".local").join("share"))
+        });
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(|home| PathBuf::from(home).join("Library").join("Application Support"));
+    let Some(base) = base else {
+        return Vec::new();
+    };
+    let runtime = base.join("umdf").join("runtime");
+    vec![runtime.join("cuda"), runtime.join("cpu"), runtime]
+}
+
 /// Directory that contains the ONNX Runtime library in use.
 fn runtime_dir() -> Option<PathBuf> {
     if let Some(path) = bundled_runtime() {
@@ -90,7 +115,7 @@ fn runtime_dir() -> Option<PathBuf> {
 /// ONNX Runtime CPU builds accept the CUDA execution-provider request but
 /// silently fall back to CPU. The CUDA provider ships as a separate library;
 /// its presence is the reliable signal that GPU execution is actually available.
-fn cuda_provider_available() -> bool {
+pub fn cuda_provider_available() -> bool {
     let Some(dir) = runtime_dir() else {
         return false;
     };
@@ -105,6 +130,17 @@ fn cuda_provider_available() -> bool {
 
 /// True when a bundled or explicitly configured ONNX Runtime is present.
 /// Used by the UI to disable semantic search with a helpful message.
+pub fn runtime_status() -> &'static str {
+    if bundled_runtime().is_none() {
+        return "missing";
+    }
+    if cuda_provider_available() {
+        "CUDA"
+    } else {
+        "CPU"
+    }
+}
+
 pub fn runtime_available() -> bool {
     if bundled_runtime().is_some() {
         return true;

@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• Perceptual: la imagen se reescala a 75×75 en gris; «dpf» cuenta los píxeles dentro de la tolerancia de gris.",
+      "text": "• Perceptual: la imagen se reescala a 32×32 en gris; «dpf» cuenta los píxeles dentro de la tolerancia de gris.",
       "kind": 2
+    },
+    {
+      "text": "• Fotos muy oscuras o de bajo contraste: sube la tolerancia a 15–20 y baja el umbral a 80–85, o usa ssim. Si la imagen no tiene detalle, solo una coincidencia exacta SHA-256 es fiable.",
+      "kind": 1
     },
     {
       "text": "• Vídeo: ffprobe + un fotograma en «Frame position», con la misma huella de imagen.",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• Semántica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por coseno. En builds estándar está desactivada; los paquetes AI ya la incluyen.",
+      "text": "• Semántica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por coseno. Incluida en el paquete AI; actívala en Opciones.",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "Los paquetes AI incluyen un ONNX Runtime CPU y usan CPU por defecto. Para CUDA, apunta ORT_DYLIB_PATH a un runtime GPU y selecciona CUDA; si falla, se usa CPU.",
+      "text": "Los paquetes AI incluyen ONNX Runtime CPU. Para usar CUDA, instala CUDA + cuDNN y sustituye los DLL de la carpeta lib de la app por el ONNX Runtime GPU (v1.31.1); la app detecta el proveedor automáticamente. ORT_DYLIB_PATH solo es necesario para una carpeta personalizada.",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• La rejilla de 75×75 en gris puede fallar en imágenes muy oscuras, de bajo contraste o con grandes zonas uniformes.",
+      "text": "• La rejilla de 32×32 puede fallar en imágenes muy oscuras, de bajo contraste o con grandes zonas uniformes. dpf exige ahora contraste (desv. típica ≥ 3) y Pearson ≥ 40 %; las copias exactas se encuentran por SHA-256.",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• Builds estándar sin embeddings; paquetes AI con runtime CPU. CUDA requiere ONNX Runtime GPU externo (ORT_DYLIB_PATH).",
+      "text": "• CUDA requiere una GPU NVIDIA, CUDA + cuDNN y el ONNX Runtime GPU; sin ellos la app usa el runtime CPU incluido.",
       "kind": 2
     },
     {

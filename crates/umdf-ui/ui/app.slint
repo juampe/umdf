@@ -566,10 +566,12 @@ export component AppWindow inherits Window {
     in-out property <length> preview-drag-width: 340px;
     in-out property <length> preview-drag-x: 0px;
     in-out property <bool> lightbox-open: false;
+    in-out property <length> list-scroll-y: 0px;
     // Leave room for the fixed location panel and a usable match list.
     out property <length> preview-max: Math.max(340px, root.width - 840px);
 
     callback persist-settings();
+    callback request-thumbnails(offset: length, height: length);
     callback start();
     callback stop();
     callback toggle-pause();
@@ -641,6 +643,14 @@ export component AppWindow inherits Window {
                 if (root.selected-row >= 0) {
                     root.delete-row(root.selected-row);
                 }
+                return accept;
+            }
+            if (event.text == Key.PageDown) {
+                root.list-scroll-y -= 420px;
+                return accept;
+            }
+            if (event.text == Key.PageUp) {
+                root.list-scroll-y += 420px;
                 return accept;
             }
             return reject;
@@ -1106,7 +1116,14 @@ export component AppWindow inherits Window {
 
                         Rectangle {
                             vertical-stretch: 1;
-                            ListView {
+                            match-list := ListView {
+                                content-y <=> root.list-scroll-y;
+                                changed content-y => {
+                                    root.request-thumbnails(self.content-y, self.visible-height);
+                                }
+                                changed visible-height => {
+                                    root.request-thumbnails(self.content-y, self.visible-height);
+                                }
                                 for row[i] in root.rows : Rectangle {
                                     height: root.row-height;
                                     background: i == root.selected-row
@@ -1181,6 +1198,9 @@ export component AppWindow inherits Window {
                                 root.preview-drag-x = self.mouse-x;
                                 root.preview-drag-width = root.preview-width;
                             }
+                            if (event.kind == PointerEventKind.up) {
+                                root.persist-settings();
+                            }
                         }
                         moved => {
                             if (self.pressed) {
@@ -1225,6 +1245,7 @@ export component AppWindow inherits Window {
                                     root.preview-width = root.preview-width > 420px
                                         ? 340px
                                         : Math.min(root.width * 0.55, root.preview-max);
+                                    root.persist-settings();
                                 }
                             }
                         }

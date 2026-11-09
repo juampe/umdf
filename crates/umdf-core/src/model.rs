@@ -255,6 +255,8 @@ pub struct Group {
     pub keep: usize,
     /// Items that the policy suggests removing/moving.
     pub remove: Vec<usize>,
+    /// Similarity of each `remove` item against `keep`, in the same order.
+    pub member_scores: Vec<f32>,
     pub max_similarity: f32,
     /// How likely the kept member is the original (0..100 heuristic).
     pub keep_confidence: f32,

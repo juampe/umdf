@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• Percetual: a imagem é redimensionada para 75×75 em tons de cinza; «dpf» conta os píxeis dentro da tolerância de cinza.",
+      "text": "• Percetual: a imagem é redimensionada para 32×32 em tons de cinza; «dpf» conta os píxeis dentro da tolerância de cinza.",
       "kind": 2
+    },
+    {
+      "text": "• Fotos muito escuras ou de baixo contraste: aumente a tolerância para 15–20 e baixe o limiar para 80–85, ou use ssim. Se a imagem não tiver detalhe, apenas uma correspondência exata SHA-256 é fiável.",
+      "kind": 1
     },
     {
       "text": "• Vídeo: ffprobe + um fotograma em «Frame position», com a mesma impressão digital de imagem.",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• Semântica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por cosseno. Desativada nas compilações padrão; os pacotes AI incluem-na.",
+      "text": "• Semântica (opcional): embeddings ONNX (ResNet/CLIP/SigLIP) comparados por cosseno. Incluída no pacote AI; ative-a em Opções.",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "Os pacotes AI incluem um ONNX Runtime CPU e usam CPU por predefinição. Para CUDA, aponte ORT_DYLIB_PATH para um runtime GPU e selecione CUDA; se falhar, usa-se CPU.",
+      "text": "Os pacotes AI incluem ONNX Runtime CPU. Para CUDA, instale CUDA + cuDNN e substitua as DLL na pasta lib da aplicação pelo ONNX Runtime GPU (v1.31.1); a aplicação deteta o fornecedor automaticamente. ORT_DYLIB_PATH só é necessário para uma pasta personalizada.",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• A grelha 75×75 em tons de cinza pode falhar em imagens muito escuras, de baixo contraste ou maioritariamente uniformes.",
+      "text": "• A grelha 32×32 pode continuar a falhar em imagens muito escuras, de baixo contraste ou maioritariamente uniformes. dpf exige agora contraste (desvio padrão ≥ 3) e Pearson ≥ 40 %; as cópias exatas são encontradas por SHA-256.",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• As compilações padrão não têm embeddings; os pacotes AI incluem um runtime CPU. CUDA requer um ONNX Runtime GPU externo (ORT_DYLIB_PATH).",
+      "text": "• CUDA requer uma GPU NVIDIA, CUDA + cuDNN e o ONNX Runtime GPU; sem eles a aplicação usa o runtime CPU incluído.",
       "kind": 2
     },
     {

@@ -3,8 +3,66 @@
 use std::collections::HashMap;
 
 use crate::config::{KeepPolicy, ScanConfig};
+use crate::fingerprint;
 use crate::model::{Group, Match, MediaItem};
 use crate::originality;
+
+/// Similarity of two items with the same rule used by the comparison stage.
+fn direct_score(
+    items: &[MediaItem],
+    a: usize,
+    b: usize,
+    cfg: &ScanConfig,
+) -> Option<f32> {
+    let ai = &items[a];
+    let bi = &items[b];
+    if let (Some(ea), Some(eb)) = (ai.embedding.as_ref(), bi.embedding.as_ref()) {
+        return Some(fingerprint::cosine_percent(ea, eb));
+    }
+    let (Some(fa), Some(fb)) = (ai.fingerprint.as_ref(), bi.fingerprint.as_ref()) else {
+        return None;
+    };
+    fingerprint::similarity(fa, fb, cfg.metric, cfg.pixel_tolerance)
+}
+
+/// A member joins a group only when it matches the chosen keep directly.
+/// Union-find alone allows chains (A~B, B~C) to put visually unrelated A and C
+/// in the same group, which looked like a 100 % false positive in the UI.
+fn member_matches_keep(
+    items: &[MediaItem],
+    keep: usize,
+    other: usize,
+    cfg: &ScanConfig,
+) -> bool {
+    let ai = &items[keep];
+    let bi = &items[other];
+    let threshold = if ai.embedding.is_some() && bi.embedding.is_some() {
+        cfg.embeddings
+            .as_ref()
+            .map(|e| e.threshold * 100.0)
+            .unwrap_or(cfg.similarity_threshold)
+    } else {
+        cfg.similarity_threshold
+    };
+    if ai.embedding.is_some() && bi.embedding.is_some() {
+        return direct_score(items, keep, other, cfg)
+            .map(|score| score >= threshold)
+            .unwrap_or(true);
+    }
+    let (Some(fa), Some(fb)) = (ai.fingerprint.as_ref(), bi.fingerprint.as_ref()) else {
+        // No fingerprint to check (for example an exact video match): keep it.
+        return true;
+    };
+    fingerprint::similarity_at_least(
+        fa,
+        fb,
+        cfg.metric,
+        cfg.pixel_tolerance,
+        threshold,
+    )
+    .map(|score| score >= threshold)
+    .unwrap_or(false)
+}
 
 struct DisjointSet {
     parent: Vec<usize>,
@@ -54,14 +112,6 @@ pub fn build_groups(items: &[MediaItem], matches: &[Match], cfg: &ScanConfig) ->
     }
 
     let mut buckets: HashMap<usize, Vec<usize>> = HashMap::new();
-    let mut max_sim: HashMap<usize, f32> = HashMap::new();
-    for m in matches {
-        let root = ds.find(m.a);
-        max_sim
-            .entry(root)
-            .and_modify(|s| *s = s.max(m.similarity))
-            .or_insert(m.similarity);
-    }
     for item in items {
         let root = ds.find(item.id);
         let members = buckets.entry(root).or_default();
@@ -71,7 +121,7 @@ pub fn build_groups(items: &[MediaItem], matches: &[Match], cfg: &ScanConfig) ->
     let mut groups: Vec<Group> = buckets
         .into_values()
         .filter(|m| m.len() > 1)
-        .map(|mut members| {
+        .filter_map(|mut members| {
             let assessments = originality::assess_group(items, &members);
             match cfg.keep_policy {
                 KeepPolicy::MostLikelyOriginal => members.sort_by(|a, b| {
@@ -84,23 +134,30 @@ pub fn build_groups(items: &[MediaItem], matches: &[Match], cfg: &ScanConfig) ->
                 other => members.sort_by(|a, b| compare_for_keep(&items[*a], &items[*b], other)),
             }
             let keep = members[0];
-            let mut remove: Vec<usize> = members[1..].to_vec();
-            if cfg.leave_one && remove.len() == members.len() {
-                remove.pop();
+            // Break transitive chains: only direct matches to the keep stay.
+            members.retain(|member| *member == keep || member_matches_keep(items, keep, *member, cfg));
+            if members.len() <= 1 {
+                return None;
             }
+            let remove: Vec<usize> = members[1..].to_vec();
+            let member_scores: Vec<f32> = remove
+                .iter()
+                .map(|id| direct_score(items, keep, *id, cfg).unwrap_or(0.0))
+                .collect();
             let reclaimable = remove.iter().map(|id| items[*id].size).sum();
-            let root = ds.find(keep);
+            let max_similarity = member_scores.iter().copied().fold(0.0f32, f32::max);
             let assessment = assessments.get(&keep);
-            Group {
+            Some(Group {
                 number: 0,
-                max_similarity: max_sim.get(&root).copied().unwrap_or(100.0),
+                max_similarity,
                 keep_confidence: assessment.map(|a| a.confidence).unwrap_or(100.0),
                 keep_reasons: assessment.map(|a| a.reasons.clone()).unwrap_or_default(),
                 keep,
                 items: members,
                 remove,
+                member_scores,
                 reclaimable_bytes: reclaimable,
-            }
+            })
         })
         .collect();
 
@@ -156,7 +213,7 @@ pub fn policy_label(policy: KeepPolicy) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{MatchKind, MediaKind};
+    use crate::model::{Fingerprint, MatchKind, MediaKind};
     use std::path::PathBuf;
 
     fn item(id: usize, name: &str, size: u64) -> MediaItem {
@@ -178,6 +235,44 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].keep, 2);
         assert_eq!(groups[0].remove, vec![1, 0]);
+    }
+
+    #[test]
+    fn a_chain_does_not_put_unrelated_items_in_the_same_group() {
+        let a_values: Vec<i16> = (0..1024)
+            .map(|i| if i % 2 == 0 { 50 } else { -50 })
+            .collect();
+        let c_values: Vec<i16> = (0..1024)
+            .map(|i| ((i * 13) % 80) as i16 - 40)
+            .collect();
+        let fingerprint = |values: Vec<i16>| Fingerprint {
+            size: 32,
+            mean: 100,
+            values,
+        };
+        let mut a = item(0, "a.jpg", 10);
+        a.fingerprint = Some(fingerprint(a_values.clone()));
+        let mut b = item(1, "b.jpg", 20);
+        // B is a real copy of A.
+        b.fingerprint = Some(fingerprint(a_values));
+        let mut c = item(2, "c.jpg", 30);
+        c.fingerprint = Some(fingerprint(c_values));
+        let items = vec![a, b, c];
+        let matches = vec![
+            Match { a: 0, b: 1, similarity: 100.0, kind: MatchKind::Similar },
+            // The comparison accepted B~C, which would chain A and C together.
+            Match { a: 1, b: 2, similarity: 90.0, kind: MatchKind::Similar },
+        ];
+        let cfg = ScanConfig {
+            keep_policy: KeepPolicy::FirstName,
+            ..Default::default()
+        };
+        let groups = build_groups(&items, &matches, &cfg);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].keep, 0);
+        assert_eq!(groups[0].items, vec![0, 1]);
+        assert!(!groups[0].items.contains(&2));
+        assert_eq!(groups[0].member_scores.len(), groups[0].remove.len());
     }
 
     #[test]

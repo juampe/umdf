@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• 感知：图像缩放为 75×75 灰度图；“dpf”统计灰度容差内的像素。",
+      "text": "• 感知：图像缩放为 32×32 灰度图；“dpf”统计灰度容差内的像素。",
       "kind": 2
+    },
+    {
+      "text": "• 非常暗或低对比度的照片：将容差提高到 15–20，将阈值降低到 80–85，或使用 ssim。如果图像没有细节，只有精确的 SHA-256 匹配才可靠。",
+      "kind": 1
     },
     {
       "text": "• 视频：ffprobe + “Frame position”处的一帧，使用相同的图像指纹。",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• 语义（可选）：ONNX 嵌入（ResNet/CLIP/SigLIP）按余弦比较。标准版本中禁用；AI 包已包含。",
+      "text": "• 语义（可选）：ONNX 嵌入（ResNet/CLIP/SigLIP）按余弦比较。AI 包已包含；在选项中启用。",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "AI 包内置 CPU ONNX Runtime，默认使用 CPU。要使用 CUDA，请将 ORT_DYLIB_PATH 指向 GPU 运行时并选择 CUDA；失败时会使用 CPU。",
+      "text": "AI 包内置 CPU ONNX Runtime。使用 CUDA 时，请安装 CUDA + cuDNN，并用 GPU ONNX Runtime（v1.31.1）替换应用 lib 文件夹中的 DLL；应用会自动检测提供程序。只有自定义文件夹才需要 ORT_DYLIB_PATH。",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• 75×75 灰度网格在非常暗、低对比度或大片均匀的图像上可能失败。",
+      "text": "• 32×32 网格在非常暗、低对比度或大片均匀的图像上仍可能不可靠。dpf 现在要求对比度（标准差 ≥ 3）和 Pearson ≥ 40%；完全相同的副本由 SHA-256 找到。",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• 标准版本没有嵌入；AI 包内置 CPU 运行时。CUDA 需要外部 GPU ONNX Runtime（ORT_DYLIB_PATH）。",
+      "text": "• CUDA 需要 NVIDIA GPU、CUDA + cuDNN 和 GPU ONNX Runtime；没有这些时应用使用内置 CPU 运行时。",
       "kind": 2
     },
     {

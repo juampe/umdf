@@ -101,7 +101,8 @@ fn threads_index(threads: usize) -> i32 {
 }
 
 /// Above this many rows we skip thumbnails to keep the UI responsive.
-const MAX_THUMBNAIL_ROWS: usize = 300;
+// Initial batch; the rest are generated lazily from the ListView viewport.
+const MAX_THUMBNAIL_ROWS: usize = 100;
 
 /// Raw RGBA thumbnail/preview data (definitely `Send`, unlike `slint::Image`).
 type ThumbData = (u32, u32, Vec<u8>);
@@ -178,6 +179,13 @@ fn main() -> anyhow::Result<()> {
     let runtime_missing = false;
     ui.set_embeddings_supported(cfg!(feature = "embeddings") && !runtime_missing);
     ui.set_semantic_runtime_missing(runtime_missing);
+    #[cfg(feature = "embeddings")]
+    {
+        let status = umdf_core::embeddings::runtime_status();
+        if status != "missing" {
+            ui.set_semantic_runtime(status.into());
+        }
+    }
 
     let (models_dir, device, threshold, active_model, installed) = {
         let guard = settings.lock().expect("settings lock");
@@ -231,6 +239,11 @@ fn main() -> anyhow::Result<()> {
     ui.set_metric_index(metric_index(&boot_metric));
     ui.set_threads_index(threads_index(boot_threads));
     ui.set_dark_mode(boot_dark);
+    let boot_preview_width = settings
+        .lock()
+        .map(|guard| guard.preview_width)
+        .unwrap_or(340.0);
+    ui.set_preview_width(boot_preview_width.clamp(260.0, 900.0));
     ui.set_exclude_trash(boot_exclude_trash);
     ui.set_exclude_trash_label(boot.exclude_trash_label().into());
     ui.set_move_dest(boot_move_dest.into());
@@ -297,6 +310,51 @@ fn main() -> anyhow::Result<()> {
     let preview_cache: Arc<Mutex<HashMap<String, Option<PreviewData>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let preview_gen = Arc::new(AtomicU64::new(0));
+
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let thumbs = thumbs.clone();
+        let thumb_gen = thumb_gen.clone();
+        let last_range: Rc<Cell<(usize, usize)>> = Rc::new(Cell::new((usize::MAX, usize::MAX)));
+        ui.on_request_thumbnails(move |offset, height| {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            let count = rows.row_count();
+            if count == 0 || height <= 0.0 {
+                return;
+            }
+            let row_height = 38.0f32;
+            let first = ((-offset).max(0.0) / row_height).floor() as usize;
+            let first = first.saturating_sub(4);
+            let visible = (height / row_height).ceil() as usize + 8;
+            let last = (first + visible).min(count);
+            if (first, last) == last_range.get() {
+                return;
+            }
+            last_range.set((first, last));
+            let mut jobs = Vec::with_capacity(last.saturating_sub(first));
+            for idx in first..last {
+                if let Some(row) = rows.row_data(idx) {
+                    jobs.push((
+                        idx,
+                        row.original_path.to_string(),
+                        row.duplicate_path.to_string(),
+                    ));
+                }
+            }
+            if jobs.is_empty() {
+                return;
+            }
+            let generation = thumb_gen.fetch_add(1, Ordering::SeqCst) + 1;
+            spawn_thumbnails(
+                ui.as_weak(),
+                jobs,
+                thumbs.clone(),
+                thumb_gen.clone(),
+                generation,
+            );
+        });
+    }
 
     let (ptx, prx) = channel::<Progress>();
     let (dtx, drx) = channel::<Result<ScanReport, String>>();
@@ -1146,6 +1204,7 @@ fn main() -> anyhow::Result<()> {
                     match result {
                         Ok(report) => {
                             let stopped = stopped || report.stats.cancelled;
+                            write_skipped_log(&report);
                             apply_report(&ui, &rows, &report, &tr, &thumbs, &thumb_gen, &ui_stats);
                             if demo_select {
                                 ui.invoke_select_row(0);
@@ -1549,6 +1608,7 @@ fn save_ui_settings(
         guard.keep_policy = KEEP_NAMES[ui.get_keep_index().clamp(0, 7) as usize].to_string();
         guard.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
         guard.dark_mode = ui.get_dark_mode();
+        guard.preview_width = ui.get_preview_width().clamp(260.0, 2000.0);
         guard.exclude_trash = ui.get_exclude_trash();
         if let Err(error) = guard.save() {
             umdf_core::log_error(format_args!("UMDF: could not save config.toml: {error}"));
@@ -1822,6 +1882,39 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
     }
 }
 
+fn write_skipped_log(report: &ScanReport) {
+    let path = umdf_core::log_path().with_file_name("corrupt.log");
+    let mut text = String::from("# UMDF skipped files\n");
+    text.push_str("# path\tbytes\treason\n");
+    let mut count = 0usize;
+    for item in &report.items {
+        if let Some(reason) = &item.extract_error {
+            let reason = reason.replace(['\n', '\r', '\t'], " ");
+            text.push_str(&format!(
+                "{}\t{}\t{}\n",
+                item.path.display(),
+                item.size,
+                reason
+            ));
+            count += 1;
+        }
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match std::fs::write(&path, text) {
+        Ok(()) => umdf_core::log_error(format_args!(
+            "UMDF: skipped files report: {} entries at {}",
+            count,
+            path.display()
+        )),
+        Err(error) => umdf_core::log_error(format_args!(
+            "UMDF: could not write {}: {error}",
+            path.display()
+        )),
+    }
+}
+
 fn apply_report(
     ui: &AppWindow,
     rows: &Rc<VecModel<RowItem>>,
@@ -1836,8 +1929,13 @@ fn apply_report(
 
     for group in &report.groups {
         let keep = &report.items[group.keep];
-        for id in &group.remove {
+        for (member_index, id) in group.remove.iter().enumerate() {
             let item = &report.items[*id];
+            let member_similarity = group
+                .member_scores
+                .get(member_index)
+                .copied()
+                .unwrap_or(group.max_similarity);
             let idx = model.len();
             let keep_path = keep.path.to_string_lossy().to_string();
             let dup_path = item.path.to_string_lossy().to_string();
@@ -1849,7 +1947,7 @@ fn apply_report(
                 group: group.number.to_string().into(),
                 original: keep.file_name().into(),
                 duplicate: item.file_name().into(),
-                similarity: format!("{:.1}%", group.max_similarity).into(),
+                similarity: format!("{:.1}%", member_similarity).into(),
                 size: human_bytes(item.size).into(),
                 original_path: keep_path.into(),
                 duplicate_path: dup_path.into(),

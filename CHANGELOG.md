@@ -4,6 +4,39 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.2] - 2026-11-09
+
+### Fixed
+
+- Grouping no longer chains unrelated images together. Union-find could put A
+  and C in the same group through B even when A and C did not match. Every
+  member must now match the chosen keep directly, and the list shows the
+  keep-to-duplicate score instead of the group maximum. This removes the
+  "different photos at 100 %" rows.
+- Files of 0 bytes are reported as `empty file (0 bytes)` and skipped before
+  any decode. The first 0.6.2 scan rewrites the old decoder messages in the
+  failure cache.
+- The list generates thumbnails lazily for the visible viewport, not only the
+  first 300 rows, so scrolling no longer leaves blank thumbnails.
+
+### Added
+
+- `corrupt.log` next to the configuration lists every skipped file with its
+  path, byte size and reason. On Windows:
+  `%LOCALAPPDATA%\umdf\corrupt.log`.
+- The preview column width is saved in `config.toml` and restored at startup.
+- The AI runtime search path also includes
+  `%LOCALAPPDATA%\umdf\runtime\cuda` (and the platform equivalent), so a
+  GPU ONNX Runtime can live outside `Program Files`.
+- Help updated: 32x32 grid, no "standard builds", dark/low-contrast guidance,
+  and explicit CUDA/cuDNN/GPU-runtime instructions.
+
+### Changed
+
+- The preview lightbox uses 1280x960 preview images (already in 0.6.1).
+- Match-list columns are slightly narrower and the preview can grow without
+  overflowing a 1280 px window.
+
 ## [0.6.1] - 2026-11-09
 
 ### Fixed

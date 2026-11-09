@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• Perzeptuell: Das Bild wird auf 75×75 Graustufen skaliert; „dpf“ zählt Pixel innerhalb der Graustufen-Toleranz.",
+      "text": "• Perzeptuell: Das Bild wird auf 32×32 Graustufen skaliert; „dpf“ zählt Pixel innerhalb der Graustufen-Toleranz.",
       "kind": 2
+    },
+    {
+      "text": "• Sehr dunkle oder kontrastarme Fotos: Toleranz auf 15–20 erhöhen und Schwelle auf 80–85 senken oder ssim verwenden. Ohne Bilddetails ist nur eine exakte SHA-256-Übereinstimmung zuverlässig.",
+      "kind": 1
     },
     {
       "text": "• Video: ffprobe + ein Frame bei „Frame position“, mit demselben Bild-Fingerabdruck.",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• Semantisch (optional): ONNX-Embeddings (ResNet/CLIP/SigLIP), per Kosinus verglichen. In Standard-Builds deaktiviert; AI-Pakete enthalten es.",
+      "text": "• Semantisch (optional): ONNX-Embeddings (ResNet/CLIP/SigLIP), per Kosinus verglichen. Im AI-Paket enthalten; in den Optionen aktivieren.",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "AI-Pakete enthalten eine CPU-ONNX-Runtime und verwenden standardmäßig CPU. Für CUDA ORT_DYLIB_PATH auf eine GPU-Runtime setzen und CUDA wählen; bei Fehlern wird CPU verwendet.",
+      "text": "AI-Pakete enthalten eine CPU-ONNX-Runtime. Für CUDA CUDA + cuDNN installieren und die DLLs im lib-Ordner der App durch die GPU-ONNX-Runtime (v1.31.1) ersetzen; die App erkennt den Anbieter automatisch. ORT_DYLIB_PATH ist nur für einen eigenen Ordner nötig.",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• Das 75×75-Graustufenraster kann bei sehr dunklen, kontrastarmen oder überwiegend gleichförmigen Bildern versagen.",
+      "text": "• Das 32×32-Raster kann bei sehr dunklen, kontrastarmen oder überwiegend gleichförmigen Bildern weiterhin unzuverlässig sein. dpf verlangt jetzt Kontrast (Std.-Abw. ≥ 3) und Pearson ≥ 40 %; exakte Kopien werden per SHA-256 gefunden.",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• Standard-Builds haben keine Embeddings; AI-Pakete enthalten eine CPU-Runtime. CUDA erfordert eine externe GPU-ONNX-Runtime (ORT_DYLIB_PATH).",
+      "text": "• CUDA erfordert eine NVIDIA-GPU, CUDA + cuDNN und die GPU-ONNX-Runtime; ohne sie nutzt die App die enthaltene CPU-Runtime.",
       "kind": 2
     },
     {

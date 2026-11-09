@@ -199,8 +199,12 @@
       "kind": 2
     },
     {
-      "text": "• Perceptual: the image is resampled to 75×75 grayscale; 'dpf' counts pixels within the gray tolerance.",
+      "text": "• Perceptual: the image is resampled to 32×32 grayscale; 'dpf' counts pixels within the gray tolerance.",
       "kind": 2
+    },
+    {
+      "text": "• Very dark or low-contrast photos: raise the tolerance to 15–20 and lower the threshold to 80–85, or use ssim. If the image has no detail, only an exact SHA-256 match is reliable.",
+      "kind": 1
     },
     {
       "text": "• Video: ffprobe + one frame at 'Frame position', fingerprinted as an image.",
@@ -247,7 +251,7 @@
       "kind": 2
     },
     {
-      "text": "• Semantic (optional): ONNX embeddings (ResNet/CLIP/SigLIP) compared by cosine. Disabled in standard builds; AI packages include it.",
+      "text": "• Semantic (optional): ONNX embeddings (ResNet/CLIP/SigLIP) compared by cosine. Included in the AI package; enable it in Options.",
       "kind": 2
     },
     {
@@ -275,7 +279,7 @@
       "kind": 2
     },
     {
-      "text": "AI packages bundle a CPU ONNX Runtime and default to CPU. For CUDA, point ORT_DYLIB_PATH at a GPU runtime and select CUDA; if it fails, CPU is used.",
+      "text": "AI packages include a CPU ONNX Runtime. To use CUDA, install CUDA + cuDNN and replace the DLLs in the app's lib folder with the GPU ONNX Runtime (v1.31.1); the app detects the provider automatically. ORT_DYLIB_PATH is only needed for a custom folder.",
       "kind": 2
     },
     {
@@ -371,7 +375,7 @@
       "kind": 2
     },
     {
-      "text": "• The 75×75 grayscale grid can fail on very dark, low-contrast or mostly uniform images.",
+      "text": "• The 32×32 grid can still be unreliable on very dark, low-contrast or mostly uniform images. dpf now requires contrast (std ≥ 3) and Pearson ≥ 40 %; exact copies are found by SHA-256.",
       "kind": 2
     },
     {
@@ -411,7 +415,7 @@
       "kind": 2
     },
     {
-      "text": "• Standard builds have no embeddings; AI packages bundle a CPU runtime. CUDA requires an external GPU ONNX Runtime (ORT_DYLIB_PATH).",
+      "text": "• CUDA requires an NVIDIA GPU, CUDA + cuDNN and the GPU ONNX Runtime; without them the app uses the bundled CPU runtime.",
       "kind": 2
     },
     {

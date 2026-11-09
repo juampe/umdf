@@ -50,7 +50,7 @@ pub fn log_error(args: std::fmt::Arguments<'_>) {
     }
 }
 
-fn log_path() -> std::path::PathBuf {
+pub fn log_path() -> std::path::PathBuf {
     #[cfg(windows)]
     let base = std::env::var_os("LOCALAPPDATA")
         .map(std::path::PathBuf::from)

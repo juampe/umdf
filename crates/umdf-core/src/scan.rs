@@ -1153,6 +1153,17 @@ fn extract_item(
     let (modified, created) = (cand.modified, cand.created);
     item.modified = modified;
     let modified_ms = modified.map(|date| date.timestamp_millis());
+    if cand.size == 0 {
+        let reason = "empty file (0 bytes)".to_string();
+        let cached = cache.and_then(|cache| cache.failure(&cand.path, 0, modified_ms));
+        if cached.as_deref() != Some(reason.as_str()) {
+            if let Some(cache) = cache {
+                cache.store_failure(&cand.path, 0, modified_ms, &reason);
+            }
+        }
+        item.extract_error = Some(reason);
+        return Some((item, None, false));
+    }
 
     let cached_metadata =
         cache.and_then(|cache| cache.metadata(&cand.path, cand.size, modified_ms));
