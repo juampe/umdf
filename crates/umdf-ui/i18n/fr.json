@@ -20,8 +20,8 @@
     "home": "Dossier personnel",
     "computer": "Ordinateur",
     "folders_none": "Dossiers à analyser (aucun)",
-    "remove_selected": "Retirer la sélection",
-    "clear_all": "Tout effacer",
+    "remove_selected": "Retirer",
+    "clear_all": "Vider",
     "opt_scan_subfolders": "Inclure les sous-dossiers",
     "opt_only_identical": "Uniquement 100 % identiques",
     "opt_compare_media": "Comparer le contenu multimédia",
@@ -72,7 +72,10 @@
     "up": "Monter",
     "go": "Aller",
     "select_this_folder": "Utiliser ce dossier",
-    "show_hidden": "Afficher les fichiers cachés"
+    "show_hidden": "Afficher les fichiers cachés",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "semantic_runtime_missing": "ONNX Runtime n’est pas installé. Installez le paquet AI ou téléchargez-le sur https://onnxruntime.ai et définissez ORT_DYLIB_PATH."
   },
   "phrases": {
     "folders_label": "Dossiers à analyser ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "Exclure les corbeilles",
     "help_config": "Configuration (config.toml)",
     "help_config_body": "Les dossiers, la destination, la métrique, la tolérance, les threads, le thème et l’exclusion des corbeilles sont enregistrés automatiquement dans config.toml. La liste trash_dirs par défaut (.dtrash, .Trash, $RECYCLE.BIN…) peut y être modifiée ; désactivez l’exclusion avec la case « Exclure les corbeilles ».",
-    "status_cache_hits": "{count} depuis le cache"
+    "status_cache_hits": "{count} depuis le cache",
+    "status_paused": "En pause"
   },
   "help": [
     {

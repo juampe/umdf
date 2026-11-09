@@ -128,6 +128,8 @@ struct StringsRaw {
     start: String,
     scanning: String,
     stop: String,
+    pause: String,
+    resume: String,
     dark: String,
     light: String,
     language: String,
@@ -165,6 +167,7 @@ struct StringsRaw {
     models_none: String,
     models_clear_cache: String,
     semantic_unavailable: String,
+    semantic_runtime_missing: String,
     opt_tolerance: String,
     trash_all: String,
     move_all: String,
@@ -207,6 +210,8 @@ impl StringsRaw {
             start: self.start.clone().into(),
             scanning: self.scanning.clone().into(),
             stop: self.stop.clone().into(),
+            pause: self.pause.clone().into(),
+            resume: self.resume.clone().into(),
             dark: self.dark.clone().into(),
             light: self.light.clone().into(),
             language: self.language.clone().into(),
@@ -244,6 +249,7 @@ impl StringsRaw {
             models_none: self.models_none.clone().into(),
             models_clear_cache: self.models_clear_cache.clone().into(),
             semantic_unavailable: self.semantic_unavailable.clone().into(),
+            semantic_runtime_missing: self.semantic_runtime_missing.clone().into(),
             opt_tolerance: self.opt_tolerance.clone().into(),
             trash_all: self.trash_all.clone().into(),
             move_all: self.move_all.clone().into(),
@@ -425,6 +431,10 @@ impl Tr {
 
     pub fn status_scanning(&self) -> String {
         self.phrase("status_scanning").into()
+    }
+
+    pub fn status_paused(&self) -> String {
+        self.phrase("status_paused").into()
     }
 
     pub fn status_busy(&self) -> String {
@@ -774,7 +784,7 @@ mod tests {
             let catalog = catalog(lang);
             assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
             assert!(catalog.help.len() > 10, "{}", lang.code());
-            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "status_cache_hits", "help_config"] {
+            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "status_cache_hits", "status_paused", "help_config"] {
                 assert!(
                     catalog.phrases.contains_key(key),
                     "{} missing {key}",

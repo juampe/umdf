@@ -20,8 +20,8 @@
     "home": "홈",
     "computer": "컴퓨터",
     "folders_none": "검사할 폴더 (없음)",
-    "remove_selected": "선택 항목 제거",
-    "clear_all": "모두 지우기",
+    "remove_selected": "제거",
+    "clear_all": "비우기",
     "opt_scan_subfolders": "하위 폴더 포함",
     "opt_only_identical": "100% 동일만",
     "opt_compare_media": "미디어 내용 비교",
@@ -72,7 +72,10 @@
     "up": "위로",
     "go": "이동",
     "select_this_folder": "이 폴더 사용",
-    "show_hidden": "숨김 파일 표시"
+    "show_hidden": "숨김 파일 표시",
+    "pause": "일시정지",
+    "resume": "재개",
+    "semantic_runtime_missing": "ONNX Runtime이 설치되어 있지 않습니다. AI 패키지를 설치하거나 https://onnxruntime.ai에서 다운로드한 뒤 ORT_DYLIB_PATH를 설정하세요."
   },
   "phrases": {
     "folders_label": "검사할 폴더 ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "휴지통 폴더 제외",
     "help_config": "설정 (config.toml)",
     "help_config_body": "폴더, 대상, 지표, 허용 오차, 스레드, 테마, 휴지통 제외가 config.toml에 자동 저장됩니다. 기본 trash_dirs 목록(.dtrash, .Trash, $RECYCLE.BIN 등)을 여기에서 수정할 수 있습니다. “휴지통 폴더 제외”를 끄면 제외하지 않습니다.",
-    "status_cache_hits": "{count}개 캐시에서"
+    "status_cache_hits": "{count}개 캐시에서",
+    "status_paused": "일시정지됨"
   },
   "help": [
     {

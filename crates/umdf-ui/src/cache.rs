@@ -269,7 +269,34 @@ impl CacheDb {
                  created_at TEXT NOT NULL DEFAULT (datetime('now'))
              );
              CREATE INDEX IF NOT EXISTS metadata_cache_created
-                 ON metadata_cache(created_at);",
+                 ON metadata_cache(created_at);
+             CREATE TABLE IF NOT EXISTS content_hash_cache (
+                 path TEXT PRIMARY KEY,
+                 size INTEGER NOT NULL,
+                 modified INTEGER,
+                 hash TEXT NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE TABLE IF NOT EXISTS media_signature_cache (
+                 path TEXT NOT NULL,
+                 params TEXT NOT NULL,
+                 size INTEGER NOT NULL,
+                 modified INTEGER,
+                 signature TEXT NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                 PRIMARY KEY (path, params)
+             );
+             CREATE TABLE IF NOT EXISTS video_frame_cache (
+                 path TEXT NOT NULL,
+                 at_ms INTEGER NOT NULL,
+                 grid INTEGER NOT NULL,
+                 size INTEGER NOT NULL,
+                 modified INTEGER,
+                 mean INTEGER NOT NULL,
+                 data BLOB NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                 PRIMARY KEY (path, at_ms, grid)
+             );",
         )
         .context("creating cache schema")?;
         migrate_keys_for(&conn, cfg!(windows)).context("migrating cache keys")?;
@@ -330,7 +357,10 @@ impl CacheDb {
         conn.execute_batch(
             "DELETE FROM fingerprint_cache;
              DELETE FROM embedding_cache;
-             DELETE FROM metadata_cache;",
+             DELETE FROM metadata_cache;
+             DELETE FROM content_hash_cache;
+             DELETE FROM media_signature_cache;
+             DELETE FROM video_frame_cache;",
         )?;
         Ok(())
     }
@@ -495,6 +525,157 @@ impl CacheDb {
         );
     }
 
+    fn get_content_hash(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+    ) -> Option<String> {
+        let conn = self.conn.lock().ok()?;
+        let (cached_size, cached_modified, hash) = conn
+            .query_row(
+                "SELECT size, modified, hash FROM content_hash_cache WHERE path = ?1",
+                params![cache_key(path)],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, String>(2)?)),
+            )
+            .ok()?;
+        if cached_size as u64 == size && cached_modified == modified {
+            Some(hash)
+        } else {
+            None
+        }
+    }
+
+    fn put_content_hash(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        hash: &str,
+    ) {
+        let Ok(conn) = self.conn.lock() else { return };
+        let _ = conn.execute(
+            "INSERT INTO content_hash_cache(path, size, modified, hash)
+             VALUES(?1, ?2, ?3, ?4)
+             ON CONFLICT(path) DO UPDATE SET
+                 size = excluded.size, modified = excluded.modified,
+                 hash = excluded.hash, created_at = datetime('now')",
+            params![cache_key(path), size as i64, modified, hash],
+        );
+    }
+
+    fn get_media_signature(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        params_key: &str,
+    ) -> Option<String> {
+        let conn = self.conn.lock().ok()?;
+        let (cached_size, cached_modified, signature) = conn
+            .query_row(
+                "SELECT size, modified, signature FROM media_signature_cache
+                 WHERE path = ?1 AND params = ?2",
+                params![cache_key(path), params_key],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, String>(2)?)),
+            )
+            .ok()?;
+        if cached_size as u64 == size && cached_modified == modified {
+            Some(signature)
+        } else {
+            None
+        }
+    }
+
+    fn put_media_signature(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        params_key: &str,
+        signature: &str,
+    ) {
+        let Ok(conn) = self.conn.lock() else { return };
+        let _ = conn.execute(
+            "INSERT INTO media_signature_cache(path, params, size, modified, signature)
+             VALUES(?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(path, params) DO UPDATE SET
+                 size = excluded.size, modified = excluded.modified,
+                 signature = excluded.signature, created_at = datetime('now')",
+            params![cache_key(path), params_key, size as i64, modified, signature],
+        );
+    }
+
+    fn get_video_frame(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        at_secs: f64,
+        grid: u32,
+    ) -> Option<Fingerprint> {
+        let at_ms = (at_secs * 1000.0).round() as i64;
+        let conn = self.conn.lock().ok()?;
+        let (cached_size, cached_modified, mean, bytes) = conn
+            .query_row(
+                "SELECT size, modified, mean, data FROM video_frame_cache
+                 WHERE path = ?1 AND at_ms = ?2 AND grid = ?3",
+                params![cache_key(path), at_ms, grid as i64],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, Vec<u8>>(3)?,
+                    ))
+                },
+            )
+            .ok()?;
+        if cached_size as u64 != size || cached_modified != modified || grid == 0 {
+            return None;
+        }
+        let values = decode_i16(&bytes);
+        if values.len() != (grid as usize).pow(2) {
+            return None;
+        }
+        Some(Fingerprint {
+            size: grid,
+            mean: mean.clamp(i16::MIN as i64, i16::MAX as i64) as i16,
+            values,
+        })
+    }
+
+    fn put_video_frame(
+        &self,
+        path: &Path,
+        size: u64,
+        modified: Option<i64>,
+        at_secs: f64,
+        grid: u32,
+        fingerprint: &Fingerprint,
+    ) {
+        let Ok(conn) = self.conn.lock() else { return };
+        let at_ms = (at_secs * 1000.0).round() as i64;
+        let bytes = encode_i16(&fingerprint.values);
+        let _ = conn.execute(
+            "INSERT INTO video_frame_cache(path, at_ms, grid, size, modified, mean, data)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(path, at_ms, grid) DO UPDATE SET
+                 size = excluded.size, modified = excluded.modified,
+                 mean = excluded.mean, data = excluded.data,
+                 created_at = datetime('now')",
+            params![
+                cache_key(path),
+                at_ms,
+                grid as i64,
+                size as i64,
+                modified,
+                fingerprint.mean as i64,
+                bytes
+            ],
+        );
+    }
+
     fn get_embedding(
         &self,
         path: &Path,
@@ -598,6 +779,69 @@ impl ScanCache for CacheDb {
         metadata: &CachedMetadata,
     ) {
         self.put_metadata(path, size, modified_ms, metadata)
+    }
+
+    fn content_hash(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+    ) -> Option<String> {
+        self.get_content_hash(path, size, modified_ms)
+    }
+
+    fn store_content_hash(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        hash: &str,
+    ) {
+        self.put_content_hash(path, size, modified_ms, hash)
+    }
+
+    fn media_signature(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        params_key: &str,
+    ) -> Option<String> {
+        self.get_media_signature(path, size, modified_ms, params_key)
+    }
+
+    fn store_media_signature(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        params_key: &str,
+        signature: &str,
+    ) {
+        self.put_media_signature(path, size, modified_ms, params_key, signature)
+    }
+
+    fn video_frame(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        at_secs: f64,
+        grid: u32,
+    ) -> Option<Fingerprint> {
+        self.get_video_frame(path, size, modified_ms, at_secs, grid)
+    }
+
+    fn store_video_frame(
+        &self,
+        path: &Path,
+        size: u64,
+        modified_ms: Option<i64>,
+        at_secs: f64,
+        grid: u32,
+        fingerprint: &Fingerprint,
+    ) {
+        self.put_video_frame(path, size, modified_ms, at_secs, grid, fingerprint)
     }
 
     fn embedding(
@@ -760,6 +1004,43 @@ mod tests {
         assert!(db
             .get_fingerprint(Path::new(r"b:\photos\a.jpg"), 10, Some(100), 2)
             .is_some());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn content_media_and_video_round_trip() {
+        let (path, db) = temp_db("content");
+        let file = Path::new("/media/a.mp4");
+
+        db.put_content_hash(file, 10, Some(100), "abc123");
+        assert_eq!(
+            db.get_content_hash(file, 10, Some(100)),
+            Some("abc123".to_string())
+        );
+        assert!(db.get_content_hash(file, 10, Some(101)).is_none());
+
+        db.put_media_signature(file, 10, Some(100), "audio|5|5", "sig");
+        assert_eq!(
+            db.get_media_signature(file, 10, Some(100), "audio|5|5"),
+            Some("sig".to_string())
+        );
+        assert!(db
+            .get_media_signature(file, 10, Some(100), "audio|6|5")
+            .is_none());
+
+        let fingerprint = Fingerprint {
+            size: 2,
+            mean: -2,
+            values: vec![1, 2, 3, 4],
+        };
+        db.put_video_frame(file, 10, Some(100), 1.5, 2, &fingerprint);
+        assert_eq!(
+            db.get_video_frame(file, 10, Some(100), 1.5, 2),
+            Some(fingerprint)
+        );
+        assert!(db.get_video_frame(file, 10, Some(101), 1.5, 2).is_none());
+        assert!(db.get_video_frame(file, 10, Some(100), 1.4, 2).is_none());
+
         let _ = std::fs::remove_file(path);
     }
 

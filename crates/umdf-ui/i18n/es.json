@@ -20,8 +20,8 @@
     "home": "Inicio",
     "computer": "Equipo",
     "folders_none": "Carpetas a escanear (ninguna)",
-    "remove_selected": "Quitar seleccionada",
-    "clear_all": "Quitar todas",
+    "remove_selected": "Quitar",
+    "clear_all": "Limpiar",
     "opt_scan_subfolders": "Incluir subcarpetas",
     "opt_only_identical": "Solo 100 % idénticos",
     "opt_compare_media": "Comparar contenido multimedia",
@@ -72,7 +72,10 @@
     "up": "Subir",
     "go": "Ir",
     "select_this_folder": "Usar esta carpeta",
-    "show_hidden": "Mostrar ocultas"
+    "show_hidden": "Mostrar ocultas",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "semantic_runtime_missing": "ONNX Runtime no está instalado. Instala el paquete AI o descárgalo de https://onnxruntime.ai y define ORT_DYLIB_PATH."
   },
   "phrases": {
     "folders_label": "Carpetas a escanear ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "Excluir papeleras",
     "help_config": "Configuración (config.toml)",
     "help_config_body": "Las carpetas, el destino, la métrica, la tolerancia, los hilos, el tema y la exclusión de papeleras se guardan automáticamente en config.toml. La lista trash_dirs por defecto (.dtrash, .Trash, $RECYCLE.BIN...) se puede editar ahí; desactiva la exclusión con la casilla «Excluir papeleras».",
-    "status_cache_hits": "{count} desde caché"
+    "status_cache_hits": "{count} desde caché",
+    "status_paused": "Pausado"
   },
   "help": [
     {

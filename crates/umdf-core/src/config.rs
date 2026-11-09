@@ -167,6 +167,11 @@ pub struct ScanConfig {
     /// Cooperative cancellation flag (not serialised).
     #[serde(skip)]
     pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+
+    /// Cooperative pause flag (not serialised). While true, the worker loops
+    /// sleep between batches instead of consuming CPU/GPU.
+    #[serde(skip)]
+    pub pause: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl ScanConfig {
@@ -204,6 +209,7 @@ impl Default for ScanConfig {
             action: Action::None,
             apply: false,
             cancel: None,
+            pause: None,
         }
     }
 }

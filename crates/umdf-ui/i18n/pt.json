@@ -20,8 +20,8 @@
     "home": "Pasta pessoal",
     "computer": "Computador",
     "folders_none": "Pastas a analisar (nenhuma)",
-    "remove_selected": "Remover selecionada",
-    "clear_all": "Limpar tudo",
+    "remove_selected": "Remover",
+    "clear_all": "Limpar",
     "opt_scan_subfolders": "Incluir subpastas",
     "opt_only_identical": "Apenas 100% idênticos",
     "opt_compare_media": "Comparar conteúdo multimédia",
@@ -72,7 +72,10 @@
     "up": "Subir",
     "go": "Ir",
     "select_this_folder": "Usar esta pasta",
-    "show_hidden": "Mostrar ocultos"
+    "show_hidden": "Mostrar ocultos",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "semantic_runtime_missing": "O ONNX Runtime não está instalado. Instala o pacote AI ou descarrega-o de https://onnxruntime.ai e define ORT_DYLIB_PATH."
   },
   "phrases": {
     "folders_label": "Pastas a analisar ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "Excluir pastas de lixo",
     "help_config": "Configuração (config.toml)",
     "help_config_body": "Pastas, destino, métrica, tolerância, threads, tema e exclusão de pastas de lixo são guardados automaticamente em config.toml. A lista predefinida trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) pode ser editada aí; desative a exclusão com a caixa «Excluir pastas de lixo».",
-    "status_cache_hits": "{count} da cache"
+    "status_cache_hits": "{count} da cache",
+    "status_paused": "Em pausa"
   },
   "help": [
     {

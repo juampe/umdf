@@ -99,6 +99,18 @@ fn cuda_provider_available() -> bool {
     dir.join(name).is_file()
 }
 
+/// True when a bundled or explicitly configured ONNX Runtime is present.
+/// Used by the UI to disable semantic search with a helpful message.
+pub fn runtime_available() -> bool {
+    if bundled_runtime().is_some() {
+        return true;
+    }
+    std::env::var_os("ORT_DYLIB_PATH")
+        .map(PathBuf::from)
+        .map(|path| path.is_file())
+        .unwrap_or(false)
+}
+
 fn environment() -> &'static ort::environment::Environment {
     ENVIRONMENT.get_or_init(|| {
         let builder = match bundled_runtime() {
@@ -265,7 +277,7 @@ impl EmbeddingEngine {
     pub fn embed_paths(&mut self, paths: &[PathBuf]) -> Result<Vec<Option<Vec<f32>>>> {
         let mut out: Vec<Option<Vec<f32>>> = vec![None; paths.len()];
         let never = AtomicBool::new(false);
-        self.embed_paths_incremental(paths, &never, |start, batch| {
+        self.embed_paths_incremental(paths, &never, None, |start, batch| {
             for (offset, value) in batch.into_iter().enumerate() {
                 out[start + offset] = value;
             }
@@ -284,6 +296,7 @@ impl EmbeddingEngine {
         &mut self,
         paths: &[PathBuf],
         cancel: &AtomicBool,
+        pause: Option<&AtomicBool>,
         mut on_batch: F,
     ) -> Result<()>
     where
@@ -295,6 +308,11 @@ impl EmbeddingEngine {
         let batch_size = self.batch_size.max(1);
 
         for (chunk_index, chunk) in paths.chunks(batch_size).enumerate() {
+            if let Some(pause) = pause {
+                while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
             if cancel.load(Ordering::Relaxed) {
                 break;
             }

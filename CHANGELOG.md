@@ -4,6 +4,29 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-09
+
+### Added
+
+- Cached video frame fingerprints, audio PCM signatures and whole-file SHA-256
+  values. Audio/video rescans no longer run ffprobe/ffmpeg hashing for
+  unchanged files.
+- Pause/Resume button. The worker loops sleep between extraction, embedding,
+  hashing and comparison batches; the progress bar and elapsed time stay
+  visible.
+- If ONNX Runtime is missing, semantic search is disabled and the UI explains
+  how to obtain it and set `ORT_DYLIB_PATH`.
+
+### Changed
+
+- All release packages are AI builds. The lite portable archives are gone;
+  installers and portables include the embeddings feature.
+- macOS Intel is an AI build without a bundled ONNX Runtime (there is no
+  1.31.1 x86_64 macOS runtime); the UI guides the user to install it.
+- Models modal: cache paths and counters are on separate lines so the counters
+  are never elided; lighter backdrop.
+- Left folder actions are `Quitar`/`Limpiar` (and localized equivalents).
+
 ## [0.4.0] - 2026-11-09
 
 ### Added

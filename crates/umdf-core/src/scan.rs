@@ -1,7 +1,7 @@
 //! Scan orchestrator: discovery → extraction → matching → grouping.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
@@ -61,6 +61,14 @@ pub struct Stats {
     pub metadata_from_cache: usize,
     /// Files whose metadata had to be read from disk.
     pub metadata_computed: usize,
+    /// Whole-file SHA-256 values restored from the cache.
+    pub hashes_from_cache: usize,
+    /// Whole-file SHA-256 values computed in this scan.
+    pub hashes_computed: usize,
+    /// Audio/video signatures restored from the cache.
+    pub media_signatures_from_cache: usize,
+    /// Video frame fingerprints restored from the cache.
+    pub video_frames_from_cache: usize,
     /// Images whose semantic embedding failed (the scan continued).
     pub embedding_errors: usize,
     pub extract_ms: u128,
@@ -114,6 +122,69 @@ pub trait ScanCache: Send + Sync {
         _size: u64,
         _modified_ms: Option<i64>,
         _metadata: &CachedMetadata,
+    ) {
+    }
+
+    /// Cached whole-file SHA-256 for an unchanged file.
+    fn content_hash(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn store_content_hash(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _hash: &str,
+    ) {
+    }
+
+    /// Cached audio PCM signature. `params` identifies sample position/length.
+    fn media_signature(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _params: &str,
+    ) -> Option<String> {
+        None
+    }
+
+    fn store_media_signature(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _params: &str,
+        _signature: &str,
+    ) {
+    }
+
+    /// Cached perceptual fingerprint of a video frame.
+    fn video_frame(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _at_secs: f64,
+        _grid: u32,
+    ) -> Option<Fingerprint> {
+        None
+    }
+
+    fn store_video_frame(
+        &self,
+        _path: &Path,
+        _size: u64,
+        _modified_ms: Option<i64>,
+        _at_secs: f64,
+        _grid: u32,
+        _fingerprint: &Fingerprint,
     ) {
     }
 
@@ -193,6 +264,7 @@ fn run_inner(
     stats.threads = threads;
 
     let cancel_ref: &AtomicBool = cfg.cancel.as_deref().unwrap_or(&NEVER_CANCELLED);
+    let pause_ref = cfg.pause.as_deref();
     let (candidates, walk_cancelled) = walk::collect_candidates_cancellable(cfg, cancel_ref);
     stats.files_scanned = candidates.len();
     emit(
@@ -228,6 +300,7 @@ fn run_inner(
     let mut items: Vec<MediaItem> = Vec::with_capacity(candidates.len());
     let mut scanned = 0usize;
     for chunk in candidates.chunks(batch) {
+        wait_if_paused(pause_ref, cancel_ref);
         if cfg.is_cancelled() {
             break;
         }
@@ -301,6 +374,12 @@ fn run_inner(
                 }
                 if item.media_signature.is_some() {
                     stats.files_media_signed += 1;
+                    if item.media_signature_cached {
+                        stats.media_signatures_from_cache += 1;
+                    }
+                }
+                if item.video_frame_cached {
+                    stats.video_frames_from_cache += 1;
                 }
                 items.push(item);
             }
@@ -416,7 +495,11 @@ fn run_inner(
                             },
                         );
                         let computed_before = stats.embeddings_computed;
-                        let result = engine.embed_paths_incremental(&paths, cancel_ref, |start, batch| {
+                        let result = engine.embed_paths_incremental(
+                            &paths,
+                            cancel_ref,
+                            pause_ref,
+                            |start, batch| {
                             let batch_len = batch.len();
                             for (offset, maybe_vector) in batch.into_iter().enumerate() {
                                 let slot = missing[start + offset];
@@ -490,23 +573,40 @@ fn run_inner(
             total: hash_targets.len(),
         },
     );
-    let mut hashes: Vec<(usize, String)> = Vec::with_capacity(hash_targets.len());
+    let mut hashes: Vec<(usize, String, bool)> = Vec::with_capacity(hash_targets.len());
     let mut hashed_done = 0usize;
     for chunk in hash_targets.chunks(16) {
+        wait_if_paused(pause_ref, cancel_ref);
         if cfg.is_cancelled() {
             break;
         }
-        let part: Vec<(usize, String)> = chunk
+        let part: Vec<(usize, String, bool)> = chunk
             .par_iter()
             .filter_map(|id| {
                 if cfg.is_cancelled() {
                     return None;
                 }
                 let it = &items[*id];
+                let modified_ms = it.modified.map(|date| date.timestamp_millis());
+                if let Some(hash) = cache.and_then(|cache| {
+                    cache.content_hash(&it.path, it.size, modified_ms)
+                }) {
+                    return Some((*id, hash, true));
+                }
                 hash::file_hash_cancellable(&it.path, cancel_ref)
                     .ok()
                     .flatten()
-                    .map(|h| (*id, h))
+                    .map(|hash| {
+                        if let Some(cache) = cache {
+                            cache.store_content_hash(
+                                &it.path,
+                                it.size,
+                                modified_ms,
+                                &hash,
+                            );
+                        }
+                        (*id, hash, false)
+                    })
             })
             .collect();
         hashed_done += chunk.len();
@@ -519,9 +619,14 @@ fn run_inner(
             },
         );
     }
-    for (id, h) in hashes {
-        items[id].content_hash = Some(h);
+    for (id, hash, cached) in hashes {
+        items[id].content_hash = Some(hash);
         stats.files_hashed += 1;
+        if cached {
+            stats.hashes_from_cache += 1;
+        } else {
+            stats.hashes_computed += 1;
+        }
     }
 
     let mut matches: Vec<Match> = Vec::new();
@@ -589,6 +694,7 @@ fn run_inner(
         // Vec with potentially billions of pairs and keeps Stop responsive.
         let mut total_pairs: u64 = 0;
         'count: for i in 0..index.len() {
+            wait_if_paused(pause_ref, cancel_ref);
             if cfg.is_cancelled() {
                 break;
             }
@@ -629,6 +735,7 @@ fn run_inner(
             .map(|i| {
                 let mut local: Vec<Match> = Vec::new();
                 let mut counted: u64 = 0;
+                wait_if_paused(pause_ref, cancel_ref);
                 if cfg.is_cancelled() {
                     return (0, local);
                 }
@@ -857,24 +964,68 @@ fn extract_item(
             if cfg.compare_media_content {
                 if let Some(ffmpeg) = ffmpeg {
                     if kind == MediaKind::Video {
-                        if let Ok(fp) = video_frame_fingerprint(
+                        if let Some(fp) = cache.and_then(|cache| {
+                            cache.video_frame(
+                                &cand.path,
+                                cand.size,
+                                modified_ms,
+                                cfg.frame_position_secs,
+                                cfg.grid,
+                            )
+                        }) {
+                            item.fingerprint = Some(fp);
+                            item.video_frame_cached = true;
+                        } else if let Ok(fp) = video_frame_fingerprint(
                             ffmpeg,
                             &cand.path,
                             cfg.frame_position_secs,
                             cfg.grid,
                             cancel,
                         ) {
+                            if let Some(cache) = cache {
+                                cache.store_video_frame(
+                                    &cand.path,
+                                    cand.size,
+                                    modified_ms,
+                                    cfg.frame_position_secs,
+                                    cfg.grid,
+                                    &fp,
+                                );
+                            }
                             item.fingerprint = Some(fp);
                         }
                     }
                     if has_audio {
-                        if let Ok(signature) = media::audio_pcm_hash(
+                        let params_key = format!(
+                            "audio|{}|{}",
+                            cfg.frame_position_secs, AUDIO_SAMPLE_SECONDS
+                        );
+                        if let Some(signature) = cache.and_then(|cache| {
+                            cache.media_signature(
+                                &cand.path,
+                                cand.size,
+                                modified_ms,
+                                &params_key,
+                            )
+                        }) {
+                            item.media_signature = Some(signature);
+                            item.media_signature_cached = true;
+                        } else if let Ok(signature) = media::audio_pcm_hash(
                             ffmpeg,
                             &cand.path,
                             cfg.frame_position_secs,
                             AUDIO_SAMPLE_SECONDS,
                             cancel,
                         ) {
+                            if let Some(cache) = cache {
+                                cache.store_media_signature(
+                                    &cand.path,
+                                    cand.size,
+                                    modified_ms,
+                                    &params_key,
+                                    &signature,
+                                );
+                            }
                             item.media_signature = Some(signature);
                         }
                     }
@@ -962,6 +1113,14 @@ fn video_frame_fingerprint(
     fp
 }
 
+fn wait_if_paused(pause: Option<&AtomicBool>, cancel: &AtomicBool) {
+    if let Some(pause) = pause {
+        while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+}
+
 fn emit(tx: Option<&Sender<Progress>>, p: Progress) {
     if let Some(tx) = tx {
         let _ = tx.send(p);
@@ -972,7 +1131,9 @@ fn emit(tx: Option<&Sender<Progress>>, p: Progress) {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::Mutex;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     #[derive(Default)]
     struct MemoryCache {
@@ -1071,6 +1232,33 @@ mod tests {
             image::Rgb([(x * 8) as u8, (y * 8) as u8, 120])
         });
         image.save(path).unwrap();
+    }
+
+    #[test]
+    fn scan_waits_while_paused() {
+        let root =
+            std::env::temp_dir().join(format!("umdf-scan-pause-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        valid_image(&root.join("a.png"));
+        valid_image(&root.join("b.png"));
+
+        let mut cfg = ScanConfig::default();
+        cfg.folders = vec![root.clone()];
+        cfg.extensions = vec!["png".into()];
+        let pause = Arc::new(AtomicBool::new(true));
+        cfg.pause = Some(pause.clone());
+
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(run(&cfg).is_ok());
+        });
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(rx.try_recv().is_err(), "scan should be paused");
+        pause.store(false, Ordering::Relaxed);
+        assert!(rx.recv_timeout(Duration::from_secs(5)).unwrap());
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

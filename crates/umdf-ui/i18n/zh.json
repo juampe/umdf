@@ -20,8 +20,8 @@
     "home": "主目录",
     "computer": "计算机",
     "folders_none": "要扫描的文件夹（无）",
-    "remove_selected": "移除所选",
-    "clear_all": "全部清除",
+    "remove_selected": "移除",
+    "clear_all": "清空",
     "opt_scan_subfolders": "包含子文件夹",
     "opt_only_identical": "仅 100% 相同",
     "opt_compare_media": "比较媒体内容",
@@ -72,7 +72,10 @@
     "up": "上一级",
     "go": "前往",
     "select_this_folder": "使用此文件夹",
-    "show_hidden": "显示隐藏文件"
+    "show_hidden": "显示隐藏文件",
+    "pause": "暂停",
+    "resume": "继续",
+    "semantic_runtime_missing": "未安装 ONNX Runtime。请安装 AI 包，或从 https://onnxruntime.ai 下载并设置 ORT_DYLIB_PATH。"
   },
   "phrases": {
     "folders_label": "要扫描的文件夹（{n}）",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "排除回收站文件夹",
     "help_config": "配置（config.toml）",
     "help_config_body": "文件夹、目标位置、指标、容差、线程、主题和回收站排除会自动保存在 config.toml 中。可在其中编辑默认的 trash_dirs 列表（.dtrash、.Trash、$RECYCLE.BIN 等）；取消勾选“排除回收站文件夹”即可关闭排除。",
-    "status_cache_hits": "{count} 个来自缓存"
+    "status_cache_hits": "{count} 个来自缓存",
+    "status_paused": "已暂停"
   },
   "help": [
     {

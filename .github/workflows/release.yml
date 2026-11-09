@@ -30,116 +30,26 @@ jobs:
             target: x86_64-unknown-linux-gnu
             name: linux-x86_64
             archive: tar.gz
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            name: windows-x86_64
-            archive: zip
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            name: macos-x86_64
-            archive: tar.gz
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            name: macos-aarch64
-            archive: tar.gz
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.name }}
-
-      - name: Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev libgl1-mesa-dev libegl1-mesa-dev libwayland-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev
-
-      - name: Build release binaries
-        env:
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
-        run: cargo build --release --workspace --target ${{ matrix.target }}
-
-      - name: Package
-        shell: bash
-        env:
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          TARGET: ${{ matrix.target }}
-          NAME: ${{ matrix.name }}
-          ARCHIVE: ${{ matrix.archive }}
-        run: |
-          set -euo pipefail
-          out="umdf-${TAG}-${NAME}"
-          mkdir -p "dist/${out}"
-          if [ "${RUNNER_OS}" = "Windows" ]; then ext=".exe"; else ext=""; fi
-          cp "target/${TARGET}/release/umdf${ext}" "dist/${out}/"
-          if [ "${RUNNER_OS}" = "macOS" ]; then
-            bash packaging/build-macos-app.sh "target/${TARGET}/release" "dist/${out}/UMDF.app" "${TAG#v}"
-          else
-            cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
-          fi
-          cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
-          cp assets/fonts/NOTO-COPYRIGHT.txt "dist/${out}/NOTO-COPYRIGHT.txt"
-          cat > "dist/${out}/SOURCE.txt" <<EOF
-          UMDF ${TAG}
-          Corresponding source code:
-          https://github.com/juampe/umdf/tree/${TAG}
-          EOF
-          if [ "${RUNNER_OS}" = "Linux" ]; then
-            cp packaging/umdf.desktop assets/icon-256.png "dist/${out}/"
-          fi
-          cd dist
-          if [ "${ARCHIVE}" = "zip" ]; then
-            7z a "${out}.zip" "${out}" >/dev/null
-          else
-            tar -czf "${out}.tar.gz" "${out}"
-          fi
-          ls -lh
-
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: umdf-${{ matrix.name }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
-          if-no-files-found: error
-
-  build-ai:
-    name: Build AI (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            name: linux-x86_64-ai
-            archive: tar.gz
             ort_archive: onnxruntime-linux-x64-1.31.1.tgz
             ort_root: onnxruntime-linux-x64-1.31.1
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            name: windows-x86_64-ai
+            name: windows-x86_64
             archive: zip
             ort_archive: onnxruntime-win-x64-1.31.1.zip
             ort_root: onnxruntime-win-x64-1.31.1
           - os: macos-latest
             target: aarch64-apple-darwin
-            name: macos-aarch64-ai
+            name: macos-aarch64
             archive: tar.gz
             ort_archive: onnxruntime-osx-arm64-1.31.1.tgz
             ort_root: onnxruntime-osx-arm64-1.31.1
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: macos-x86_64
+            archive: tar.gz
+            ort_archive: ""
+            ort_root: ""
 
     steps:
       - name: Checkout
@@ -175,21 +85,23 @@ jobs:
           ORT_ROOT: ${{ matrix.ort_root }}
         run: |
           set -euo pipefail
-          archive="$RUNNER_TEMP/${ORT_ARCHIVE}"
-          if ! curl -fsSL --retry 8 --retry-all-errors --retry-delay 5 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$archive"; then
-            echo "ONNX Runtime download failed" >&2
-            exit 1
+          if [ -n "${ORT_ARCHIVE}" ]; then
+            archive="$RUNNER_TEMP/${ORT_ARCHIVE}"
+            if ! curl -fsSL --retry 8 --retry-all-errors --retry-delay 5 "${ORT_BASE}/v${ORT_VERSION}/${ORT_ARCHIVE}" -o "$archive"; then
+              echo "ONNX Runtime download failed" >&2
+              exit 1
+            fi
+            mkdir -p "$RUNNER_TEMP/ort"
+            case "${ORT_ARCHIVE}" in
+              *.zip)
+                powershell -NoProfile -Command "Expand-Archive -LiteralPath '$archive' -DestinationPath '$RUNNER_TEMP/ort' -Force"
+                ;;
+              *)
+                tar -xzf "$archive" -C "$RUNNER_TEMP/ort"
+                ;;
+            esac
+            test -d "$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
           fi
-          mkdir -p "$RUNNER_TEMP/ort"
-          case "${ORT_ARCHIVE}" in
-            *.zip)
-              powershell -NoProfile -Command "Expand-Archive -LiteralPath '$archive' -DestinationPath '$RUNNER_TEMP/ort' -Force"
-              ;;
-            *)
-              tar -xzf "$archive" -C "$RUNNER_TEMP/ort"
-              ;;
-          esac
-          test -d "$RUNNER_TEMP/ort/${ORT_ROOT}/lib"
 
       - name: Package AI build
         shell: bash
@@ -202,26 +114,30 @@ jobs:
         run: |
           set -euo pipefail
           out="umdf-${TAG}-${NAME}"
-          ort="$RUNNER_TEMP/ort/${ORT_ROOT}"
+          if [ -n "${ORT_ROOT}" ]; then ort="$RUNNER_TEMP/ort/${ORT_ROOT}"; ort_lib="$ort/lib"; else ort=""; ort_lib=""; fi
           mkdir -p "dist/${out}"
           if [ "${RUNNER_OS}" = "Windows" ]; then ext=".exe"; else ext=""; fi
           cp "target/${TARGET}/release/umdf${ext}" "dist/${out}/"
           if [ "${RUNNER_OS}" = "macOS" ]; then
-            bash packaging/build-macos-app.sh "target/${TARGET}/release" "dist/${out}/UMDF.app" "${TAG#v}" "$ort/lib"
+            bash packaging/build-macos-app.sh "target/${TARGET}/release" "dist/${out}/UMDF.app" "${TAG#v}" "$ort_lib"
           else
             cp "target/${TARGET}/release/umdf-ui${ext}" "dist/${out}/"
-            mkdir -p "dist/${out}/lib"
-            if [ "${RUNNER_OS}" = "Windows" ]; then
-              cp "$ort/lib/onnxruntime.dll" "dist/${out}/lib/"
-            else
-              find "$ort/lib" -maxdepth 1 \
-                \( -name 'libonnxruntime*.so*' -o -name 'libonnxruntime*.dylib' \) \
-                -exec cp -a {} "dist/${out}/lib/" \;
+            if [ -n "${ort_lib}" ]; then
+              mkdir -p "dist/${out}/lib"
+              if [ "${RUNNER_OS}" = "Windows" ]; then
+                cp "$ort/lib/onnxruntime.dll" "dist/${out}/lib/"
+              else
+                find "$ort/lib" -maxdepth 1 \
+                  \( -name 'libonnxruntime*.so*' -o -name 'libonnxruntime*.dylib' \) \
+                  -exec cp -a {} "dist/${out}/lib/" \;
+              fi
             fi
           fi
-          [ -f "$ort/LICENSE" ] && cp "$ort/LICENSE" "dist/${out}/ONNXRUNTIME-LICENSE"
-          [ -f "$ort/ThirdPartyNotices.txt" ] && cp "$ort/ThirdPartyNotices.txt" "dist/${out}/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt"
-          [ -f "$ort/Privacy.md" ] && cp "$ort/Privacy.md" "dist/${out}/ONNXRUNTIME-PRIVACY.md"
+          if [ -n "$ort" ]; then
+            [ -f "$ort/LICENSE" ] && cp "$ort/LICENSE" "dist/${out}/ONNXRUNTIME-LICENSE"
+            [ -f "$ort/ThirdPartyNotices.txt" ] && cp "$ort/ThirdPartyNotices.txt" "dist/${out}/ONNXRUNTIME-THIRD-PARTY-NOTICES.txt"
+            [ -f "$ort/Privacy.md" ] && cp "$ort/Privacy.md" "dist/${out}/ONNXRUNTIME-PRIVACY.md"
+          fi
           cp README.md LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md CHANGELOG.md "dist/${out}/"
           cp assets/fonts/NOTO-COPYRIGHT.txt "dist/${out}/NOTO-COPYRIGHT.txt"
           cat > "dist/${out}/SOURCE.txt" <<EOF
@@ -240,7 +156,7 @@ jobs:
           fi
           ls -lh
 
-      - name: Upload AI archive
+      - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
           name: umdf-${{ matrix.name }}
@@ -375,7 +291,7 @@ jobs:
 
   release:
     name: Publish GitHub release
-    needs: [build, build-ai, linux-packages, msi]
+    needs: [build, linux-packages, msi]
     runs-on: ubuntu-latest
     steps:
       - name: Download archives

@@ -20,8 +20,8 @@
     "home": "Cartella personale",
     "computer": "Computer",
     "folders_none": "Cartelle da analizzare (nessuna)",
-    "remove_selected": "Rimuovi selezionata",
-    "clear_all": "Pulisci tutto",
+    "remove_selected": "Rimuovi",
+    "clear_all": "Svuota",
     "opt_scan_subfolders": "Includi sottocartelle",
     "opt_only_identical": "Solo 100% identici",
     "opt_compare_media": "Confronta contenuto multimediale",
@@ -72,7 +72,10 @@
     "up": "Su",
     "go": "Vai",
     "select_this_folder": "Usa questa cartella",
-    "show_hidden": "Mostra nascosti"
+    "show_hidden": "Mostra nascosti",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "semantic_runtime_missing": "ONNX Runtime non è installato. Installa il pacchetto AI o scaricalo da https://onnxruntime.ai e imposta ORT_DYLIB_PATH."
   },
   "phrases": {
     "folders_label": "Cartelle da analizzare ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "Escludi i cestini",
     "help_config": "Configurazione (config.toml)",
     "help_config_body": "Cartelle, destinazione, metrica, tolleranza, thread, tema ed esclusione dei cestini vengono salvati automaticamente in config.toml. La lista predefinita trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) può essere modificata lì; disattiva l’esclusione con la casella «Escludi i cestini».",
-    "status_cache_hits": "{count} dalla cache"
+    "status_cache_hits": "{count} dalla cache",
+    "status_paused": "In pausa"
   },
   "help": [
     {

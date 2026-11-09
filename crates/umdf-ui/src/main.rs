@@ -171,7 +171,13 @@ fn main() -> anyhow::Result<()> {
         .into(),
     );
     set_combo_labels(&ui, &boot);
-    ui.set_embeddings_supported(cfg!(feature = "embeddings"));
+    #[cfg(feature = "embeddings")]
+    let runtime_missing =
+        !umdf_core::embeddings::runtime_available();
+    #[cfg(not(feature = "embeddings"))]
+    let runtime_missing = false;
+    ui.set_embeddings_supported(cfg!(feature = "embeddings") && !runtime_missing);
+    ui.set_semantic_runtime_missing(runtime_missing);
 
     let (models_dir, device, threshold, active_model, installed) = {
         let guard = settings.lock().expect("settings lock");
@@ -279,6 +285,7 @@ fn main() -> anyhow::Result<()> {
     save_ui_settings(&ui, &settings, &folders);
     let browser_path: Rc<RefCell<PathBuf>> = Rc::new(RefCell::new(current_dir()));
     let cancel = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
     let ui_stats: Rc<RefCell<UiStats>> = Rc::new(RefCell::new(UiStats {
         threads: auto_threads,
         ..Default::default()
@@ -940,6 +947,7 @@ fn main() -> anyhow::Result<()> {
         let cache = cache.clone();
         let settings = settings.clone();
         let scan_started = scan_started.clone();
+        let paused = paused.clone();
         ui.on_start(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
@@ -1018,10 +1026,13 @@ fn main() -> anyhow::Result<()> {
                 ui.set_status(tr.status_ffmpeg_missing().into());
             }
             cfg.cancel = Some(cancel.clone());
+            cfg.pause = Some(paused.clone());
+            paused.store(false, Ordering::Relaxed);
 
             rows.set_vec(Vec::new());
             ui.set_selected_row(-1);
             ui.set_busy(true);
+            ui.set_paused(false);
             set_progress(&ui, 0.0);
             ui.set_semantic_runtime("".into());
             ui.set_semantic_runtime_cpu(false);
@@ -1058,13 +1069,38 @@ fn main() -> anyhow::Result<()> {
     {
         let ui_handle = ui.as_weak();
         let cancel = cancel.clone();
+        let paused = paused.clone();
         let lang = lang.clone();
         ui.on_stop(move || {
             let Some(ui) = ui_handle.upgrade() else { return };
             let tr = Tr::new(lang.get());
             cancel.store(true, Ordering::Relaxed);
+            paused.store(false, Ordering::Relaxed);
+            ui.set_paused(false);
             ui.set_stage(tr.stage_stopping().into());
             ui.set_status(tr.status_stopping().into());
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let paused = paused.clone();
+        let lang = lang.clone();
+        ui.on_toggle_pause(move || {
+            let Some(ui) = ui_handle.upgrade() else { return };
+            if !ui.get_busy() {
+                return;
+            }
+            let paused_now = !paused.load(Ordering::Relaxed);
+            paused.store(paused_now, Ordering::Relaxed);
+            ui.set_paused(paused_now);
+            let tr = Tr::new(lang.get());
+            if paused_now {
+                ui.set_stage(tr.status_paused().into());
+                ui.set_status(tr.status_paused().into());
+            } else {
+                ui.set_stage(tr.status_scanning().into());
+                ui.set_status(tr.status_scanning().into());
+            }
         });
     }
 
@@ -1084,6 +1120,7 @@ fn main() -> anyhow::Result<()> {
         let thumb_gen = thumb_gen.clone();
         let ui_stats = ui_stats.clone();
         let scan_started = scan_started.clone();
+        let paused = paused.clone();
         pump.start(
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(100),
@@ -1102,6 +1139,8 @@ fn main() -> anyhow::Result<()> {
                 let done = drx.borrow_mut().try_recv();
                 if let Ok(result) = done {
                     scan_started.set(None);
+                    paused.store(false, Ordering::Relaxed);
+                    ui.set_paused(false);
                     ui.set_busy(false);
                     let stopped = cancel.load(Ordering::Relaxed);
                     match result {
@@ -1546,9 +1585,15 @@ fn update_cache_label(ui: &AppWindow, cache: &CacheDb) {
     let stats = cache.stats();
     ui.set_models_db(
         format!(
-            "config.toml: {} · cache.db: {} ({} fingerprints · {} embeddings · {} metadata · {})",
+            "config.toml: {}  ·  cache.db: {}",
             Settings::path().display(),
-            cache.path().display(),
+            cache.path().display()
+        )
+        .into(),
+    );
+    ui.set_models_counters(
+        format!(
+            "{} fingerprints · {} embeddings · {} metadata · {}",
             stats.fingerprints,
             stats.embeddings,
             stats.metadata,

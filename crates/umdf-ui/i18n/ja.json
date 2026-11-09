@@ -20,8 +20,8 @@
     "home": "ホーム",
     "computer": "コンピューター",
     "folders_none": "スキャンするフォルダー（なし）",
-    "remove_selected": "選択を削除",
-    "clear_all": "すべてクリア",
+    "remove_selected": "削除",
+    "clear_all": "クリア",
     "opt_scan_subfolders": "サブフォルダーを含める",
     "opt_only_identical": "100% 一致のみ",
     "opt_compare_media": "メディア内容を比較",
@@ -72,7 +72,10 @@
     "up": "上へ",
     "go": "移動",
     "select_this_folder": "このフォルダーを使用",
-    "show_hidden": "隠しファイルを表示"
+    "show_hidden": "隠しファイルを表示",
+    "pause": "一時停止",
+    "resume": "再開",
+    "semantic_runtime_missing": "ONNX Runtime がインストールされていません。AI パッケージをインストールするか、https://onnxruntime.ai からダウンロードして ORT_DYLIB_PATH を設定してください。"
   },
   "phrases": {
     "folders_label": "スキャンするフォルダー（{n}）",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "ゴミ箱フォルダーを除外",
     "help_config": "設定（config.toml）",
     "help_config_body": "フォルダー、保存先、指標、許容値、スレッド、テーマ、ゴミ箱の除外は config.toml に自動保存されます。既定の trash_dirs リスト（.dtrash、.Trash、$RECYCLE.BIN など）はそこで編集できます。「ゴミ箱フォルダーを除外」をオフにすると除外されません。",
-    "status_cache_hits": "{count} 件はキャッシュから"
+    "status_cache_hits": "{count} 件はキャッシュから",
+    "status_paused": "一時停止中"
   },
   "help": [
     {

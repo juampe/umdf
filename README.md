@@ -38,21 +38,21 @@ crates/umdf-ui     `umdf-ui` Slint desktop app
 
 ## Install (prebuilt binaries)
 
-Every [release](https://github.com/juampe/umdf/releases) ships:
-
-- **Standard archives** — small, no ONNX Runtime; pixel metrics only.
-- **AI archives / installers** — include a bundled **CPU ONNX Runtime 1.31.1**
-  and the `embeddings` feature, so semantic search and the Models manager work
-  out of the box.
+Every [release](https://github.com/juampe/umdf/releases) is **AI**: semantic
+search is part of the product, not an optional reduced build. Installers and
+the Linux/Windows portable archives bundle a **CPU ONNX Runtime 1.31.1**.
+If a runtime is missing (for example the macOS Intel archive), semantic search
+is disabled and the UI explains how to install ONNX Runtime and set
+`ORT_DYLIB_PATH`.
 
 ### Linux
 
-| Format | AI | Command |
-|---|:---:|---|
-| `.deb` | yes | `sudo apt install ./umdf_0.4.0_amd64.deb` |
-| `.rpm` | yes | `sudo dnf install ./umdf-0.4.0-1.x86_64.rpm` |
-| `.AppImage` | yes | `chmod +x umdf-0.4.0-x86_64.AppImage && ./umdf-0.4.0-x86_64.AppImage` |
-| `.tar.gz` | optional | extract and run `umdf` / `umdf-ui` |
+| Format | Command |
+|---|---|
+| `.deb` | `sudo apt install ./umdf_0.5.0_amd64.deb` |
+| `.rpm` | `sudo dnf install ./umdf-0.5.0-1.x86_64.rpm` |
+| `.AppImage` | `chmod +x umdf-0.5.0-x86_64.AppImage && ./umdf-0.5.0-x86_64.AppImage` |
+| `.tar.gz` | extract and run `umdf` / `umdf-ui`; bundles ONNX Runtime |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
 licenses. They are built against **glibc 2.35** (Ubuntu 22.04); the RPM targets
@@ -61,17 +61,17 @@ OpenGL drivers.
 
 ### Windows
 
-| Format | AI | Notes |
-|---|:---:|---|
-| `.msi` | yes | Start Menu + Desktop shortcuts, includes `onnxruntime.dll` |
-| `.zip` | optional | portable; the `-ai` archive includes `lib\onnxruntime.dll` |
+| Format | Notes |
+|---|---|
+| `.msi` | Start Menu + Desktop shortcuts, includes `onnxruntime.dll` |
+| `.zip` | portable; includes `lib\onnxruntime.dll` |
 
 ### macOS
 
-| Format | AI | Notes |
-|---|:---:|---|
-| `.tar.gz` (Intel) | no | `UMDF.app` + `umdf`, macOS 11+ |
-| `.tar.gz` (Apple Silicon) | optional | `-ai` archive bundles ONNX Runtime; macOS 14+ |
+| Format | Notes |
+|---|---|
+| `.tar.gz` (Intel) | `UMDF.app` + `umdf`, macOS 11+; AI build, ONNX Runtime external |
+| `.tar.gz` (Apple Silicon) | `UMDF.app` + `umdf`, macOS 14+; bundles ONNX Runtime |
 
 The macOS builds are not notarised. If Gatekeeper blocks the app, right-click →
 **Open**, or run `xattr -d com.apple.quarantine UMDF.app`.

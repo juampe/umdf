@@ -34,7 +34,7 @@ global Theme {
     out property <color> warn_bg: dark ? #2d2416 : #fff7ed;
     out property <color> warn_text: dark ? #fdba74 : #9a3412;
     out property <color> folder: #f59e0b;
-    out property <color> backdrop: dark ? #0b1220cc : #0f172a66;
+    out property <color> backdrop: dark ? #0b1220a6 : #0f172a66;
     out property <color> thumb_bg: dark ? #1e293b : #f1f5f9;
     out property <color> disabled_bg: dark ? #1e293b : #f1f5f9;
     out property <color> disabled_line: dark ? #2d3b52 : #cbd5e1;
@@ -53,6 +53,8 @@ export struct Strings {
     start: string,
     scanning: string,
     stop: string,
+    pause: string,
+    resume: string,
     dark: string,
     light: string,
     language: string,
@@ -93,6 +95,7 @@ export struct Strings {
     models_none: string,
     models_clear_cache: string,
     semantic_unavailable: string,
+    semantic_runtime_missing: string,
     opt_tolerance: string,
 
     trash_all: string,
@@ -360,6 +363,8 @@ export component AppWindow inherits Window {
         start: "Start",
         scanning: "Scanning…",
         stop: "Stop",
+        pause: "Pause",
+        resume: "Resume",
         dark: "Dark",
         light: "Light",
         language: "Language",
@@ -397,6 +402,7 @@ export component AppWindow inherits Window {
         models_none: "No models installed yet. Download one below.",
         models_clear_cache: "Clear cache",
         semantic_unavailable: "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
+        semantic_runtime_missing: "ONNX Runtime is not installed. Install the AI package or download it from https://onnxruntime.ai and set ORT_DYLIB_PATH.",
         opt_tolerance: "Pixel tolerance",
         trash_all: "Trash all duplicates",
         move_all: "Move all",
@@ -447,6 +453,7 @@ export component AppWindow inherits Window {
     in-out property <bool> browser-drives: false;
     in-out property <string> stage: "Ready";
     in-out property <string> status: "Add a folder to begin.";
+    in-out property <bool> paused: false;
     in-out property <float> progress: 0;
     in-out property <string> progress-label: "0 %";
     in-out property <int> lang-index: 0;
@@ -468,6 +475,7 @@ export component AppWindow inherits Window {
     in-out property <int> metric-index: 0;
     in-out property <int> threads-index: 0;
     in-out property <bool> embeddings-supported: false;
+    in-out property <bool> semantic-runtime-missing: false;
     in-out property <bool> semantic-enabled: false;
     in-out property <string> semantic-model: "";
     in-out property <int> semantic-device: 0;
@@ -484,6 +492,7 @@ export component AppWindow inherits Window {
     in-out property <[ModelRow]> model-rows;
     in-out property <string> models-status: "";
     in-out property <string> models-db: "";
+    in-out property <string> models-counters: "";
     in-out property <string> models-dir: "models";
     in-out property <string> move-dest: "";
     in-out property <string> app-version: "";
@@ -504,6 +513,7 @@ export component AppWindow inherits Window {
     callback persist-settings();
     callback start();
     callback stop();
+    callback toggle-pause();
     callback set-lang(int);
     callback toggle-theme();
     callback toggle-hidden(bool);
@@ -706,6 +716,14 @@ export component AppWindow inherits Window {
                         clicked => { root.start(); }
                     }
                     FlatButton {
+                        label: root.paused ? root.strings.resume : root.strings.pause;
+                        height: 36px;
+                        minw: 84px;
+                        enabled: root.busy;
+                        bg: Theme.soft;
+                        clicked => { root.toggle-pause(); }
+                    }
+                    FlatButton {
                         label: root.strings.stop;
                         height: 36px;
                         minw: 72px;
@@ -863,9 +881,15 @@ export component AppWindow inherits Window {
                                         checked <=> root.semantic-enabled;
                                         enabled: root.embeddings-supported;
                                     }
-                                    if !root.embeddings-supported : Text {
+                                    if !root.embeddings-supported && !root.semantic-runtime-missing : Text {
                                         text: root.strings.semantic_unavailable;
                                         color: Theme.faint;
+                                        font-size: 9px;
+                                        wrap: word-wrap;
+                                    }
+                                    if root.semantic-runtime-missing : Text {
+                                        text: root.strings.semantic_runtime_missing;
+                                        color: Theme.warn_text;
                                         font-size: 9px;
                                         wrap: word-wrap;
                                     }
@@ -1465,11 +1489,21 @@ export component AppWindow inherits Window {
                         wrap: word-wrap;
                         height: 22px;
                     }
-                    Text {
-                        text: root.models-db;
-                        color: Theme.faint;
-                        font-size: 10px;
-                        overflow: elide;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Text {
+                            text: root.models-db;
+                            color: Theme.faint;
+                            font-size: 10px;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: root.models-counters;
+                            color: Theme.faint;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                        }
                     }
 
                     HorizontalLayout {

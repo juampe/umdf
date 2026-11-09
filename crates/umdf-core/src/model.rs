@@ -80,6 +80,12 @@ pub struct MediaItem {
     /// True when width/height/EXIF/duration came from `metadata_cache`.
     #[serde(skip)]
     pub metadata_cached: bool,
+    /// True when the audio signature came from the cache.
+    #[serde(skip)]
+    pub media_signature_cached: bool,
+    /// True when the video frame fingerprint came from the cache.
+    #[serde(skip)]
+    pub video_frame_cached: bool,
 
     /// Optional semantic embedding (L2-normalised). Requires the `embeddings`
     /// feature; `None` otherwise.
@@ -109,6 +115,8 @@ impl MediaItem {
             fingerprint: None,
             fingerprint_cached: false,
             metadata_cached: false,
+            media_signature_cached: false,
+            video_frame_cached: false,
             embedding: None,
             extract_error: None,
         }

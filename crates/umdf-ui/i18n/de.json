@@ -20,8 +20,8 @@
     "home": "Benutzerordner",
     "computer": "Computer",
     "folders_none": "Zu durchsuchende Ordner (keine)",
-    "remove_selected": "Auswahl entfernen",
-    "clear_all": "Alle entfernen",
+    "remove_selected": "Entfernen",
+    "clear_all": "Leeren",
     "opt_scan_subfolders": "Unterordner einbeziehen",
     "opt_only_identical": "Nur 100 % identisch",
     "opt_compare_media": "Medieninhalte vergleichen",
@@ -72,7 +72,10 @@
     "up": "Nach oben",
     "go": "Gehen",
     "select_this_folder": "Diesen Ordner verwenden",
-    "show_hidden": "Versteckte anzeigen"
+    "show_hidden": "Versteckte anzeigen",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "semantic_runtime_missing": "ONNX Runtime ist nicht installiert. Installiere das AI-Paket oder lade es von https://onnxruntime.ai herunter und setze ORT_DYLIB_PATH."
   },
   "phrases": {
     "folders_label": "Zu durchsuchende Ordner ({n})",
@@ -175,7 +178,8 @@
     "opt_exclude_trash": "Papierkörbe ausschließen",
     "help_config": "Konfiguration (config.toml)",
     "help_config_body": "Ordner, Ziel, Metrik, Toleranz, Threads, Theme und der Ausschluss von Papierkörben werden automatisch in config.toml gespeichert. Die Standardliste trash_dirs (.dtrash, .Trash, $RECYCLE.BIN, …) kann dort bearbeitet werden; deaktiviere den Ausschluss mit „Papierkörbe ausschließen“.",
-    "status_cache_hits": "{count} aus dem Cache"
+    "status_cache_hits": "{count} aus dem Cache",
+    "status_paused": "Pausiert"
   },
   "help": [
     {
