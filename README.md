@@ -49,9 +49,9 @@ is disabled and the UI explains how to install ONNX Runtime and set
 
 | Format | Command |
 |---|---|
-| `.deb` | `sudo apt install ./umdf_0.6.3_amd64.deb` |
-| `.rpm` | `sudo dnf install ./umdf-0.6.3-1.x86_64.rpm` |
-| `.AppImage` | `chmod +x umdf-0.6.3-x86_64.AppImage && ./umdf-0.6.3-x86_64.AppImage` |
+| `.deb` | `sudo apt install ./umdf_0.6.4_amd64.deb` |
+| `.rpm` | `sudo dnf install ./umdf-0.6.4-1.x86_64.rpm` |
+| `.AppImage` | `chmod +x umdf-0.6.4-x86_64.AppImage && ./umdf-0.6.4-x86_64.AppImage` |
 | `.tar.gz` | extract and run `umdf` / `umdf-ui`; bundles ONNX Runtime |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the

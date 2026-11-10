@@ -84,8 +84,8 @@ pub mod walk;
 pub use config::{Action, EmbeddingConfig, KeepPolicy, Metric, ScanConfig};
 pub use model::{CachedMetadata, Fingerprint, Group, Match, MatchKind, MediaItem, MediaKind};
 pub use scan::{
-    run as scan, run_with_progress, run_with_progress_cached, Progress, ScanCache, ScanReport,
-    Stats,
+    run as scan, run_with_progress, run_with_progress_cached, CachedComparison, ComparisonEntry,
+    Progress, ScanCache, ScanReport, Stats,
 };
 
 /// Convenience: run a scan and return only the groups.

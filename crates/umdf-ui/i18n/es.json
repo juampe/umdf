@@ -36,6 +36,7 @@
     "models_help": "Descarga un modelo de embeddings de imagen desde Hugging Face. La carpeta y el modelo activo se guardan en config.toml; los datos derivados se cachean en cache.db.",
     "models_folder": "Carpeta de modelos",
     "models_capabilities": "Capacidades",
+    "models_execution": "Ejecución",
     "models_download": "Descargar",
     "models_use": "Usar",
     "models_active": "Activo",
@@ -44,11 +45,17 @@
     "models_threshold": "Similitud",
     "models_none": "No hay modelos instalados. Descarga uno abajo.",
     "models_clear_cache": "Vaciar caché",
+    "models_clear_results": "Vaciar resultados",
+    "models_open_data": "Abrir carpeta de datos",
     "runtime_title": "Motor de IA",
     "runtime_check": "Verificar",
     "runtime_install": "Instalar runtime CUDA",
     "runtime_open": "Abrir carpeta del runtime",
     "runtime_restart": "Reinicia UMDF para usar el nuevo runtime.",
+    "runtime_reinstall": "Reinstalar CUDA",
+    "star": "Usar como referencia",
+    "manual_reference": "Referencia manual ★",
+    "shortcuts_hint": "Intro vista previa · Esc cerrar · t papelera · m mover · d borrar · s referencia",
     "semantic_unavailable": "Esta compilación no incluye búsqueda semántica. Compila con --features embeddings y ONNX Runtime.",
     "opt_tolerance": "Tolerancia de gris",
     "trash_all": "A la papelera",
@@ -185,7 +192,10 @@
     "help_config": "Configuración (config.toml)",
     "help_config_body": "Las carpetas, el destino, la métrica, la tolerancia, los hilos, el tema y la exclusión de papeleras se guardan automáticamente en config.toml. La lista trash_dirs por defecto (.dtrash, .Trash, $RECYCLE.BIN...) se puede editar ahí; desactiva la exclusión con la casilla «Excluir papeleras».",
     "status_cache_hits": "{count} desde caché",
-    "status_paused": "Pausado"
+    "status_paused": "Pausado",
+    "status_starred": "{path} es ahora la referencia de su grupo.",
+    "manual_reference_reason": "Has elegido esta copia como referencia.",
+    "comparison_cache_cleared": "Resultados de comparación vaciados; el próximo escaneo recalculará los pares."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• Los modelos descargados no se incluyen en el instalador y conservan la licencia de su repositorio de origen.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "Teclado, referencia y caché"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ selecciona · Intro abre la vista ampliada · Esc la cierra · t papelera · m mover · d borrar · s usar el duplicado como referencia del grupo."
+    },
+    {
+      "kind": 2,
+      "text": "★ marca la copia elegida como referencia de su grupo, aunque la política prefiera otra; la referencia anterior pasa a ser un duplicado."
+    },
+    {
+      "kind": 2,
+      "text": "Modelos → Vaciar resultados borra solo los resultados de comparación; las huellas siguen en caché y el próximo escaneo recalcula los pares. Vaciar caché lo borra todo."
+    },
+    {
+      "kind": 2,
+      "text": "Las vistas previas de vídeo se abren en el reproductor del sistema; se recomienda VLC porque reproduce más códecs sin instalar nada más."
     }
   ]
 }

@@ -33,6 +33,8 @@ global Theme {
     out property <color> danger_hover: dark ? #3a1b1f : #fee2e2;
     out property <color> warn_bg: dark ? #2d2416 : #fff7ed;
     out property <color> warn_text: dark ? #fdba74 : #9a3412;
+    out property <color> ok_bg: dark ? #12291f : #ecfdf5;
+    out property <color> ok_text: dark ? #86efac : #166534;
     out property <color> folder: #f59e0b;
     out property <color> backdrop: dark ? #0b1220a6 : #0f172a66;
     out property <color> thumb_bg: dark ? #1e293b : #f1f5f9;
@@ -86,6 +88,7 @@ export struct Strings {
     models_help: string,
     models_folder: string,
     models_capabilities: string,
+    models_execution: string,
     models_download: string,
     models_use: string,
     models_active: string,
@@ -94,11 +97,17 @@ export struct Strings {
     models_threshold: string,
     models_none: string,
     models_clear_cache: string,
+    models_clear_results: string,
+    models_open_data: string,
     runtime_title: string,
     runtime_check: string,
     runtime_install: string,
     runtime_open: string,
     runtime_restart: string,
+    runtime_reinstall: string,
+    star: string,
+    manual_reference: string,
+    shortcuts_hint: string,
     semantic_unavailable: string,
     semantic_runtime_missing: string,
     opt_tolerance: string,
@@ -174,6 +183,8 @@ export struct RowItem {
     keep-reason: string,
     keep-pct: float,
     keep-codes: string,
+    /// This row shows a manually chosen reference instead of the policy keep.
+    starred: bool,
     original-thumb: image,
     duplicate-thumb: image,
 }
@@ -463,6 +474,7 @@ export component AppWindow inherits Window {
         models_help: "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.",
         models_folder: "Models folder",
         models_capabilities: "Capabilities",
+        models_execution: "Execution",
         models_download: "Download",
         models_use: "Use",
         models_active: "Active",
@@ -563,6 +575,7 @@ export component AppWindow inherits Window {
     in-out property <string> models-status: "";
     in-out property <string> runtime-status: "";
     in-out property <string> runtime-details: "";
+    in-out property <bool> runtime-cuda: false;
     in-out property <string> models-db: "";
     in-out property <string> models-counters: "";
     in-out property <string> models-dir: "models";
@@ -625,10 +638,13 @@ export component AppWindow inherits Window {
     callback check-runtime();
     callback install-cuda-runtime();
     callback open-runtime-folder();
+    callback clear-comparison-cache();
+    callback open-data-folder();
     callback clear-cache();
     callback trash-row(int);
     callback move-row(int);
     callback delete-row(int);
+    callback star-row(int);
     callback apply-all(string);
     callback confirm-apply();
     callback confirm-cancel();
@@ -662,7 +678,7 @@ export component AppWindow inherits Window {
                 }
                 return reject;
             }
-            if (root.browser-open || root.help-open) {
+            if (root.browser-open || root.help-open || root.models-open) {
                 return reject;
             }
             if (event.text == Key.DownArrow) {
@@ -676,6 +692,30 @@ export component AppWindow inherits Window {
             if (event.text == Key.Delete) {
                 if (root.selected-row >= 0) {
                     root.delete-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.T) {
+                if (root.selected-row >= 0) {
+                    root.trash-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.M) {
+                if (root.selected-row >= 0) {
+                    root.move-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.D) {
+                if (root.selected-row >= 0) {
+                    root.delete-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.S) {
+                if (root.selected-row >= 0) {
+                    root.star-row(root.selected-row);
                 }
                 return accept;
             }
@@ -1190,6 +1230,7 @@ export component AppWindow inherits Window {
                                                 background: Theme.thumb_bg;
                                                 Image { width: parent.width; height: parent.height; source: row.original-thumb; image-fit: cover; }
                                             }
+                                            if row.starred : Text { text: "★"; color: Theme.folder; font-size: 12px; vertical-alignment: center; }
                                             Text { text: row.original; vertical-alignment: center; font-size: 11px; color: Theme.text; overflow: elide; }
                                         }
                                         HorizontalLayout {
@@ -1399,6 +1440,13 @@ export component AppWindow inherits Window {
                                 enabled: root.selected-row >= 0;
                                 clicked => { root.delete-row(root.selected-row); }
                             }
+                            FlatButton {
+                                label: "★";
+                                minw: 36px;
+                                bg: Theme.soft;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.star-row(root.selected-row); }
+                            }
                         }
                     }
                 }
@@ -1460,6 +1508,38 @@ export component AppWindow inherits Window {
                             scope.focus();
                             return accept;
                         }
+                        if (event.text == Key.T) {
+                            if (root.selected-row >= 0) {
+                                root.trash-row(root.selected-row);
+                            }
+                            return accept;
+                        }
+                        if (event.text == Key.M) {
+                            if (root.selected-row >= 0) {
+                                root.move-row(root.selected-row);
+                            }
+                            return accept;
+                        }
+                        if (event.text == Key.D) {
+                            if (root.selected-row >= 0) {
+                                root.delete-row(root.selected-row);
+                            }
+                            return accept;
+                        }
+                        if (event.text == Key.S) {
+                            if (root.selected-row >= 0) {
+                                root.star-row(root.selected-row);
+                            }
+                            return accept;
+                        }
+                        if (event.text == Key.DownArrow) {
+                            root.move-selection(1);
+                            return accept;
+                        }
+                        if (event.text == Key.UpArrow) {
+                            root.move-selection(-1);
+                            return accept;
+                        }
                         return reject;
                     }
                 }
@@ -1506,6 +1586,49 @@ export component AppWindow inherits Window {
                             playable: root.preview-right-playable;
                             play => { root.play-preview(false); }
                             open => {}
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        FlatButton {
+                            label: root.strings.trash;
+                            minw: 92px;
+                            bg: Theme.soft;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.trash-row(root.selected-row); }
+                        }
+                        FlatButton {
+                            label: root.strings.move;
+                            minw: 84px;
+                            bg: Theme.soft;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.move-row(root.selected-row); }
+                        }
+                        FlatButton {
+                            label: root.strings.delete;
+                            minw: 92px;
+                            fg: Theme.danger;
+                            bg: Theme.danger_bg;
+                            hover: Theme.danger_hover;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.delete-row(root.selected-row); }
+                        }
+                        FlatButton {
+                            label: root.strings.star;
+                            minw: 130px;
+                            bg: Theme.soft;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.star-row(root.selected-row); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Text {
+                            text: root.strings.shortcuts_hint;
+                            color: Theme.muted;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            overflow: elide;
                         }
                     }
                 }
@@ -1636,141 +1759,197 @@ export component AppWindow inherits Window {
             background: Theme.backdrop;
 
             models-card := Rectangle {
-                width: 820px;
-                height: 540px;
+                width: 800px;
+                height: 600px;
                 x: (parent.width - models-card.width) / 2;
                 y: (parent.height - models-card.height) / 2;
                 background: Theme.card;
                 border-radius: 12px;
+                border-width: 1px;
+                border-color: Theme.border_elevated;
 
                 VerticalLayout {
-                    padding: 16px;
-                    spacing: 8px;
-                    Text { text: root.strings.models_title; color: Theme.text; font-size: 18px; font-weight: 700; }
-                    Text { text: root.strings.models_help; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
+                    padding: 14px;
+                    spacing: 7px;
 
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: root.strings.models_title;
+                            color: Theme.text;
+                            font-size: 18px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        FlatButton {
+                            label: "✕";
+                            minw: 34px;
+                            bg: Theme.soft;
+                            clicked => { root.close-models(); }
+                        }
+                    }
+
+                    // Compact AI engine bar: status, details and actions in one row.
                     Rectangle {
+                        height: 44px;
                         background: Theme.soft;
-                        border-radius: 6px;
+                        border-radius: 8px;
                         border-width: 1px;
                         border-color: Theme.border;
-                        VerticalLayout {
-                            padding: 8px;
-                            spacing: 4px;
-                            HorizontalLayout {
-                                spacing: 6px;
-                                Text { text: root.strings.runtime_title; color: Theme.text; font-size: 11px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: root.runtime-status; color: Theme.accent; font-size: 11px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                        HorizontalLayout {
+                            padding-left: 9px;
+                            padding-right: 5px;
+                            spacing: 6px;
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                border-radius: 4px;
+                                background: root.runtime-cuda ? Theme.ok_text : Theme.warn_text;
+                            }
+                            Text {
+                                text: root.strings.runtime_title;
+                                color: Theme.text;
+                                font-size: 11px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: root.runtime-status;
+                                color: root.runtime-cuda ? Theme.ok_text : Theme.warn_text;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                                overflow: elide;
                             }
                             Text {
                                 text: root.runtime-details;
                                 color: Theme.muted;
                                 font-size: 10px;
-                                wrap: word-wrap;
-                                height: 32px;
-                                vertical-alignment: top;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
                                 overflow: elide;
                             }
-                            HorizontalLayout {
-                                spacing: 6px;
-                                FlatButton {
-                                    label: root.strings.runtime_check;
-                                    minw: 86px;
-                                    bg: Theme.card;
-                                    clicked => { root.check-runtime(); }
-                                }
-                                FlatButton {
-                                    label: root.strings.runtime_install;
-                                    minw: 150px;
-                                    fg: Theme.accent_text;
-                                    bg: Theme.accent;
-                                    hover: Theme.accent_hover;
-                                    clicked => { root.install-cuda-runtime(); }
-                                }
-                                FlatButton {
-                                    label: root.strings.runtime_open;
-                                    minw: 140px;
-                                    bg: Theme.card;
-                                    clicked => { root.open-runtime-folder(); }
-                                }
+                            FlatButton {
+                                label: root.strings.runtime_check;
+                                minw: 74px;
+                                bg: Theme.card;
+                                clicked => { root.check-runtime(); }
+                            }
+                            FlatButton {
+                                label: root.runtime-cuda
+                                    ? root.strings.runtime_reinstall
+                                    : root.strings.runtime_install;
+                                minw: 116px;
+                                fg: Theme.accent_text;
+                                bg: Theme.accent;
+                                hover: Theme.accent_hover;
+                                clicked => { root.install-cuda-runtime(); }
+                            }
+                            FlatButton {
+                                label: root.strings.runtime_open;
+                                minw: 108px;
+                                bg: Theme.card;
+                                clicked => { root.open-runtime-folder(); }
                             }
                         }
                     }
 
-                    VerticalLayout {
-                        spacing: 3px;
-                        Text { text: root.strings.models_folder; color: Theme.text2; font-size: 10px; }
-                        HorizontalLayout {
-                            spacing: 6px;
-                            LineEdit {
-                                text <=> root.models-dir;
-                                height: 30px;
-                                horizontal-stretch: 1;
-                                edited => { root.save-model-settings(); }
-                            }
-                            FlatButton {
-                                label: root.strings.browse;
-                                minw: 84px;
-                                bg: Theme.soft;
-                                clicked => { root.open-browser("models-dir"); }
-                            }
+                    // Compact models folder row.
+                    HorizontalLayout {
+                        spacing: 7px;
+                        Text {
+                            text: root.strings.models_folder;
+                            color: Theme.text2;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                            width: 96px;
+                        }
+                        LineEdit {
+                            text <=> root.models-dir;
+                            height: 30px;
+                            horizontal-stretch: 1;
+                            edited => { root.save-model-settings(); }
+                        }
+                        FlatButton {
+                            label: root.strings.browse;
+                            minw: 84px;
+                            bg: Theme.soft;
+                            clicked => { root.open-browser("models-dir"); }
                         }
                     }
 
                     HorizontalLayout {
                         spacing: 6px;
-                        Text { text: root.strings.models_capabilities; color: Theme.muted; font-size: 10px; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; }
+                        Text {
+                            text: root.strings.models_capabilities;
+                            color: Theme.muted;
+                            font-size: 10px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
                     }
 
-                    ScrollView {
+                    // All four supported models, always visible.
+                    Rectangle {
                         vertical-stretch: 1;
-                        VerticalLayout {
-                            spacing: 2px;
-                            for row[i] in root.model-rows : Rectangle {
-                                height: 54px;
-                                background: row.state == 2
-                                    ? Theme.selected
-                                    : (Math.mod(i, 2) == 0 ? transparent : Theme.soft);
-                                HorizontalLayout {
-                                    padding: 6px;
-                                    spacing: 8px;
-                                    VerticalLayout {
-                                        width: 200px;
-                                        spacing: 2px;
-                                        Text { text: row.name; color: Theme.text; font-size: 12px; font-weight: 700; overflow: elide; }
-                                        Text { text: row.path; color: Theme.muted; font-size: 9px; overflow: elide; }
-                                    }
-                                    Text {
-                                        text: row.details;
-                                        color: Theme.text2;
-                                        font-size: 10px;
-                                        wrap: word-wrap;
-                                        vertical-alignment: center;
-                                        horizontal-stretch: 1;
-                                    }
-                                    FlatButton {
-                                        label: row.state == 0
-                                            ? root.strings.models_download
-                                            : (row.state == 1 ? root.strings.models_use : root.strings.models_active);
-                                        minw: 96px;
-                                        enabled: row.state != 2;
-                                        fg: row.state == 2 ? Theme.accent_text : Theme.text;
-                                        bg: row.state == 2 ? Theme.accent : Theme.soft;
-                                        clicked => {
-                                            if (row.state == 0) {
-                                                root.download-model(i);
-                                            } else if (row.state == 1) {
-                                                root.use-model(i);
+                        background: Theme.soft2;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Theme.border;
+
+                        ScrollView {
+                            VerticalLayout {
+                                padding: 4px;
+                                spacing: 3px;
+                                for row[i] in root.model-rows : Rectangle {
+                                    height: 48px;
+                                    border-radius: 6px;
+                                    background: row.state == 2
+                                        ? Theme.selected
+                                        : (Math.mod(i, 2) == 0 ? transparent : Theme.soft);
+                                    HorizontalLayout {
+                                        padding-left: 8px;
+                                        padding-right: 6px;
+                                        spacing: 8px;
+                                        VerticalLayout {
+                                            width: 180px;
+                                            spacing: 1px;
+                                            Text { text: row.name; color: Theme.text; font-size: 12px; font-weight: 700; overflow: elide; }
+                                            Text { text: row.path; color: Theme.muted; font-size: 9px; overflow: elide; }
+                                        }
+                                        Text {
+                                            text: row.details;
+                                            color: Theme.text2;
+                                            font-size: 10px;
+                                            wrap: word-wrap;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                        }
+                                        FlatButton {
+                                            label: row.state == 0
+                                                ? root.strings.models_download
+                                                : (row.state == 1 ? root.strings.models_use : root.strings.models_active);
+                                            minw: 90px;
+                                            enabled: row.state != 2;
+                                            fg: row.state == 2 ? Theme.accent_text : Theme.text;
+                                            bg: row.state == 2 ? Theme.accent : Theme.soft;
+                                            clicked => {
+                                                if (row.state == 0) {
+                                                    root.download-model(i);
+                                                } else if (row.state == 1) {
+                                                    root.use-model(i);
+                                                }
                                             }
                                         }
-                                    }
-                                    if row.state != 0 : FlatButton {
-                                        label: root.strings.models_remove;
-                                        minw: 84px;
-                                        fg: Theme.danger;
-                                        bg: Theme.danger_bg;
-                                        hover: Theme.danger_hover;
-                                        clicked => { root.remove-model(i); }
+                                        if row.state != 0 : FlatButton {
+                                            label: root.strings.models_remove;
+                                            minw: 78px;
+                                            fg: Theme.danger;
+                                            bg: Theme.danger_bg;
+                                            hover: Theme.danger_hover;
+                                            clicked => { root.remove-model(i); }
+                                        }
                                     }
                                 }
                             }
@@ -1783,63 +1962,109 @@ export component AppWindow inherits Window {
                         font-size: 11px;
                     }
 
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Text { text: root.strings.models_accel; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
-                        ComboBox {
-                            model: ["CUDA", "CPU"];
-                            current-index <=> root.semantic-device;
-                            width: 110px;
-                            selected => { root.save-model-settings(); }
+                    // Execution parameters card.
+                    Rectangle {
+                        height: 54px;
+                        background: Theme.soft;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        HorizontalLayout {
+                            padding-left: 9px;
+                            padding-right: 9px;
+                            spacing: 8px;
+                            Text {
+                                text: root.strings.models_execution;
+                                color: Theme.text;
+                                font-size: 11px;
+                                font-weight: 700;
+                                vertical-alignment: center;
+                            }
+                            Text { text: root.strings.models_accel; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
+                            ComboBox {
+                                model: ["CUDA", "CPU"];
+                                current-index <=> root.semantic-device;
+                                width: 104px;
+                                selected => { root.save-model-settings(); }
+                            }
+                            Text { text: root.strings.models_threshold; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
+                            Slider {
+                                minimum: 0.5;
+                                maximum: 1.0;
+                                step: 0.01;
+                                value <=> root.semantic-threshold;
+                                horizontal-stretch: 1;
+                                changed(value) => { root.save-model-settings(); }
+                            }
+                            Text {
+                                text: root.semantic-threshold-label;
+                                color: Theme.text2;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                                width: 38px;
+                            }
                         }
-                        Text { text: root.strings.models_threshold; color: Theme.text2; font-size: 11px; vertical-alignment: center; }
-                        Slider {
-                            minimum: 0.5;
-                            maximum: 1.0;
-                            step: 0.01;
-                            value <=> root.semantic-threshold;
-                            horizontal-stretch: 1;
-                            changed(value) => { root.save-model-settings(); }
-                        }
-                        Text { text: root.semantic-threshold-label; color: Theme.text2; font-size: 11px; vertical-alignment: center; width: 40px; }
                     }
 
                     Text {
                         text: root.models-status;
                         color: Theme.muted;
-                        font-size: 11px;
+                        font-size: 10px;
                         wrap: word-wrap;
-                        height: 22px;
+                        height: 30px;
+                        overflow: elide;
                     }
-                    HorizontalLayout {
-                        spacing: 10px;
-                        Text {
-                            text: root.models-db;
-                            color: Theme.faint;
-                            font-size: 10px;
-                            overflow: elide;
-                            horizontal-stretch: 1;
-                        }
-                        Text {
-                            text: root.models-counters;
-                            color: Theme.faint;
-                            font-size: 10px;
-                            vertical-alignment: center;
-                        }
+                    Text {
+                        text: root.models-db;
+                        color: Theme.faint;
+                        font-size: 9px;
+                        overflow: elide;
                     }
 
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 6px;
+                        Rectangle {
+                            width: 280px;
+                            height: 30px;
+                            border-radius: 15px;
+                            background: Theme.soft;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                Text {
+                                    text: root.models-counters;
+                                    color: Theme.muted;
+                                    font-size: 10px;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                        }
                         FlatButton {
-                            label: root.strings.models_clear_cache;
-                            minw: 120px;
+                            label: root.strings.models_open_data;
+                            minw: 108px;
                             bg: Theme.soft;
-                            clicked => { root.clear-cache(); }
+                            clicked => { root.open-data-folder(); }
                         }
                         Rectangle { horizontal-stretch: 1; }
                         FlatButton {
+                            label: root.strings.models_clear_cache;
+                            minw: 104px;
+                            bg: Theme.soft;
+                            clicked => { root.clear-cache(); }
+                        }
+                        FlatButton {
+                            label: root.strings.models_clear_results;
+                            minw: 126px;
+                            bg: Theme.soft;
+                            clicked => { root.clear-comparison-cache(); }
+                        }
+                        FlatButton {
                             label: root.strings.close;
-                            minw: 96px;
+                            minw: 88px;
                             fg: Theme.accent_text;
                             bg: Theme.accent;
                             hover: Theme.accent_hover;

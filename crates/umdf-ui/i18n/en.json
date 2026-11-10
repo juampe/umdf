@@ -36,6 +36,7 @@
     "models_help": "Download an image-embedding model from Hugging Face. The folder and active model are saved in config.toml; derived data is cached in cache.db.",
     "models_folder": "Models folder",
     "models_capabilities": "Capabilities",
+    "models_execution": "Execution",
     "models_download": "Download",
     "models_use": "Use",
     "models_active": "Active",
@@ -44,11 +45,17 @@
     "models_threshold": "Similarity",
     "models_none": "No models installed yet. Download one below.",
     "models_clear_cache": "Clear cache",
+    "models_clear_results": "Clear results",
+    "models_open_data": "Open data folder",
     "runtime_title": "AI engine",
     "runtime_check": "Check",
     "runtime_install": "Install CUDA runtime",
     "runtime_open": "Open runtime folder",
     "runtime_restart": "Restart UMDF to use the new runtime.",
+    "runtime_reinstall": "Reinstall CUDA",
+    "star": "Set as reference",
+    "manual_reference": "Manual reference ★",
+    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star",
     "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
     "opt_tolerance": "Pixel tolerance",
     "trash_all": "Trash all duplicates",
@@ -185,7 +192,10 @@
     "help_config": "Configuration (config.toml)",
     "help_config_body": "Folders, destination, metric, tolerance, threads, theme and trash-folder exclusion are saved automatically in config.toml. The default trash_dirs list (.dtrash, .Trash, $RECYCLE.BIN, ...) can be edited there; disable the exclusion with the “Exclude trash folders” checkbox.",
     "status_cache_hits": "{count} from cache",
-    "status_paused": "Paused"
+    "status_paused": "Paused",
+    "status_starred": "{path} is now the reference for its group.",
+    "manual_reference_reason": "You chose this copy as the reference.",
+    "comparison_cache_cleared": "Comparison results cleared; the next scan will recompute the pairs."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• Downloaded models are not included in the installer and keep the license of their upstream repository.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "Keyboard, reference and cache"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ select · Enter opens the enlarged preview · Esc closes it · t trash · m move · d delete · s set the duplicate as the group reference."
+    },
+    {
+      "kind": 2,
+      "text": "★ marks the chosen copy as the reference for its group, even if the policy preferred another one; the previous reference becomes a duplicate."
+    },
+    {
+      "kind": 2,
+      "text": "Models → Clear results deletes only the comparison results; fingerprints stay cached and the next scan recomputes the pairs. Clear cache deletes everything."
+    },
+    {
+      "kind": 2,
+      "text": "Video previews open in the system player; VLC is recommended because it plays more codecs without extra installations."
     }
   ]
 }

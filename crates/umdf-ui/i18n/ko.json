@@ -36,6 +36,7 @@
     "models_help": "Hugging Face에서 이미지 임베딩 모델을 다운로드합니다. 폴더와 활성 모델은 config.toml에 저장되고 파생 데이터는 cache.db에 캐시됩니다.",
     "models_folder": "모델 폴더",
     "models_capabilities": "기능",
+    "models_execution": "실행",
     "models_download": "다운로드",
     "models_use": "사용",
     "models_active": "활성",
@@ -44,11 +45,17 @@
     "models_threshold": "유사도",
     "models_none": "설치된 모델이 없습니다. 아래에서 다운로드하세요.",
     "models_clear_cache": "캐시 지우기",
+    "models_clear_results": "결과 지우기",
+    "models_open_data": "데이터 폴더 열기",
     "runtime_title": "AI 엔진",
     "runtime_check": "확인",
     "runtime_install": "CUDA 런타임 설치",
     "runtime_open": "런타임 폴더 열기",
     "runtime_restart": "새 런타임을 사용하려면 UMDF를 다시 시작하세요.",
+    "runtime_reinstall": "CUDA 재설치",
+    "star": "참조로 설정",
+    "manual_reference": "수동 참조 ★",
+    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조",
     "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
     "opt_tolerance": "픽셀 허용 오차",
     "trash_all": "모든 중복을 휴지통으로",
@@ -185,7 +192,10 @@
     "help_config": "설정 (config.toml)",
     "help_config_body": "폴더, 대상, 지표, 허용 오차, 스레드, 테마, 휴지통 제외가 config.toml에 자동 저장됩니다. 기본 trash_dirs 목록(.dtrash, .Trash, $RECYCLE.BIN 등)을 여기에서 수정할 수 있습니다. “휴지통 폴더 제외”를 끄면 제외하지 않습니다.",
     "status_cache_hits": "{count}개 캐시에서",
-    "status_paused": "일시정지됨"
+    "status_paused": "일시정지됨",
+    "status_starred": "{path}이(가) 그룹의 참조가 되었습니다.",
+    "manual_reference_reason": "이 복사본을 참조로 선택했습니다.",
+    "comparison_cache_cleared": "비교 결과를 지웠습니다. 다음 스캔에서 쌍을 다시 계산합니다."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• 다운로드한 모델은 설치 프로그램에 포함되지 않으며 업스트림 저장소의 라이선스를 유지합니다.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "키보드, 참조 및 캐시"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ 선택 · Enter 확대 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 중복을 그룹 참조로 설정."
+    },
+    {
+      "kind": 2,
+      "text": "★ 선택한 복사본을 그룹의 참조로 표시합니다. 정책이 다른 복사본을 선호해도 변경되며 이전 참조는 중복이 됩니다."
+    },
+    {
+      "kind": 2,
+      "text": "모델 → 결과 지우기는 비교 결과만 삭제합니다. 지문은 캐시에 남아 있으며 다음 스캔에서 쌍을 다시 계산합니다. 캐시 지우기는 모두 삭제합니다."
+    },
+    {
+      "kind": 2,
+      "text": "비디오 미리보기는 시스템 플레이어에서 열립니다. 추가 설치 없이 더 많은 코덱을 재생하므로 VLC를 권장합니다."
     }
   ]
 }

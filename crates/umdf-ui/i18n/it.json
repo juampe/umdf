@@ -36,6 +36,7 @@
     "models_help": "Scarica un modello di embedding di immagini da Hugging Face. La cartella e il modello attivo vengono salvati in config.toml; i dati derivati vengono memorizzati nella cache di cache.db.",
     "models_folder": "Cartella modelli",
     "models_capabilities": "Capacità",
+    "models_execution": "Esecuzione",
     "models_download": "Scarica",
     "models_use": "Usa",
     "models_active": "Attivo",
@@ -44,11 +45,17 @@
     "models_threshold": "Somiglianza",
     "models_none": "Nessun modello installato. Scaricane uno qui sotto.",
     "models_clear_cache": "Svuota cache",
+    "models_clear_results": "Svuota risultati",
+    "models_open_data": "Apri cartella dati",
     "runtime_title": "Motore IA",
     "runtime_check": "Verifica",
     "runtime_install": "Installa runtime CUDA",
     "runtime_open": "Apri cartella runtime",
     "runtime_restart": "Riavvia UMDF per usare il nuovo runtime.",
+    "runtime_reinstall": "Reinstalla CUDA",
+    "star": "Imposta come riferimento",
+    "manual_reference": "Riferimento manuale ★",
+    "shortcuts_hint": "Invio anteprima · Esc chiudi · t cestino · m sposta · d elimina · s riferimento",
     "semantic_unavailable": "La ricerca semantica non è inclusa in questa build. Compila con --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolleranza di grigio",
     "trash_all": "Sposta tutti i duplicati nel cestino",
@@ -185,7 +192,10 @@
     "help_config": "Configurazione (config.toml)",
     "help_config_body": "Cartelle, destinazione, metrica, tolleranza, thread, tema ed esclusione dei cestini vengono salvati automaticamente in config.toml. La lista predefinita trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) può essere modificata lì; disattiva l’esclusione con la casella «Escludi i cestini».",
     "status_cache_hits": "{count} dalla cache",
-    "status_paused": "In pausa"
+    "status_paused": "In pausa",
+    "status_starred": "{path} è ora il riferimento del suo gruppo.",
+    "manual_reference_reason": "Hai scelto questa copia come riferimento.",
+    "comparison_cache_cleared": "Risultati di confronto svuotati; la prossima analisi ricalcolerà le coppie."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• I modelli scaricati non sono inclusi nell'installer e mantengono la licenza del repository di origine.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "Tastiera, riferimento e cache"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ seleziona · Invio apre l’anteprima ingrandita · Esc la chiude · t cestino · m sposta · d elimina · s imposta il duplicato come riferimento del gruppo."
+    },
+    {
+      "kind": 2,
+      "text": "★ contrassegna la copia scelta come riferimento del suo gruppo, anche se la politica ne preferisce un’altra; il riferimento precedente diventa un duplicato."
+    },
+    {
+      "kind": 2,
+      "text": "Modelli → Svuota risultati elimina solo i risultati di confronto; le impronte restano in cache e la prossima analisi ricalcola le coppie. Svuota cache elimina tutto."
+    },
+    {
+      "kind": 2,
+      "text": "Le anteprime video si aprono nel lettore di sistema; si consiglia VLC perché riproduce più codec senza installazioni aggiuntive."
     }
   ]
 }

@@ -36,6 +36,7 @@
     "models_help": "Laden Sie ein Bild-Embedding-Modell von Hugging Face herunter. Ordner und aktives Modell werden in config.toml gespeichert; abgeleitete Daten werden in cache.db zwischengespeichert.",
     "models_folder": "Modellordner",
     "models_capabilities": "Fähigkeiten",
+    "models_execution": "Ausführung",
     "models_download": "Herunterladen",
     "models_use": "Verwenden",
     "models_active": "Aktiv",
@@ -44,11 +45,17 @@
     "models_threshold": "Ähnlichkeit",
     "models_none": "Noch keine Modelle installiert. Laden Sie unten eines herunter.",
     "models_clear_cache": "Cache leeren",
+    "models_clear_results": "Ergebnisse löschen",
+    "models_open_data": "Datenordner öffnen",
     "runtime_title": "KI-Motor",
     "runtime_check": "Prüfen",
     "runtime_install": "CUDA-Runtime installieren",
     "runtime_open": "Runtime-Ordner öffnen",
     "runtime_restart": "UMDF neu starten, um die neue Runtime zu verwenden.",
+    "runtime_reinstall": "CUDA neu installieren",
+    "star": "Als Referenz festlegen",
+    "manual_reference": "Manuelle Referenz ★",
+    "shortcuts_hint": "Enter Vorschau · Esc schließen · t Papierkorb · m verschieben · d löschen · s Referenz",
     "semantic_unavailable": "Die semantische Suche ist in diesem Build nicht enthalten. Kompilieren Sie mit --features embeddings und ONNX Runtime.",
     "opt_tolerance": "Graustufen-Toleranz",
     "trash_all": "Alle Duplikate in den Papierkorb",
@@ -185,7 +192,10 @@
     "help_config": "Konfiguration (config.toml)",
     "help_config_body": "Ordner, Ziel, Metrik, Toleranz, Threads, Theme und der Ausschluss von Papierkörben werden automatisch in config.toml gespeichert. Die Standardliste trash_dirs (.dtrash, .Trash, $RECYCLE.BIN, …) kann dort bearbeitet werden; deaktiviere den Ausschluss mit „Papierkörbe ausschließen“.",
     "status_cache_hits": "{count} aus dem Cache",
-    "status_paused": "Pausiert"
+    "status_paused": "Pausiert",
+    "status_starred": "{path} ist jetzt die Referenz der Gruppe.",
+    "manual_reference_reason": "Sie haben diese Kopie als Referenz gewählt.",
+    "comparison_cache_cleared": "Vergleichsergebnisse gelöscht; der nächste Scan berechnet die Paare neu."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• Heruntergeladene Modelle sind nicht im Installer enthalten und behalten die Lizenz ihres Upstream-Repositories.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "Tastatur, Referenz und Cache"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ auswählen · Enter öffnet die große Vorschau · Esc schließt sie · t Papierkorb · m verschieben · d löschen · s legt das Duplikat als Gruppenreferenz fest."
+    },
+    {
+      "kind": 2,
+      "text": "★ markiert die gewählte Kopie als Referenz ihrer Gruppe, auch wenn die Richtlinie eine andere bevorzugt; die bisherige Referenz wird zum Duplikat."
+    },
+    {
+      "kind": 2,
+      "text": "Modelle → Ergebnisse löschen entfernt nur die Vergleichsergebnisse; Fingerabdrücke bleiben im Cache und der nächste Scan berechnet die Paare neu. Cache leeren löscht alles."
+    },
+    {
+      "kind": 2,
+      "text": "Videovorschauen werden im Systemplayer geöffnet; VLC wird empfohlen, da er mehr Codecs ohne zusätzliche Installation abspielt."
     }
   ]
 }

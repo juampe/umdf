@@ -99,9 +99,8 @@ static CATALOGS: [OnceLock<Catalog>; 9] = [const { OnceLock::new() }; 9];
 
 fn catalog(lang: Lang) -> &'static Catalog {
     CATALOGS[lang.index()].get_or_init(|| {
-        serde_json::from_str(CATALOG_TEXTS[lang.index()]).unwrap_or_else(|error| {
-            panic!("invalid i18n catalog for {}: {error}", lang.code())
-        })
+        serde_json::from_str(CATALOG_TEXTS[lang.index()])
+            .unwrap_or_else(|error| panic!("invalid i18n catalog for {}: {error}", lang.code()))
     })
 }
 
@@ -158,6 +157,7 @@ struct StringsRaw {
     models_help: String,
     models_folder: String,
     models_capabilities: String,
+    models_execution: String,
     models_download: String,
     models_use: String,
     models_active: String,
@@ -166,11 +166,17 @@ struct StringsRaw {
     models_threshold: String,
     models_none: String,
     models_clear_cache: String,
+    models_clear_results: String,
+    models_open_data: String,
     runtime_title: String,
     runtime_check: String,
     runtime_install: String,
     runtime_open: String,
     runtime_restart: String,
+    runtime_reinstall: String,
+    star: String,
+    manual_reference: String,
+    shortcuts_hint: String,
     semantic_unavailable: String,
     semantic_runtime_missing: String,
     opt_tolerance: String,
@@ -246,6 +252,7 @@ impl StringsRaw {
             models_help: self.models_help.clone().into(),
             models_folder: self.models_folder.clone().into(),
             models_capabilities: self.models_capabilities.clone().into(),
+            models_execution: self.models_execution.clone().into(),
             models_download: self.models_download.clone().into(),
             models_use: self.models_use.clone().into(),
             models_active: self.models_active.clone().into(),
@@ -254,11 +261,17 @@ impl StringsRaw {
             models_threshold: self.models_threshold.clone().into(),
             models_none: self.models_none.clone().into(),
             models_clear_cache: self.models_clear_cache.clone().into(),
+            models_clear_results: self.models_clear_results.clone().into(),
+            models_open_data: self.models_open_data.clone().into(),
             runtime_title: self.runtime_title.clone().into(),
             runtime_check: self.runtime_check.clone().into(),
             runtime_install: self.runtime_install.clone().into(),
             runtime_open: self.runtime_open.clone().into(),
             runtime_restart: self.runtime_restart.clone().into(),
+            runtime_reinstall: self.runtime_reinstall.clone().into(),
+            star: self.star.clone().into(),
+            manual_reference: self.manual_reference.clone().into(),
+            shortcuts_hint: self.shortcuts_hint.clone().into(),
             semantic_unavailable: self.semantic_unavailable.clone().into(),
             semantic_runtime_missing: self.semantic_runtime_missing.clone().into(),
             opt_tolerance: self.opt_tolerance.clone().into(),
@@ -293,7 +306,6 @@ impl StringsRaw {
         }
     }
 }
-
 
 impl Tr {
     pub fn new(lang: Lang) -> Self {
@@ -613,6 +625,7 @@ impl Tr {
                     "metadata" => "reason_metadata",
                     "name" => "reason_name",
                     "location" => "reason_location",
+                    "manual" => "manual_reference_reason",
                     _ => "reason_other",
                 };
                 self.phrase(key)
@@ -661,6 +674,18 @@ impl Tr {
 
     pub fn status_cache_hits(&self, count: usize) -> String {
         self.fmt("status_cache_hits", &[("count", count.to_string())])
+    }
+
+    pub fn status_starred(&self, path: &Path) -> String {
+        self.fmt("status_starred", &[("path", display_path(path))])
+    }
+
+    pub fn manual_reference_reason(&self) -> String {
+        self.phrase("manual_reference_reason").into()
+    }
+
+    pub fn comparison_cache_cleared(&self) -> String {
+        self.phrase("comparison_cache_cleared").into()
     }
 
     pub fn browser_folders(&self, n: usize) -> String {
@@ -730,10 +755,7 @@ impl Tr {
     }
 
     pub fn browser_not_a_folder(&self, path: &Path) -> String {
-        self.fmt(
-            "browser_not_a_folder",
-            &[("path", display_path(path))],
-        )
+        self.fmt("browser_not_a_folder", &[("path", display_path(path))])
     }
 
     pub fn browser_destination(&self) -> String {
@@ -781,7 +803,11 @@ impl Tr {
 
     pub fn thread_labels(&self) -> Vec<String> {
         let mut labels = vec![self.phrase("auto_label").to_string()];
-        labels.extend(["1", "2", "4", "8", "16", "32"].into_iter().map(str::to_string));
+        labels.extend(
+            ["1", "2", "4", "8", "16", "32"]
+                .into_iter()
+                .map(str::to_string),
+        );
         labels
     }
 }
@@ -796,7 +822,16 @@ mod tests {
             let catalog = catalog(lang);
             assert!(!catalog.strings.title.is_empty(), "{}", lang.code());
             assert!(catalog.help.len() > 10, "{}", lang.code());
-            for key in ["folders_label", "stage_ready", "confirm_bulk", "keep_original", "status_finished_skipped", "status_cache_hits", "status_paused", "help_config"] {
+            for key in [
+                "folders_label",
+                "stage_ready",
+                "confirm_bulk",
+                "keep_original",
+                "status_finished_skipped",
+                "status_cache_hits",
+                "status_paused",
+                "help_config",
+            ] {
                 assert!(
                     catalog.phrases.contains_key(key),
                     "{} missing {key}",

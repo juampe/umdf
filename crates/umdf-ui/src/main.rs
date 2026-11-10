@@ -142,8 +142,7 @@ fn main() -> anyhow::Result<()> {
     register_bundled_fonts();
     // Initial size set once; the window stays resizable/maximizable because the
     // size is not bound in the .slint file.
-    ui.window()
-        .set_size(slint::LogicalSize::new(1280.0, 820.0));
+    ui.window().set_size(slint::LogicalSize::new(1280.0, 820.0));
 
     let auto_threads = umdf_core::scan::effective_threads(&ScanConfig::default());
 
@@ -180,8 +179,7 @@ fn main() -> anyhow::Result<()> {
     );
     set_combo_labels(&ui, &boot);
     #[cfg(feature = "embeddings")]
-    let runtime_missing =
-        !umdf_core::embeddings::runtime_available();
+    let runtime_missing = !umdf_core::embeddings::runtime_available();
     #[cfg(not(feature = "embeddings"))]
     let runtime_missing = false;
     // Keep the AI settings (and the runtime installer) reachable even when the
@@ -253,6 +251,17 @@ fn main() -> anyhow::Result<()> {
         .map(|guard| guard.preview_width)
         .unwrap_or(340.0);
     ui.set_preview_width(boot_preview_width.clamp(260.0, 900.0));
+
+    // Restore the window geometry saved when the app was closed. The size is
+    // not bound in the .slint file, so the window stays resizable/maximizable.
+    if let Ok(guard) = settings.lock() {
+        let width = guard.window_width.clamp(800.0, 12000.0);
+        let height = guard.window_height.clamp(600.0, 12000.0);
+        ui.window().set_size(slint::LogicalSize::new(width, height));
+        if guard.window_maximized {
+            ui.window().set_maximized(true);
+        }
+    }
     ui.set_exclude_trash(boot_exclude_trash);
     ui.set_exclude_trash_label(boot.exclude_trash_label().into());
     ui.set_move_dest(boot_move_dest.into());
@@ -281,9 +290,10 @@ fn main() -> anyhow::Result<()> {
     }
     refresh_models(&ui, &settings, &ui_models, lang.get());
     {
-        let (status, details) = runtime_report(boot_lang);
+        let (status, details, cuda) = runtime_report(boot_lang);
         ui.set_runtime_status(status.into());
         ui.set_runtime_details(details.into());
+        ui.set_runtime_cuda(cuda);
     }
 
     ui.set_preview_left_info(boot.no_picture().into());
@@ -344,7 +354,9 @@ fn main() -> anyhow::Result<()> {
         let thumb_gen = thumb_gen.clone();
         let last_range: Rc<Cell<(usize, usize)>> = Rc::new(Cell::new((usize::MAX, usize::MAX)));
         ui.on_request_thumbnails(move |offset, height| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let count = rows.row_count();
             if count == 0 || height <= 0.0 {
                 return;
@@ -397,7 +409,9 @@ fn main() -> anyhow::Result<()> {
         let settings = settings.clone();
         let ui_models = ui_models.clone();
         ui.on_set_lang(move |index| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let new_lang = Lang::from_index(index);
             lang.set(new_lang);
             let tr = Tr::new(new_lang);
@@ -431,15 +445,20 @@ fn main() -> anyhow::Result<()> {
             // report would resurrect rows the user already deleted.
             for i in 0..rows.row_count() {
                 if let Some(mut row) = rows.row_data(i) {
-                    let pct = row.keep_pct;
-                    let codes: Vec<String> = row
-                        .keep_codes
-                        .split(',')
-                        .filter(|s| !s.is_empty())
-                        .map(String::from)
-                        .collect();
-                    row.keep_confidence = tr.original_likely(pct).into();
-                    row.keep_reason = tr.reason_labels(&codes).into();
+                    if row.starred {
+                        row.keep_confidence = tr.strings().manual_reference.clone();
+                        row.keep_reason = tr.manual_reference_reason().into();
+                    } else {
+                        let pct = row.keep_pct;
+                        let codes: Vec<String> = row
+                            .keep_codes
+                            .split(',')
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                            .collect();
+                        row.keep_confidence = tr.original_likely(pct).into();
+                        row.keep_reason = tr.reason_labels(&codes).into();
+                    }
                     rows.set_row_data(i, row);
                 }
             }
@@ -501,7 +520,9 @@ fn main() -> anyhow::Result<()> {
         let folders = folders.clone();
         let lang = lang.clone();
         ui.on_open_browser(move |key| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if key == "models-dir" {
                 ui.set_browser_mode("models-dir".into());
@@ -563,7 +584,9 @@ fn main() -> anyhow::Result<()> {
         let browser_path = browser_path.clone();
         let lang = lang.clone();
         ui.on_browse_go(move |value| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if ui.get_browser_drives() && value == tr.browser_drives() {
                 return;
@@ -587,7 +610,9 @@ fn main() -> anyhow::Result<()> {
         let browser_path = browser_path.clone();
         let lang = lang.clone();
         ui.on_browse_up(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if ui.get_browser_drives() {
                 return;
@@ -596,7 +621,13 @@ fn main() -> anyhow::Result<()> {
             if at_filesystem_root(&current) {
                 show_roots(&ui, &browser_model, &browser_path, &tr);
             } else if let Some(parent) = current.parent() {
-                open_browser(&ui, &browser_model, &browser_path, parent.to_path_buf(), &tr);
+                open_browser(
+                    &ui,
+                    &browser_model,
+                    &browser_path,
+                    parent.to_path_buf(),
+                    &tr,
+                );
             } else {
                 show_roots(&ui, &browser_model, &browser_path, &tr);
             }
@@ -608,7 +639,9 @@ fn main() -> anyhow::Result<()> {
         let browser_path = browser_path.clone();
         let lang = lang.clone();
         ui.on_browse_roots(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             show_roots(&ui, &browser_model, &browser_path, &tr);
         });
@@ -619,7 +652,9 @@ fn main() -> anyhow::Result<()> {
         let browser_path = browser_path.clone();
         let lang = lang.clone();
         ui.on_browse_enter(move |value| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             let path = PathBuf::from(value.to_string());
             if path.is_dir() {
@@ -636,7 +671,9 @@ fn main() -> anyhow::Result<()> {
         let settings = settings.clone();
         let ui_models = ui_models.clone();
         ui.on_browse_select(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if ui.get_browser_drives() {
                 return;
@@ -685,15 +722,12 @@ fn main() -> anyhow::Result<()> {
         let browser_path = browser_path.clone();
         let lang = lang.clone();
         ui.on_toggle_hidden(move |show| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             ui.set_show_hidden(show);
             if ui.get_browser_drives() {
-                show_roots(
-                    &ui,
-                    &browser_model,
-                    &browser_path,
-                    &Tr::new(lang.get()),
-                );
+                show_roots(&ui, &browser_model, &browser_path, &Tr::new(lang.get()));
                 return;
             }
             let current = browser_path.borrow().clone();
@@ -714,7 +748,9 @@ fn main() -> anyhow::Result<()> {
         let cache = cache.clone();
         let lang = lang.clone();
         ui.on_open_models(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             refresh_models(&ui, &settings, &ui_models, lang.get());
             update_cache_label(&ui, &cache);
             ui.set_models_open(true);
@@ -725,7 +761,9 @@ fn main() -> anyhow::Result<()> {
         let cache = cache.clone();
         let lang = lang.clone();
         ui.on_clear_cache(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             match cache.clear() {
                 Ok(()) => {
@@ -739,6 +777,96 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
+    {
+        let ui_handle = ui.as_weak();
+        let cache = cache.clone();
+        let lang = lang.clone();
+        ui.on_clear_comparison_cache(move || {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            match cache.clear_comparison() {
+                Ok(()) => {
+                    ui.set_models_status(tr.comparison_cache_cleared().into());
+                    update_cache_label(&ui, &cache);
+                }
+                Err(error) => {
+                    ui.set_models_status(tr.model_failed(&error.to_string()).into());
+                }
+            }
+        });
+    }
+    {
+        let cache = cache.clone();
+        ui.on_open_data_folder(move || {
+            let dir = cache
+                .path()
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("."));
+            open_folder(&dir);
+        });
+    }
+
+    // ---- star: choose the duplicate as the group reference ------------------
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        ui.on_star_row(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(target) = rows.row_data(index as usize) else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            let group = target.group.clone();
+            let new_keep_path = target.duplicate_path.clone();
+            let new_keep_name = target.duplicate.clone();
+            let new_keep_thumb = target.duplicate_thumb.clone();
+            let old_keep_path = target.original_path.clone();
+            let old_keep_name = target.original.clone();
+            let old_keep_thumb = target.original_thumb.clone();
+
+            // The user decided this copy is the best one, so every row of the
+            // group now uses it as the reference. The previously suggested
+            // original becomes the duplicate in the starred row; the other
+            // duplicates stay untouched.
+            for i in 0..rows.row_count() {
+                let Some(mut row) = rows.row_data(i) else {
+                    continue;
+                };
+                if row.group != group {
+                    continue;
+                }
+                if i == index as usize {
+                    row.duplicate = old_keep_name.clone();
+                    row.duplicate_path = old_keep_path.clone();
+                    row.duplicate_thumb = old_keep_thumb.clone();
+                }
+                row.original = new_keep_name.clone();
+                row.original_path = new_keep_path.clone();
+                row.original_thumb = new_keep_thumb.clone();
+                row.starred = true;
+                row.keep_pct = 100.0;
+                row.keep_codes = "manual".into();
+                row.keep_confidence = tr.strings().manual_reference.clone();
+                row.keep_reason = tr.manual_reference_reason().into();
+                rows.set_row_data(i, row);
+            }
+
+            ui.set_status(tr.status_starred(Path::new(new_keep_path.as_str())).into());
+            if ui.get_selected_row() == index {
+                let reason = tr.manual_reference_reason();
+                ui.set_keep_confidence(tr.strings().manual_reference.clone());
+                ui.set_keep_reason(reason.into());
+                ui.invoke_select_row(index);
+            }
+        });
+    }
+
     // ---- model manager ------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
@@ -747,8 +875,16 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         ui.on_download_model(move |index| {
             let tr = Tr::new(lang.get());
-            let Some(ui) = ui_handle.upgrade() else { return };
-            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(model) = ui_models
+                .lock()
+                .ok()
+                .and_then(|guard| guard.get(index as usize).cloned())
+            else {
+                return;
+            };
             if model.url.is_empty() {
                 ui.set_models_status(tr.model_no_url().into());
                 return;
@@ -799,8 +935,16 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         ui.on_use_model(move |index| {
             let tr = Tr::new(lang.get());
-            let Some(ui) = ui_handle.upgrade() else { return };
-            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(model) = ui_models
+                .lock()
+                .ok()
+                .and_then(|guard| guard.get(index as usize).cloned())
+            else {
+                return;
+            };
             if !model.path.is_file() {
                 ui.set_models_status(tr.model_missing(&display_path(&model.path)).into());
                 return;
@@ -837,8 +981,16 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         ui.on_remove_model(move |index| {
             let tr = Tr::new(lang.get());
-            let Some(ui) = ui_handle.upgrade() else { return };
-            let Some(model) = ui_models.lock().ok().and_then(|guard| guard.get(index as usize).cloned()) else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(model) = ui_models
+                .lock()
+                .ok()
+                .and_then(|guard| guard.get(index as usize).cloned())
+            else {
+                return;
+            };
             let _ = std::fs::remove_file(&model.path);
             let was_active = if let Ok(mut guard) = settings.lock() {
                 let was_active = guard.active_model == model.path.to_string_lossy();
@@ -862,7 +1014,9 @@ fn main() -> anyhow::Result<()> {
         let ui_models = ui_models.clone();
         let lang = lang.clone();
         ui.on_save_model_settings(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             save_model_settings(&ui, &settings);
             refresh_models(&ui, &settings, &ui_models, lang.get());
         });
@@ -873,7 +1027,9 @@ fn main() -> anyhow::Result<()> {
         let ui_models = ui_models.clone();
         let lang = lang.clone();
         ui.on_close_models(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             save_model_settings(&ui, &settings);
             refresh_models(&ui, &settings, &ui_models, lang.get());
             ui.set_models_open(false);
@@ -884,10 +1040,14 @@ fn main() -> anyhow::Result<()> {
         let ui_handle = ui.as_weak();
         let lang = lang.clone();
         ui.on_check_runtime(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
-            let (status, details) = runtime_report(lang.get());
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let (status, details, cuda) = runtime_report(lang.get());
             ui.set_runtime_status(status.into());
-            ui.set_runtime_details(details.into());
+            ui.set_runtime_details(details.clone().into());
+            ui.set_models_status(details.into());
+            ui.set_runtime_cuda(cuda);
         });
     }
     {
@@ -955,9 +1115,10 @@ fn main() -> anyhow::Result<()> {
                         let tr = Tr::new(lang_value);
                         match result {
                             Ok(()) => {
-                                let (status, details) = runtime_report(lang_value);
+                                let (status, details, cuda) = runtime_report(lang_value);
                                 ui.set_runtime_status(status.into());
                                 ui.set_runtime_details(details.into());
+                                ui.set_runtime_cuda(cuda);
                                 ui.set_models_status(tr.strings().runtime_restart.clone());
                             }
                             Err(error) => {
@@ -980,7 +1141,9 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         let settings = settings.clone();
         ui.on_remove_folder(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             let idx = ui.get_folder_selected();
             if idx >= 0 && (idx as usize) < folder_model.row_count() {
@@ -1000,7 +1163,9 @@ fn main() -> anyhow::Result<()> {
         let lang = lang.clone();
         let settings = settings.clone();
         ui.on_clear_folders(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             folders.borrow_mut().clear();
             folder_model.set_vec(Vec::new());
@@ -1050,11 +1215,15 @@ fn main() -> anyhow::Result<()> {
         let preview_cache = preview_cache.clone();
         let preview_gen = preview_gen.clone();
         ui.on_select_row(move |index| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             if index < 0 {
                 return;
             }
-            let Some(row) = rows.row_data(index as usize) else { return };
+            let Some(row) = rows.row_data(index as usize) else {
+                return;
+            };
             ui.set_selected_row(index);
             ui.set_keep_confidence(row.keep_confidence.clone());
             ui.set_keep_reason(row.keep_reason.clone());
@@ -1096,7 +1265,9 @@ fn main() -> anyhow::Result<()> {
         let ui_handle = ui.as_weak();
         let rows = rows.clone();
         ui.on_move_selection(move |delta| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let count = rows.row_count();
             if count == 0 {
                 return;
@@ -1127,7 +1298,9 @@ fn main() -> anyhow::Result<()> {
         let scan_started = scan_started.clone();
         let paused = paused.clone();
         ui.on_start(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if ui.get_busy() {
                 ui.set_status(tr.status_busy().into());
@@ -1235,9 +1408,7 @@ fn main() -> anyhow::Result<()> {
                         .map(|text| (*text).to_string())
                         .or_else(|| payload.downcast_ref::<String>().cloned())
                         .unwrap_or_else(|| "unknown panic".to_string());
-                    umdf_core::log_error(format_args!(
-                        "UMDF: scan thread panicked: {detail}"
-                    ));
+                    umdf_core::log_error(format_args!("UMDF: scan thread panicked: {detail}"));
                     Err(anyhow::anyhow!("scan thread panicked: {detail}"))
                 });
                 let _ = dtx.send(result.map_err(|e| e.to_string()));
@@ -1250,7 +1421,9 @@ fn main() -> anyhow::Result<()> {
         let paused = paused.clone();
         let lang = lang.clone();
         ui.on_stop(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             cancel.store(true, Ordering::Relaxed);
             paused.store(false, Ordering::Relaxed);
@@ -1264,7 +1437,9 @@ fn main() -> anyhow::Result<()> {
         let paused = paused.clone();
         let lang = lang.clone();
         ui.on_toggle_pause(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             if !ui.get_busy() {
                 return;
             }
@@ -1303,7 +1478,9 @@ fn main() -> anyhow::Result<()> {
             slint::TimerMode::Repeated,
             std::time::Duration::from_millis(100),
             move || {
-                let Some(ui) = ui_handle.upgrade() else { return };
+                let Some(ui) = ui_handle.upgrade() else {
+                    return;
+                };
                 let tr = Tr::new(lang.get());
 
                 loop {
@@ -1343,8 +1520,8 @@ fn main() -> anyhow::Result<()> {
                                 }
                             } else {
                                 ui.set_stage(tr.stage_finished().into());
-                                let skipped = report.stats.extract_errors
-                                    + report.stats.embedding_errors;
+                                let skipped =
+                                    report.stats.extract_errors + report.stats.embedding_errors;
                                 if skipped > 0 {
                                     tr.status_finished_skipped(
                                         report.stats.groups,
@@ -1388,12 +1565,16 @@ fn main() -> anyhow::Result<()> {
         let ui_handle = ui.as_weak();
         let rows = rows.clone();
         ui.on_play_preview(move |left| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let index = ui.get_selected_row();
             if index < 0 {
                 return;
             }
-            let Some(row) = rows.row_data(index as usize) else { return };
+            let Some(row) = rows.row_data(index as usize) else {
+                return;
+            };
             let path = if left {
                 row.original_path.to_string()
             } else {
@@ -1409,7 +1590,9 @@ fn main() -> anyhow::Result<()> {
         let ui_stats = ui_stats.clone();
         let preview_gen = preview_gen.clone();
         ui.on_trash_row(move |index| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if let Some((idx, path)) = row_path(&rows, index) {
                 let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
@@ -1432,7 +1615,9 @@ fn main() -> anyhow::Result<()> {
         let ui_stats = ui_stats.clone();
         let preview_gen = preview_gen.clone();
         ui.on_delete_row(move |index| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             if let Some((idx, path)) = row_path(&rows, index) {
                 let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
@@ -1455,7 +1640,9 @@ fn main() -> anyhow::Result<()> {
         let ui_stats = ui_stats.clone();
         let preview_gen = preview_gen.clone();
         ui.on_move_row(move |index| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             let dest = PathBuf::from(ui.get_move_dest().to_string());
             if dest.as_os_str().is_empty() {
@@ -1484,7 +1671,9 @@ fn main() -> anyhow::Result<()> {
         let rows = rows.clone();
         let lang = lang.clone();
         ui.on_apply_all(move |kind| {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             let count = rows.row_count();
             if count == 0 {
@@ -1516,7 +1705,9 @@ fn main() -> anyhow::Result<()> {
         let ui_stats = ui_stats.clone();
         let preview_gen = preview_gen.clone();
         ui.on_confirm_apply(move || {
-            let Some(ui) = ui_handle.upgrade() else { return };
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
             let tr = Tr::new(lang.get());
             let kind = ui.get_confirm_kind().to_string();
             let verb = verb_for(&kind);
@@ -1528,7 +1719,9 @@ fn main() -> anyhow::Result<()> {
             let mut failed = 0usize;
             let mut bytes = 0u64;
             for i in 0..rows.row_count() {
-                let Some(row) = rows.row_data(i) else { continue };
+                let Some(row) = rows.row_data(i) else {
+                    continue;
+                };
                 let path = PathBuf::from(row.duplicate_path.as_str());
                 let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
                 let ok = match verb {
@@ -1632,7 +1825,10 @@ fn main() -> anyhow::Result<()> {
             ui.set_semantic_summary(
                 format!(
                     "{} · 224²",
-                    Path::new(model).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                    Path::new(model)
+                        .file_name()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default()
                 )
                 .into(),
             );
@@ -1747,6 +1943,16 @@ fn save_ui_settings(
         guard.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
         guard.dark_mode = ui.get_dark_mode();
         guard.preview_width = ui.get_preview_width().clamp(260.0, 2000.0);
+        let window = ui.window();
+        guard.window_maximized = window.is_maximized();
+        // While maximized the window size is the maximized one. Keep the last
+        // normal size so restoring and then unmaximizing behaves sensibly.
+        if !guard.window_maximized {
+            let scale = window.scale_factor().max(0.1);
+            let size = window.size();
+            guard.window_width = (size.width as f32 / scale).clamp(800.0, 12000.0);
+            guard.window_height = (size.height as f32 / scale).clamp(600.0, 12000.0);
+        }
         guard.exclude_trash = ui.get_exclude_trash();
         if let Err(error) = guard.save() {
             umdf_core::log_error(format_args!("UMDF: could not save config.toml: {error}"));
@@ -1791,10 +1997,11 @@ fn update_cache_label(ui: &AppWindow, cache: &CacheDb) {
     );
     ui.set_models_counters(
         format!(
-            "{} fingerprints · {} embeddings · {} metadata · {}",
+            "{} fp · {} emb · {} meta · {} res · {}",
             stats.fingerprints,
             stats.embeddings,
             stats.metadata,
+            stats.comparisons,
             human_bytes(stats.bytes)
         )
         .into(),
@@ -1948,11 +2155,7 @@ fn handle_progress(ui: &AppWindow, progress: Progress, tr: &Tr) {
             ui.set_stage(tr.stage_loading_total(total).into());
             set_progress(ui, 1.0);
         }
-        Progress::Loaded {
-            index,
-            total,
-            path,
-        } => {
+        Progress::Loaded { index, total, path } => {
             let name = path
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
@@ -2093,6 +2296,7 @@ fn apply_report(
                 keep_reason: reasons.into(),
                 keep_pct: group.keep_confidence,
                 keep_codes: group.keep_reasons.join(",").into(),
+                starred: false,
                 original_thumb: slint::Image::default(),
                 duplicate_thumb: slint::Image::default(),
             });
@@ -2112,12 +2316,21 @@ fn apply_report(
     // Thumbnails are generated in the background so the list appears instantly.
     let generation = thumb_gen.fetch_add(1, Ordering::SeqCst) + 1;
     if !jobs.is_empty() {
-        spawn_thumbnails(ui.as_weak(), jobs, thumb_cache.clone(), thumb_gen.clone(), generation);
+        spawn_thumbnails(
+            ui.as_weak(),
+            jobs,
+            thumb_cache.clone(),
+            thumb_gen.clone(),
+            generation,
+        );
     }
 
     ui.set_scanned_label(tr.files_scanned(report.stats.files_scanned).into());
     ui.set_found_label(tr.duplicates_found(report.stats.duplicates_found).into());
-    ui.set_space_label(tr.reclaimable(&human_bytes(report.stats.reclaimable_bytes)).into());
+    ui.set_space_label(
+        tr.reclaimable(&human_bytes(report.stats.reclaimable_bytes))
+            .into(),
+    );
     ui.set_elapsed_label(
         tr.elapsed(
             report.stats.elapsed_ms as f64 / 1000.0,
@@ -2148,18 +2361,19 @@ fn spawn_thumbnails(
             if generation.load(Ordering::SeqCst) != my_generation {
                 return;
             }
-            let computed: Vec<(usize, Option<ThumbData>, Option<ThumbData>, String, String)> = chunk
-                .par_iter()
-                .map(|(idx, left, right)| {
-                    (
-                        *idx,
-                        thumb_data(left, &cache),
-                        thumb_data(right, &cache),
-                        left.clone(),
-                        right.clone(),
-                    )
-                })
-                .collect();
+            let computed: Vec<(usize, Option<ThumbData>, Option<ThumbData>, String, String)> =
+                chunk
+                    .par_iter()
+                    .map(|(idx, left, right)| {
+                        (
+                            *idx,
+                            thumb_data(left, &cache),
+                            thumb_data(right, &cache),
+                            left.clone(),
+                            right.clone(),
+                        )
+                    })
+                    .collect();
 
             for (idx, left, right, left_path, right_path) in computed {
                 let ui_weak = ui_weak.clone();
@@ -2170,7 +2384,9 @@ fn spawn_thumbnails(
                     }
                     let Some(ui) = ui_weak.upgrade() else { return };
                     let model = ui.get_rows();
-                    let Some(mut row) = model.row_data(idx) else { return };
+                    let Some(mut row) = model.row_data(idx) else {
+                        return;
+                    };
                     if row.original_path.as_str() != left_path
                         || row.duplicate_path.as_str() != right_path
                     {
@@ -2224,7 +2440,6 @@ fn read_directories(path: &Path, show_hidden: bool) -> Vec<BrowserEntry> {
         .collect()
 }
 
-
 fn list_roots() -> Vec<BrowserEntry> {
     #[cfg(windows)]
     {
@@ -2253,12 +2468,7 @@ fn list_roots() -> Vec<BrowserEntry> {
     }
 }
 
-fn show_roots(
-    ui: &AppWindow,
-    model: &VecModel<BrowserEntry>,
-    current: &RefCell<PathBuf>,
-    tr: &Tr,
-) {
+fn show_roots(ui: &AppWindow, model: &VecModel<BrowserEntry>, current: &RefCell<PathBuf>, tr: &Tr) {
     let roots = list_roots();
     let count = roots.len();
     model.set_vec(roots);
@@ -2327,7 +2537,6 @@ fn quick_location(kind: &str) -> Option<PathBuf> {
 fn current_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
 }
-
 
 /// Keep the status-bar counters honest after rows leave the list.
 fn update_counters(
@@ -2405,9 +2614,7 @@ fn describe_string(path: &str) -> String {
         Err(_) => FFPROBE
             .get()
             .and_then(|tool| tool.as_ref())
-            .and_then(|ffprobe| {
-                umdf_core::media::probe(ffprobe, p, &AtomicBool::new(false)).ok()
-            })
+            .and_then(|ffprobe| umdf_core::media::probe(ffprobe, p, &AtomicBool::new(false)).ok())
             .and_then(|probe| match (probe.width, probe.height) {
                 (Some(w), Some(h)) => Some(format!("{w} x {h}")),
                 _ => None,
@@ -2438,7 +2645,7 @@ fn on_path(names: &[&str]) -> bool {
 }
 
 #[cfg(feature = "embeddings")]
-fn runtime_report(lang: Lang) -> (String, String) {
+fn runtime_report(lang: Lang) -> (String, String, bool) {
     let status = umdf_core::embeddings::runtime_status();
     let provider = umdf_core::embeddings::cuda_provider_available();
     let nvidia = std::process::Command::new("nvidia-smi")
@@ -2480,19 +2687,19 @@ fn runtime_report(lang: Lang) -> (String, String) {
             yes(ffmpeg)
         ),
     };
-    (head.to_string(), details)
+    let cuda_ready = status == "CUDA" && provider;
+    (head.to_string(), details, cuda_ready)
 }
 
 #[cfg(not(feature = "embeddings"))]
-fn runtime_report(lang: Lang) -> (String, String) {
+fn runtime_report(lang: Lang) -> (String, String, bool) {
     let head = match lang {
-        Lang::Es => "Motor IA: no incluido en esta compilación",
-        _ => "AI engine: not included in this build",
+        Lang::Es => "No incluido en esta compilación",
+        _ => "Not included in this build",
     };
-    (head.to_string(), String::new())
+    (head.to_string(), String::new(), false)
 }
 
-#[cfg(feature = "embeddings")]
 fn open_folder(path: &Path) {
     let _ = std::fs::create_dir_all(path);
     #[cfg(windows)]
@@ -2565,9 +2772,7 @@ fn load_media_image(path: &Path) -> Option<image::DynamicImage> {
         let output = std::process::Command::new(ffmpeg)
             .args(["-loglevel", "error", "-ss", seconds, "-i"])
             .arg(path)
-            .args([
-                "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-",
-            ])
+            .args(["-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"])
             .output()
             .ok()?;
         if !output.status.success() || output.stdout.is_empty() {
@@ -2580,10 +2785,7 @@ fn load_media_image(path: &Path) -> Option<image::DynamicImage> {
     None
 }
 
-fn thumb_data(
-    path: &str,
-    cache: &Mutex<HashMap<String, Option<ThumbData>>>,
-) -> Option<ThumbData> {
+fn thumb_data(path: &str, cache: &Mutex<HashMap<String, Option<ThumbData>>>) -> Option<ThumbData> {
     if let Some(value) = cache.lock().ok()?.get(path) {
         return value.clone();
     }

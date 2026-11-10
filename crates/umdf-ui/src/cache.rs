@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use umdf_core::scan::ScanCache;
-use umdf_core::{CachedMetadata, Fingerprint};
+use umdf_core::{CachedComparison, CachedMetadata, ComparisonEntry, Fingerprint, MatchKind};
 
 /// Bump when the fingerprint algorithm or its storage encoding changes.
 /// Old rows are ignored and rebuilt once, without deleting the whole cache.
@@ -31,6 +31,11 @@ const WRITE_INTERVAL: Duration = Duration::from_millis(200);
 /// SQLite memory map per connection. With 32x32 fingerprints the whole cache
 /// of a 113k-image library fits here, so reads hit the OS page cache.
 const MMAP_BYTES: i64 = 1024 * 1024 * 1024;
+/// Comparison results are far larger than one fingerprint, so keep the newest
+/// few signatures and refuse anything above this size.
+const MAX_COMPARISON_BYTES: usize = 64 * 1024 * 1024;
+const MAX_COMPARISON_ENTRIES: usize = 1_000_000;
+const COMPARISON_KEEP: usize = 4;
 
 #[derive(Clone)]
 struct CachedFingerprint {
@@ -178,7 +183,73 @@ pub struct CacheStats {
     pub fingerprints: u64,
     pub embeddings: u64,
     pub metadata: u64,
+    /// Stored whole-library comparison results.
+    pub comparisons: u64,
     pub bytes: u64,
+    pub comparison_bytes: u64,
+}
+
+fn put_text(out: &mut Vec<u8>, text: &str) {
+    out.extend_from_slice(&(text.len() as u32).to_le_bytes());
+    out.extend_from_slice(text.as_bytes());
+}
+
+fn take_u32(data: &[u8], pos: &mut usize) -> Option<u32> {
+    let bytes = data.get(*pos..*pos + 4)?;
+    *pos += 4;
+    Some(u32::from_le_bytes(bytes.try_into().ok()?))
+}
+
+fn take_text(data: &[u8], pos: &mut usize) -> Option<String> {
+    let len = take_u32(data, pos)? as usize;
+    let bytes = data.get(*pos..*pos + len)?;
+    *pos += len;
+    String::from_utf8(bytes.to_vec()).ok()
+}
+
+fn encode_comparison(entries: &[ComparisonEntry]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(entries.len() * 96);
+    out.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    for entry in entries {
+        put_text(&mut out, &entry.a.to_string_lossy());
+        put_text(&mut out, &entry.b.to_string_lossy());
+        out.extend_from_slice(&entry.similarity.to_le_bytes());
+        out.push(match entry.kind {
+            MatchKind::Exact => 0,
+            MatchKind::Similar => 1,
+            MatchKind::MediaContent => 2,
+        });
+    }
+    out
+}
+
+fn decode_comparison(data: &[u8]) -> Option<Vec<ComparisonEntry>> {
+    let mut pos = 0usize;
+    let count = take_u32(data, &mut pos)? as usize;
+    if count > MAX_COMPARISON_ENTRIES {
+        return None;
+    }
+    let mut entries = Vec::with_capacity(count);
+    for _ in 0..count {
+        let a = take_text(data, &mut pos)?;
+        let b = take_text(data, &mut pos)?;
+        let similarity = f32::from_le_bytes(data.get(pos..pos + 4)?.try_into().ok()?);
+        pos += 4;
+        let kind = match *data.get(pos)? {
+            0 => MatchKind::Exact,
+            1 => MatchKind::Similar,
+            2 => MatchKind::MediaContent,
+            _ => return None,
+        };
+        pos += 1;
+        entries.push(ComparisonEntry {
+            a: PathBuf::from(a),
+            b: PathBuf::from(b),
+            similarity,
+            kind,
+        });
+    }
+    Some(entries)
 }
 
 /// Canonical key for the cache tables.
@@ -880,7 +951,15 @@ impl CacheDb {
                  data BLOB NOT NULL,
                  created_at TEXT NOT NULL DEFAULT (datetime('now')),
                  PRIMARY KEY (path, at_ms, grid)
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS comparison_cache (
+                 signature TEXT PRIMARY KEY,
+                 pairs INTEGER NOT NULL,
+                 matches BLOB NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE INDEX IF NOT EXISTS comparison_cache_created
+                 ON comparison_cache(created_at);",
         )
         .context("creating cache schema")?;
         // Existing databases predate `fp_version`. Adding the column with a
@@ -1189,7 +1268,7 @@ impl CacheDb {
                             row.get::<_, Option<i64>>(2)?,
                             row.get::<_, String>(3)?,
                         ))
-        })
+                    })
                 {
                     for row in rows.flatten() {
                         let (key, size, modified, hash) = row;
@@ -1363,12 +1442,38 @@ impl CacheDb {
                 |row| row.get::<_, i64>(0),
             )
             .unwrap_or(0);
+        let comparisons = conn
+            .query_row("SELECT COUNT(*) FROM comparison_cache", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap_or(0);
+        let comparison_bytes = conn
+            .query_row(
+                "SELECT COALESCE(SUM(LENGTH(matches)), 0) FROM comparison_cache",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0);
         CacheStats {
             fingerprints: fingerprints.max(0) as u64,
             embeddings: embeddings.max(0) as u64,
             metadata: metadata.max(0) as u64,
-            bytes: (fingerprint_bytes + embedding_bytes).max(0) as u64,
+            comparisons: comparisons.max(0) as u64,
+            bytes: (fingerprint_bytes + embedding_bytes + comparison_bytes).max(0) as u64,
+            comparison_bytes: comparison_bytes.max(0) as u64,
         }
+    }
+
+    /// Drop only the cached whole-library comparison results. Fingerprints,
+    /// embeddings and metadata are kept, so the next scan still extracts
+    /// instantly but recomputes the pairs.
+    pub fn clear_comparison(&self) -> Result<()> {
+        self.flush();
+        let conn = self
+            .checkout()
+            .ok_or_else(|| anyhow::anyhow!("cache connection unavailable"))?;
+        conn.execute_batch("DELETE FROM comparison_cache;")?;
+        Ok(())
     }
 
     /// Drop every cached value. The configuration is untouched.
@@ -1384,7 +1489,8 @@ impl CacheDb {
              DELETE FROM failure_cache;
              DELETE FROM content_hash_cache;
              DELETE FROM media_signature_cache;
-             DELETE FROM video_frame_cache;",
+             DELETE FROM video_frame_cache;
+             DELETE FROM comparison_cache;",
         )?;
         if let Ok(mut memory) = self.memory.write() {
             *memory = MemoryCache::default();
@@ -1459,7 +1565,7 @@ impl CacheDb {
         self.enqueue(WriteOp::Fingerprint {
             key: cache_key(path),
             size,
-                modified,
+            modified,
             grid,
             mean: fingerprint.mean,
             values: fingerprint.values.clone(),
@@ -1542,7 +1648,7 @@ impl CacheDb {
         self.enqueue(WriteOp::Metadata {
             key: cache_key(path),
             size,
-                modified,
+            modified,
             metadata: metadata.clone(),
         });
     }
@@ -1755,7 +1861,7 @@ impl CacheDb {
             at_ms: (at_secs * 1000.0).round() as i64,
             grid,
             size,
-                modified,
+            modified,
             mean: fingerprint.mean,
             values: fingerprint.values.clone(),
         });
@@ -1816,7 +1922,7 @@ impl CacheDb {
             key: cache_key(path),
             model: model.to_string(),
             size,
-                modified,
+            modified,
             values: values.to_vec(),
         });
     }
@@ -1860,6 +1966,57 @@ impl ScanCache for CacheDb {
         self.get_fingerprint(path, size, modified_ms, grid)
     }
 
+    fn comparison(&self, signature: &str) -> Option<CachedComparison> {
+        let conn = self.checkout()?;
+        let (pairs, blob): (i64, Vec<u8>) = conn
+            .query_row(
+                "SELECT pairs, matches FROM comparison_cache WHERE signature = ?1",
+                params![signature],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok()?;
+        Some(CachedComparison {
+            pairs: pairs.max(0) as u64,
+            matches: decode_comparison(&blob)?,
+        })
+    }
+
+    fn store_comparison(&self, signature: &str, pairs: u64, matches: &[ComparisonEntry]) {
+        if matches.len() > MAX_COMPARISON_ENTRIES {
+            return;
+        }
+        let blob = encode_comparison(matches);
+        if blob.len() > MAX_COMPARISON_BYTES {
+            return;
+        }
+        let Some(conn) = self.checkout() else {
+            return;
+        };
+        if conn
+            .execute(
+                "INSERT INTO comparison_cache(signature, pairs, matches)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(signature) DO UPDATE SET
+                     pairs = excluded.pairs,
+                     matches = excluded.matches,
+                     created_at = datetime('now')",
+                params![signature, pairs as i64, blob],
+            )
+            .is_err()
+        {
+            return;
+        }
+        let _ = conn.execute(
+            &format!(
+                "DELETE FROM comparison_cache WHERE rowid NOT IN (
+                     SELECT rowid FROM comparison_cache ORDER BY rowid DESC LIMIT {COMPARISON_KEEP}
+                 )"
+            ),
+            [],
+        );
+        let _ = conn.execute_batch("PRAGMA optimize;");
+    }
+
     fn store_fingerprint(
         &self,
         path: &Path,
@@ -1889,13 +2046,7 @@ impl ScanCache for CacheDb {
         self.get_failure(path, size, modified_ms)
     }
 
-    fn store_failure(
-        &self,
-        path: &Path,
-        size: u64,
-        modified_ms: Option<i64>,
-        reason: &str,
-    ) {
+    fn store_failure(&self, path: &Path, size: u64, modified_ms: Option<i64>, reason: &str) {
         self.put_failure(path, size, modified_ms, reason)
     }
 
@@ -2261,7 +2412,10 @@ mod tests {
             conn.execute(
                 "INSERT INTO fingerprint_cache(path, size, modified, grid, mean, data)
                  VALUES(?1, 10, 100, 75, 0, ?2)",
-                params![cache_key(Path::new("/photos/a.jpg")), encode_i16(&[1, 2, 3])],
+                params![
+                    cache_key(Path::new("/photos/a.jpg")),
+                    encode_i16(&[1, 2, 3])
+                ],
             )
             .unwrap();
         }

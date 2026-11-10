@@ -1,14 +1,16 @@
 //! Scan orchestrator: discovery → extraction → matching → grouping.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use rayon::prelude::*;
+use sha2::{Digest, Sha256};
 
 use crate::action::{self, ActionReport};
-use crate::config::{is_audio_ext, is_image_ext, is_video_ext, Action, ScanConfig};
+use crate::config::{is_audio_ext, is_image_ext, is_video_ext, Action, Metric, ScanConfig};
 use crate::fingerprint::{self, aspect_ratio, LEGACY_ASPECT_TOLERANCE};
 use crate::group;
 use crate::hash;
@@ -19,14 +21,35 @@ use crate::walk;
 
 #[derive(Debug, Clone)]
 pub enum Progress {
-    Discovered { total: usize },
-    Loaded { index: usize, total: usize, path: PathBuf },
-    Embedding { done: usize, total: usize },
+    Discovered {
+        total: usize,
+    },
+    Loaded {
+        index: usize,
+        total: usize,
+        path: PathBuf,
+    },
+    Embedding {
+        done: usize,
+        total: usize,
+    },
     /// Which execution provider the semantic model actually uses.
-    EmbeddingDevice { cuda: bool, forced_cpu: bool },
-    Hashing { done: usize, total: usize },
-    Comparing { done: usize, total: usize },
-    Grouped { groups: usize, duplicates: usize },
+    EmbeddingDevice {
+        cuda: bool,
+        forced_cpu: bool,
+    },
+    Hashing {
+        done: usize,
+        total: usize,
+    },
+    Comparing {
+        done: usize,
+        total: usize,
+    },
+    Grouped {
+        groups: usize,
+        duplicates: usize,
+    },
     Finished,
 }
 
@@ -75,6 +98,10 @@ pub struct Stats {
     pub hash_ms: u128,
     pub compare_ms: u128,
     pub group_ms: u128,
+    /// True when the perceptual matches came from `comparison_cache`.
+    pub comparison_from_cache: bool,
+    /// Pairs that survived the perceptual index and were fully compared.
+    pub comparison_candidates: u64,
 }
 
 #[derive(Debug)]
@@ -84,6 +111,25 @@ pub struct ScanReport {
     pub groups: Vec<Group>,
     pub stats: Stats,
     pub actions: Option<ActionReport>,
+}
+
+/// One perceptual match serialised in the comparison cache.
+///
+/// Paths (instead of item ids) keep the cache valid across runs where the
+/// discovery order changes.
+#[derive(Debug, Clone)]
+pub struct ComparisonEntry {
+    pub a: PathBuf,
+    pub b: PathBuf,
+    pub similarity: f32,
+    pub kind: MatchKind,
+}
+
+/// Whole comparison result for one exact library + settings signature.
+#[derive(Debug, Clone, Default)]
+pub struct CachedComparison {
+    pub pairs: u64,
+    pub matches: Vec<ComparisonEntry>,
 }
 
 /// Seconds of decoded audio used for the content signature.
@@ -137,41 +183,18 @@ pub trait ScanCache: Send + Sync {
 
     /// Reason why a previous decode of this unchanged file failed. Caching
     /// failures prevents corrupt/empty files from being retried on every scan.
-    fn failure(
-        &self,
-        _path: &Path,
-        _size: u64,
-        _modified_ms: Option<i64>,
-    ) -> Option<String> {
+    fn failure(&self, _path: &Path, _size: u64, _modified_ms: Option<i64>) -> Option<String> {
         None
     }
 
-    fn store_failure(
-        &self,
-        _path: &Path,
-        _size: u64,
-        _modified_ms: Option<i64>,
-        _reason: &str,
-    ) {
-    }
+    fn store_failure(&self, _path: &Path, _size: u64, _modified_ms: Option<i64>, _reason: &str) {}
 
     /// Cached whole-file SHA-256 for an unchanged file.
-    fn content_hash(
-        &self,
-        _path: &Path,
-        _size: u64,
-        _modified_ms: Option<i64>,
-    ) -> Option<String> {
+    fn content_hash(&self, _path: &Path, _size: u64, _modified_ms: Option<i64>) -> Option<String> {
         None
     }
 
-    fn store_content_hash(
-        &self,
-        _path: &Path,
-        _size: u64,
-        _modified_ms: Option<i64>,
-        _hash: &str,
-    ) {
+    fn store_content_hash(&self, _path: &Path, _size: u64, _modified_ms: Option<i64>, _hash: &str) {
     }
 
     /// Cached audio PCM signature. `params` identifies sample position/length.
@@ -217,6 +240,16 @@ pub trait ScanCache: Send + Sync {
         _fingerprint: &Fingerprint,
     ) {
     }
+
+    /// Whole perceptual comparison result for `signature`. Returning `Some`
+    /// lets the scanner skip the O(n²) pass entirely.
+    fn comparison(&self, _signature: &str) -> Option<CachedComparison> {
+        None
+    }
+
+    /// Persist the perceptual matches for `signature`. Implementations may
+    /// ignore very large results.
+    fn store_comparison(&self, _signature: &str, _pairs: u64, _matches: &[ComparisonEntry]) {}
 
     fn store_fingerprint(
         &self,
@@ -392,6 +425,52 @@ fn apply_embedding_batch(
     }
 }
 
+/// Stable signature for the whole perceptual comparison.
+///
+/// It covers the file set (paths, sizes, mtimes), every fingerprint and
+/// embedding and the options that affect a pair. A repeated scan with the same
+/// library and settings can therefore reuse the previous match list.
+fn comparison_signature(items: &[MediaItem], index: &[usize], cfg: &ScanConfig) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"umdf-comparison-v1");
+    hasher.update(format!("{:?}", cfg.metric).as_bytes());
+    hasher.update([cfg.pixel_tolerance]);
+    hasher.update(cfg.similarity_threshold.to_bits().to_le_bytes());
+    match cfg.embeddings.as_ref() {
+        Some(embedding) => {
+            hasher.update(b"embeddings");
+            hasher.update(embedding.model_path.to_string_lossy().as_bytes());
+            hasher.update(embedding.threshold.to_bits().to_le_bytes());
+        }
+        None => hasher.update(b"no-embeddings"),
+    }
+    let mut entries: Vec<&MediaItem> = index.iter().map(|&id| &items[id]).collect();
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    for item in entries {
+        hasher.update(item.path.to_string_lossy().as_bytes());
+        hasher.update(item.size.to_le_bytes());
+        hasher.update(
+            item.modified
+                .map(|date| date.timestamp_millis())
+                .unwrap_or_default()
+                .to_le_bytes(),
+        );
+        if let Some(fp) = item.fingerprint.as_ref() {
+            hasher.update(fp.size.to_le_bytes());
+            hasher.update(fp.mean.to_le_bytes());
+            for value in &fp.values {
+                hasher.update(value.to_le_bytes());
+            }
+        }
+        if let Some(embedding) = item.embedding.as_ref() {
+            for value in embedding {
+                hasher.update(value.to_bits().to_le_bytes());
+            }
+        }
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 fn run_inner(
     cfg: &ScanConfig,
     tx: Option<&Sender<Progress>>,
@@ -416,7 +495,7 @@ fn run_inner(
         // Stop pressed while walking the tree: return immediately.
         stats.cancelled = true;
         stats.elapsed_ms = started.elapsed().as_millis();
-    stats.cancelled = cfg.is_cancelled();
+        stats.cancelled = cfg.is_cancelled();
         emit(tx, Progress::Finished);
         return Ok(ScanReport {
             items: Vec::new(),
@@ -743,31 +822,31 @@ fn run_inner(
                             cancel_ref,
                             pause_ref,
                             |start, batch| {
-                            let batch_len = batch.len();
-                            for (offset, maybe_vector) in batch.into_iter().enumerate() {
-                                let slot = missing[start + offset];
-                                match maybe_vector {
-                                    Some(vector) => {
-                                        stats.embeddings_computed += 1;
-                                        if let Some(cache) = cache {
-                                            let (path, size, modified) = &meta[slot];
-                                            cache.store_embedding(
+                                let batch_len = batch.len();
+                                for (offset, maybe_vector) in batch.into_iter().enumerate() {
+                                    let slot = missing[start + offset];
+                                    match maybe_vector {
+                                        Some(vector) => {
+                                            stats.embeddings_computed += 1;
+                                            if let Some(cache) = cache {
+                                                let (path, size, modified) = &meta[slot];
+                                                cache.store_embedding(
                                                     path, &model_key, *size, *modified, &vector,
-                                            );
+                                                );
+                                            }
+                                            vectors[slot] = Some(vector);
                                         }
-                                        vectors[slot] = Some(vector);
+                                        None => stats.embedding_errors += 1,
                                     }
-                                    None => stats.embedding_errors += 1,
                                 }
-                            }
-                            let done = (cached_embeddings + start + batch_len).min(ids.len());
-                            emit(
-                                tx,
-                                Progress::Embedding {
-                                    done,
-                                    total: ids.len(),
-                                },
-                            );
+                                let done = (cached_embeddings + start + batch_len).min(ids.len());
+                                emit(
+                                    tx,
+                                    Progress::Embedding {
+                                        done,
+                                        total: ids.len(),
+                                    },
+                                );
                             },
                         );
                         if let Err(error) = result {
@@ -926,156 +1005,256 @@ fn run_inner(
                 _ => 1.0,
             })
             .collect();
-        // Sort by aspect ratio so the 1.5x gate becomes a sliding window.
-        index.sort_by(|a, b| {
-            ratios[*a]
-                .partial_cmp(&ratios[*b])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
         let embedding_threshold = cfg
             .embeddings
             .as_ref()
             .map(|e| e.threshold * 100.0)
             .unwrap_or(cfg.similarity_threshold);
 
-        // Upper bound for the progress bar. Counting the exact number of
-        // compatible pairs first would traverse every window twice; on a large
-        // library that is billions of iterations before any pixel is compared.
-        let max_pairs = (index.len() as u64)
-            .saturating_mul(index.len().saturating_sub(1) as u64)
-            / 2;
-        emit(
-            tx,
-            Progress::Comparing {
-                done: 0,
-                total: max_pairs as usize,
-            },
-        );
+        // A repeated scan of an unchanged library reuses the previous match
+        // list instead of recomputing billions of pairs.
+        let comparison_sig = comparison_signature(&items, &index, cfg);
+        let cached = cache.and_then(|cache| cache.comparison(&comparison_sig));
+        if let Some(cached) = cached {
+            let ids: HashMap<&Path, usize> = index
+                .iter()
+                .map(|&id| (items[id].path.as_path(), id))
+                .collect();
+            for entry in cached.matches {
+                if let (Some(&a), Some(&b)) =
+                    (ids.get(entry.a.as_path()), ids.get(entry.b.as_path()))
+                {
+                    matches.push(Match {
+                        a,
+                        b,
+                        similarity: entry.similarity,
+                        kind: entry.kind,
+                    });
+                }
+            }
+            stats.pairs_compared = cached.pairs;
+            stats.comparison_from_cache = true;
+            let total =
+                (index.len() as u64).saturating_mul(index.len().saturating_sub(1) as u64) / 2;
+            emit(
+                tx,
+                Progress::Comparing {
+                    done: total as usize,
+                    total: total as usize,
+                },
+            );
+        } else {
+            // Cheap perceptual index. For `dpf` a pair that reaches the
+            // threshold can only differ by a bounded amount in global mean
+            // grey, and flat images are rejected by the structural check
+            // anyway. Sorting by mean and scanning a narrow window removes
+            // most of the O(n²) pairs before the pixel loop starts.
+            let mut means = vec![0i32; items.len()];
+            let mut stddevs = vec![0f64; items.len()];
+            for &id in &index {
+                if let Some(fp) = items[id].fingerprint.as_ref() {
+                    means[id] = fp.mean as i32;
+                    stddevs[id] = fingerprint::fingerprint_stddev(fp);
+                }
+            }
+            let use_mean_index = cfg.metric == Metric::PixelTolerance;
+            if matches!(cfg.metric, Metric::PixelTolerance | Metric::Ssim) {
+                index.retain(|id| stddevs[*id] >= 3.0);
+            }
+            if use_mean_index {
+                index.sort_by(|a, b| {
+                    means[*a].cmp(&means[*b]).then_with(|| {
+                        ratios[*a]
+                            .partial_cmp(&ratios[*b])
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                });
+            } else {
+                // Sort by aspect ratio so the 1.5x gate becomes a sliding
+                // window.
+                index.sort_by(|a, b| {
+                    ratios[*a]
+                        .partial_cmp(&ratios[*b])
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
 
-        // The comparison can run for minutes on a large library. A small
-        // progress thread turns the atomic counter into UI updates instead of
-        // leaving the bar at 0 until the whole stage finishes.
-        let compared = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let progress_stop = std::sync::Arc::new(AtomicBool::new(false));
-        let progress_thread = if max_pairs > 2_000_000 {
-            tx.cloned().map(|tx| {
-                let compared = compared.clone();
-                let stop = progress_stop.clone();
-                std::thread::spawn(move || {
-                    while !stop.load(Ordering::Relaxed) {
-                        std::thread::sleep(std::time::Duration::from_millis(200));
-                        let done = compared.load(Ordering::Relaxed) as usize;
-                        if tx
-                            .send(Progress::Comparing {
-                                done,
-                                total: max_pairs as usize,
-                            })
-                            .is_err()
-                        {
+            let grid_len = index
+                .first()
+                .and_then(|&id| items[id].fingerprint.as_ref())
+                .map(|fp| fp.values.len())
+                .unwrap_or(0) as f64;
+            let mean_bound = if use_mean_index && grid_len > 0.0 {
+                let threshold = cfg.similarity_threshold.clamp(0.0, 100.0) as f64;
+                let allowed = ((100.0 - threshold) / 100.0 * grid_len).floor();
+                let tolerance = cfg.pixel_tolerance as f64;
+                (tolerance + (allowed / grid_len) * (255.0 - tolerance)).ceil() as i32
+            } else {
+                i32::MAX
+            };
+
+            // Upper bound for the progress bar. Counting the exact number of
+            // compatible pairs first would traverse every window twice; on a
+            // large library that is billions of iterations before any pixel is
+            // compared.
+            let max_pairs =
+                (index.len() as u64).saturating_mul(index.len().saturating_sub(1) as u64) / 2;
+            emit(
+                tx,
+                Progress::Comparing {
+                    done: 0,
+                    total: max_pairs as usize,
+                },
+            );
+
+            // The comparison can run for minutes on a large library. A small
+            // progress thread turns the atomic counter into UI updates instead
+            // of leaving the bar at 0 until the whole stage finishes.
+            let compared = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let progress_stop = std::sync::Arc::new(AtomicBool::new(false));
+            let progress_thread = if max_pairs > 2_000_000 {
+                tx.cloned().map(|tx| {
+                    let compared = compared.clone();
+                    let stop = progress_stop.clone();
+                    std::thread::spawn(move || {
+                        while !stop.load(Ordering::Relaxed) {
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            let done = compared.load(Ordering::Relaxed) as usize;
+                            if tx
+                                .send(Progress::Comparing {
+                                    done,
+                                    total: max_pairs as usize,
+                                })
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    })
+                })
+            } else {
+                None
+            };
+
+            // Parallelise over the outer index (one Rayon region) instead of
+            // spawning a parallel region per window. Nested regions scale badly
+            // once the pool exceeds the number of chunks.
+            let results: Vec<Vec<Match>> = (0..index.len())
+                .into_par_iter()
+                .map(|i| {
+                    let mut local: Vec<Match> = Vec::new();
+                    wait_if_paused(pause_ref, cancel_ref);
+                    if cfg.is_cancelled() {
+                        return local;
+                    }
+                    let ai = index[i];
+                    let ra = ratios[ai];
+                    let ai_hash = items[ai].content_hash.as_deref();
+                    let ai_embedding = items[ai].embedding.as_ref();
+                    let ai_fingerprint = items[ai].fingerprint.as_ref();
+                    let mut seen = 0usize;
+                    let mut pending: u64 = 0;
+                    let end = if use_mean_index {
+                        i + 1
+                            + index[i + 1..]
+                                .partition_point(|&bj| means[bj] <= means[ai] + mean_bound)
+                    } else {
+                        index.len()
+                    };
+                    for &bj in &index[i + 1..end] {
+                        let rb = ratios[bj];
+                        if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
+                            if use_mean_index {
+                                continue;
+                            }
                             break;
                         }
-                    }
-                })
-            })
-        } else {
-            None
-        };
-
-        // Parallelise over the outer index (one Rayon region) instead of
-        // spawning a parallel region per window. Nested regions scale badly
-        // once the pool exceeds the number of chunks.
-        let results: Vec<Vec<Match>> = (0..index.len())
-            .into_par_iter()
-            .map(|i| {
-                let mut local: Vec<Match> = Vec::new();
-                wait_if_paused(pause_ref, cancel_ref);
-                if cfg.is_cancelled() {
-                    return local;
-                }
-                let ai = index[i];
-                let ra = ratios[ai];
-                let ai_hash = items[ai].content_hash.as_deref();
-                let ai_embedding = items[ai].embedding.as_ref();
-                let ai_fingerprint = items[ai].fingerprint.as_ref();
-                let mut seen = 0usize;
-                let mut pending: u64 = 0;
-                for &bj in &index[i + 1..] {
-                    let rb = ratios[bj];
-                    if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
-                        break;
-                    }
-                    if let Some(hash) = ai_hash {
-                        if items[bj].content_hash.as_deref() == Some(hash) {
-                            continue;
+                        if let Some(hash) = ai_hash {
+                            if items[bj].content_hash.as_deref() == Some(hash) {
+                                continue;
+                            }
+                        }
+                        seen += 1;
+                        if seen.is_multiple_of(256) && cfg.is_cancelled() {
+                            break;
+                        }
+                        pending += 1;
+                        if pending >= 1024 {
+                            compared.fetch_add(pending, Ordering::Relaxed);
+                            pending = 0;
+                        }
+                        let bj_embedding = items[bj].embedding.as_ref();
+                        let (sim, threshold) =
+                            if let (Some(ea), Some(eb)) = (ai_embedding, bj_embedding) {
+                                (fingerprint::cosine_percent(ea, eb), embedding_threshold)
+                            } else {
+                                let (Some(fa), Some(fb)) =
+                                    (ai_fingerprint, items[bj].fingerprint.as_ref())
+                                else {
+                                    continue;
+                                };
+                                let threshold = cfg.similarity_threshold;
+                                let Some(similarity) = fingerprint::similarity_at_least(
+                                    fa,
+                                    fb,
+                                    cfg.metric,
+                                    cfg.pixel_tolerance,
+                                    threshold,
+                                ) else {
+                                    continue;
+                                };
+                                (similarity, threshold)
+                            };
+                        if sim >= threshold {
+                            local.push(Match {
+                                a: ai,
+                                b: bj,
+                                similarity: sim,
+                                kind: MatchKind::Similar,
+                            });
                         }
                     }
-                    seen += 1;
-                    if seen % 256 == 0 && cfg.is_cancelled() {
-                        break;
-                    }
-                    pending += 1;
-                    if pending >= 1024 {
-                        compared.fetch_add(pending, Ordering::Relaxed);
-                        pending = 0;
-                    }
-                    let bj_embedding = items[bj].embedding.as_ref();
-                    let (sim, threshold) = if let (Some(ea), Some(eb)) =
-                        (ai_embedding, bj_embedding)
-                    {
-                        (
-                            fingerprint::cosine_percent(ea, eb),
-                            embedding_threshold,
-                        )
-                    } else {
-                        let (Some(fa), Some(fb)) = (ai_fingerprint, items[bj].fingerprint.as_ref())
-                        else {
-                            continue;
-                        };
-                        let threshold = cfg.similarity_threshold;
-                        let Some(similarity) = fingerprint::similarity_at_least(
-                            fa,
-                            fb,
-                            cfg.metric,
-                            cfg.pixel_tolerance,
-                            threshold,
-                        ) else {
-                            continue;
-                        };
-                        (similarity, threshold)
-                    };
-                    if sim >= threshold {
-                        local.push(Match {
-                            a: ai,
-                            b: bj,
-                            similarity: sim,
-                            kind: MatchKind::Similar,
-                        });
-                    }
-                }
-                compared.fetch_add(pending, Ordering::Relaxed);
-                local
-            })
-            .collect();
+                    compared.fetch_add(pending, Ordering::Relaxed);
+                    local
+                })
+                .collect();
 
-        progress_stop.store(true, Ordering::Relaxed);
-        if let Some(handle) = progress_thread {
-            let _ = handle.join();
+            progress_stop.store(true, Ordering::Relaxed);
+            if let Some(handle) = progress_thread {
+                let _ = handle.join();
+            }
+            let compared_total = compared.load(Ordering::Relaxed);
+            let mut perceptual: Vec<Match> = Vec::new();
+            for found in results {
+                perceptual.extend(found);
+            }
+            if !cfg.is_cancelled() {
+                if let Some(cache) = cache {
+                    let entries: Vec<ComparisonEntry> = perceptual
+                        .iter()
+                        .map(|m| ComparisonEntry {
+                            a: items[m.a].path.clone(),
+                            b: items[m.b].path.clone(),
+                            similarity: m.similarity,
+                            kind: m.kind,
+                        })
+                        .collect();
+                    cache.store_comparison(&comparison_sig, compared_total, &entries);
+                }
+            }
+            matches.extend(perceptual);
+            // The exact compatible-pair count is only known after the pass;
+            // fill the comparison segment of the bar once it has finished.
+            emit(
+                tx,
+                Progress::Comparing {
+                    done: max_pairs as usize,
+                    total: max_pairs as usize,
+                },
+            );
+            stats.pairs_compared = compared_total;
+            stats.comparison_candidates = compared_total;
         }
-        let compared_total = compared.load(Ordering::Relaxed);
-        for found in results {
-            matches.extend(found);
-        }
-        // The exact compatible-pair count is only known after the pass; fill
-        // the comparison segment of the bar once it has finished.
-        emit(
-            tx,
-            Progress::Comparing {
-                done: max_pairs as usize,
-                total: max_pairs as usize,
-            },
-        );
-        stats.pairs_compared = compared_total;
     }
 
     stats.compare_ms = compare_started.elapsed().as_millis();
@@ -1111,7 +1290,7 @@ fn run_inner(
         .filter(|item| item.extract_error.is_some())
         .count();
     crate::log_error(format_args!(
-        "UMDF: scan complete: files={} extract={}ms hash={}ms compare={}ms group={}ms total={}ms pairs={} errors={}",
+        "UMDF: scan complete: files={} extract={}ms hash={}ms compare={}ms group={}ms total={}ms pairs={} candidates={} comparison_cached={} errors={}",
         stats.files_scanned,
         stats.extract_ms,
         stats.hash_ms,
@@ -1119,6 +1298,8 @@ fn run_inner(
         stats.group_ms,
         stats.elapsed_ms,
         stats.pairs_compared,
+        stats.comparison_candidates,
+        stats.comparison_from_cache as u8,
         stats.extract_errors,
     ));
     emit(tx, Progress::Finished);
@@ -1220,8 +1401,8 @@ fn extract_item(
             let cached_embedding: Option<Vec<f32>> = None;
 
             if let Some(fp) = cached_fp {
-                    item.fingerprint = Some(fp);
-                    item.fingerprint_cached = true;
+                item.fingerprint = Some(fp);
+                item.fingerprint_cached = true;
                 if let Some(vector) = cached_embedding {
                     item.embedding = Some(vector);
                     item.embedding_cached = true;
@@ -1246,7 +1427,7 @@ fn extract_item(
                                 )),
                             }
                         }
-                }
+                    }
                 }
             } else if let Some(reason) =
                 cache.and_then(|cache| cache.failure(&cand.path, cand.size, modified_ms))
@@ -1289,12 +1470,7 @@ fn extract_item(
                     Err(e) => {
                         let reason = e.to_string();
                         if let Some(cache) = cache {
-                            cache.store_failure(
-                                &cand.path,
-                                cand.size,
-                                modified_ms,
-                                &reason,
-                            );
+                            cache.store_failure(&cand.path, cand.size, modified_ms, &reason);
                         }
                         item.extract_error = Some(reason);
                     }
@@ -1358,17 +1534,10 @@ fn extract_item(
                         }
                     }
                     if has_audio {
-                        let params_key = format!(
-                            "audio|{}|{}",
-                            cfg.frame_position_secs, AUDIO_SAMPLE_SECONDS
-                        );
+                        let params_key =
+                            format!("audio|{}|{}", cfg.frame_position_secs, AUDIO_SAMPLE_SECONDS);
                         if let Some(signature) = cache.and_then(|cache| {
-                            cache.media_signature(
-                                &cand.path,
-                                cand.size,
-                                modified_ms,
-                                &params_key,
-                            )
+                            cache.media_signature(&cand.path, cand.size, modified_ms, &params_key)
                         }) {
                             item.media_signature = Some(signature);
                             item.media_signature_cached = true;
@@ -1513,14 +1682,18 @@ mod tests {
             grid: u32,
         ) -> Option<Fingerprint> {
             let cache = self.fingerprints.lock().ok()?;
-            cache.get(path).and_then(|(cached_size, cached_modified, cached_grid, fp)| {
-                if *cached_size == size && *cached_modified == modified_ms && *cached_grid == grid
-                {
-                    Some(fp.clone())
-                } else {
-                    None
-                }
-            })
+            cache
+                .get(path)
+                .and_then(|(cached_size, cached_modified, cached_grid, fp)| {
+                    if *cached_size == size
+                        && *cached_modified == modified_ms
+                        && *cached_grid == grid
+                    {
+                        Some(fp.clone())
+                    } else {
+                        None
+                    }
+                })
         }
 
         fn store_fingerprint(
@@ -1599,8 +1772,7 @@ mod tests {
 
     #[test]
     fn scan_waits_while_paused() {
-        let root =
-            std::env::temp_dir().join(format!("umdf-scan-pause-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("umdf-scan-pause-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         valid_image(&root.join("a.png"));
@@ -1626,8 +1798,7 @@ mod tests {
 
     #[test]
     fn second_scan_reuses_cached_fingerprints() {
-        let root =
-            std::env::temp_dir().join(format!("umdf-scan-cache-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("umdf-scan-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         valid_image(&root.join("a.png"));
@@ -1657,8 +1828,7 @@ mod tests {
 
     #[test]
     fn corrupt_image_is_skipped_and_the_scan_continues() {
-        let root =
-            std::env::temp_dir().join(format!("umdf-scan-skip-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("umdf-scan-skip-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         valid_image(&root.join("a.png"));

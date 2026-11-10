@@ -36,6 +36,7 @@
     "models_help": "Transfira um modelo de embeddings de imagem do Hugging Face. A pasta e o modelo ativo são guardados em config.toml; os dados derivados são colocados em cache em cache.db.",
     "models_folder": "Pasta de modelos",
     "models_capabilities": "Capacidades",
+    "models_execution": "Execução",
     "models_download": "Transferir",
     "models_use": "Usar",
     "models_active": "Ativo",
@@ -44,11 +45,17 @@
     "models_threshold": "Semelhança",
     "models_none": "Ainda não há modelos instalados. Transfira um abaixo.",
     "models_clear_cache": "Limpar cache",
+    "models_clear_results": "Limpar resultados",
+    "models_open_data": "Abrir pasta de dados",
     "runtime_title": "Motor de IA",
     "runtime_check": "Verificar",
     "runtime_install": "Instalar runtime CUDA",
     "runtime_open": "Abrir pasta do runtime",
     "runtime_restart": "Reinicie o UMDF para usar o novo runtime.",
+    "runtime_reinstall": "Reinstalar CUDA",
+    "star": "Definir como referência",
+    "manual_reference": "Referência manual ★",
+    "shortcuts_hint": "Enter pré-visualização · Esc fechar · t lixo · m mover · d eliminar · s referência",
     "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolerância de cinza",
     "trash_all": "Mover todos os duplicados para o lixo",
@@ -185,7 +192,10 @@
     "help_config": "Configuração (config.toml)",
     "help_config_body": "Pastas, destino, métrica, tolerância, threads, tema e exclusão de pastas de lixo são guardados automaticamente em config.toml. A lista predefinida trash_dirs (.dtrash, .Trash, $RECYCLE.BIN...) pode ser editada aí; desative a exclusão com a caixa «Excluir pastas de lixo».",
     "status_cache_hits": "{count} da cache",
-    "status_paused": "Em pausa"
+    "status_paused": "Em pausa",
+    "status_starred": "{path} é agora a referência do seu grupo.",
+    "manual_reference_reason": "Escolheu esta cópia como referência.",
+    "comparison_cache_cleared": "Resultados de comparação limpos; o próximo escaneamento recalcula os pares."
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• Os modelos transferidos não são incluídos no instalador e mantêm a licença do repositório de origem.",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "Teclado, referência e cache"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ seleciona · Enter abre a pré-visualização ampliada · Esc fecha · t lixo · m mover · d eliminar · s define o duplicado como referência do grupo."
+    },
+    {
+      "kind": 2,
+      "text": "★ marca a cópia escolhida como referência do seu grupo, mesmo que a política prefira outra; a referência anterior passa a duplicado."
+    },
+    {
+      "kind": 2,
+      "text": "Modelos → Limpar resultados apaga apenas os resultados de comparação; as impressões digitais continuam em cache e o próximo escaneamento recalcula os pares. Limpar cache apaga tudo."
+    },
+    {
+      "kind": 2,
+      "text": "As pré-visualizações de vídeo abrem no leitor do sistema; recomenda-se o VLC por reproduzir mais codecs sem instalações adicionais."
     }
   ]
 }

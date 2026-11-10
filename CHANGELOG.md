@@ -4,6 +4,47 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.4] - 2026-11-10
+
+### Added
+
+- A perceptual index for the default `dpf` metric. Fingerprints are sorted by
+  their global mean and only a safe mean-difference window is compared; flat
+  fingerprints (std < 3) are skipped. This removes most of the O(n²) pairs
+  before the pixel loop starts, without changing the accepted matches.
+- A whole-library comparison cache. The match list is stored per exact
+  library/settings signature (paths, sizes, mtimes, fingerprints, embeddings,
+  metric and thresholds), so a warm rescan reuses it instead of comparing every
+  pair again.
+- "Clear results" in Models deletes only the comparison cache; fingerprints,
+  embeddings and metadata stay cached. "Clear cache" still deletes everything.
+- Star reference: press `s` or the ★ button to use a duplicate as the reference
+  of its group, even when the policy prefers another copy. The previous
+  reference becomes a duplicate and the group rows follow the new reference.
+- Keyboard operations in the main list and the enlarged preview: `t` trash,
+  `m` move, `d` delete and `s` star, in addition to ↑/↓, Enter and Esc.
+- Window size and maximized state are saved in `config.toml` and restored on
+  start, together with the existing layout settings.
+
+### Changed
+
+- The Models dialog is more compact: a one-row AI engine bar, a single models
+  folder row, all four supported models with their capabilities, an execution
+  card for device/similarity, and a footer with the cache counters, "Open data
+  folder", "Clear cache", "Clear results" and "Close".
+- Cache counters in Models show the number of stored comparison results and
+  include their size in the cache total.
+- Help now documents the star/reference workflow, the new keyboard operations
+  and the independent comparison cache. It also recommends VLC for video
+  previews because it plays more codecs without extra installations.
+- The Settings window geometry is persisted only in `config.toml`; `cache.db`
+  remains disposable derived data.
+
+### Fixed
+
+- Language changes keep manually chosen references labelled as such instead of
+  reverting them to the policy score.
+
 ## [0.6.3] - 2026-11-09
 
 ### Added

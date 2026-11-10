@@ -36,6 +36,7 @@
     "models_help": "Hugging Face から画像埋め込みモデルをダウンロードします。フォルダーと有効なモデルは config.toml に保存され、派生データは cache.db にキャッシュされます。",
     "models_folder": "モデルフォルダー",
     "models_capabilities": "機能",
+    "models_execution": "実行",
     "models_download": "ダウンロード",
     "models_use": "使用",
     "models_active": "有効",
@@ -44,11 +45,17 @@
     "models_threshold": "類似度",
     "models_none": "モデルがインストールされていません。下からダウンロードしてください。",
     "models_clear_cache": "キャッシュをクリア",
+    "models_clear_results": "結果を消去",
+    "models_open_data": "データフォルダーを開く",
     "runtime_title": "AI エンジン",
     "runtime_check": "確認",
     "runtime_install": "CUDA ランタイムをインストール",
     "runtime_open": "ランタイムフォルダーを開く",
     "runtime_restart": "新しいランタイムを使用するには UMDF を再起動してください。",
+    "runtime_reinstall": "CUDA を再インストール",
+    "star": "参照に設定",
+    "manual_reference": "手動参照 ★",
+    "shortcuts_hint": "Enter プレビュー · Esc 閉じる · t ゴミ箱 · m 移動 · d 削除 · s 参照",
     "semantic_unavailable": "このビルドにはセマンティック検索が含まれていません。--features embeddings と ONNX Runtime で再ビルドしてください。",
     "opt_tolerance": "ピクセル許容値",
     "trash_all": "すべての重複をゴミ箱へ",
@@ -185,7 +192,10 @@
     "help_config": "設定（config.toml）",
     "help_config_body": "フォルダー、保存先、指標、許容値、スレッド、テーマ、ゴミ箱の除外は config.toml に自動保存されます。既定の trash_dirs リスト（.dtrash、.Trash、$RECYCLE.BIN など）はそこで編集できます。「ゴミ箱フォルダーを除外」をオフにすると除外されません。",
     "status_cache_hits": "{count} 件はキャッシュから",
-    "status_paused": "一時停止中"
+    "status_paused": "一時停止中",
+    "status_starred": "{path} がグループの参照になりました。",
+    "manual_reference_reason": "このコピーを参照として選択しました。",
+    "comparison_cache_cleared": "比較結果を消去しました。次回のスキャンでペアを再計算します。"
   },
   "help": [
     {
@@ -431,6 +441,26 @@
     {
       "text": "• ダウンロードしたモデルはインストーラーに含まれず、上流リポジトリのライセンスを保持します。",
       "kind": 2
+    },
+    {
+      "kind": 0,
+      "text": "キーボード、参照、キャッシュ"
+    },
+    {
+      "kind": 2,
+      "text": "↑/↓ 選択 · Enter 拡大プレビュー · Esc 閉じる · t ゴミ箱 · m 移動 · d 削除 · s 重複をグループの参照に設定。"
+    },
+    {
+      "kind": 2,
+      "text": "★ 選択したコピーをグループの参照としてマークします。ポリシーが別のコピーを優先していても変更され、以前の参照は重複になります。"
+    },
+    {
+      "kind": 2,
+      "text": "モデル → 結果を消去 は比較結果だけを削除します。指紋はキャッシュに残り、次回のスキャンでペアを再計算します。キャッシュを消去 はすべて削除します。"
+    },
+    {
+      "kind": 2,
+      "text": "動画プレビューはシステムのプレーヤーで開きます。追加インストールなしで多くのコーデックを再生できるため、VLC を推奨します。"
     }
   ]
 }

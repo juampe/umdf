@@ -54,6 +54,11 @@ pub struct Settings {
     pub dark_mode: bool,
     /// Width of the preview column in logical pixels.
     pub preview_width: f32,
+    /// Last window size in logical pixels.
+    pub window_width: f32,
+    pub window_height: f32,
+    /// Reopen maximized.
+    pub window_maximized: bool,
     /// Skip trash directories during scans.
     pub exclude_trash: bool,
     /// Directory names to skip when `exclude_trash` is true. Edit this list in
@@ -87,6 +92,9 @@ impl Default for Settings {
             threads: 0,
             dark_mode: false,
             preview_width: 340.0,
+            window_width: 1280.0,
+            window_height: 820.0,
+            window_maximized: false,
             exclude_trash: true,
             trash_dirs: vec![
                 ".dtrash".to_string(),
@@ -144,8 +152,7 @@ impl Settings {
         std::fs::write(&tmp, text).with_context(|| format!("writing {}", tmp.display()))?;
         if std::fs::rename(&tmp, &path).is_err() {
             // Windows does not replace an existing file with rename().
-            std::fs::copy(&tmp, &path)
-                .with_context(|| format!("writing {}", path.display()))?;
+            std::fs::copy(&tmp, &path).with_context(|| format!("writing {}", path.display()))?;
             let _ = std::fs::remove_file(&tmp);
         }
         Ok(())
