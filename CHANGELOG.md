@@ -4,6 +4,42 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.5] - 2026-11-11
+
+### Added
+
+- Preview rotation for visual comparison: `1` rotates the original and `2`
+  the duplicate (90° steps). Rotation is display-only and is never written to
+  the file; the lightbox and the per-pane ⟳ buttons use the same state.
+- "Remove from group" (`o`, or the button under the preview) takes a copy out
+  of its group when it does not look like the reference. The file stays on
+  disk; the decision is stored in `cache.db` and applied on later scans.
+- Star and out choices now persist in `cache.db` across scans and restarts.
+  Starred references are loaded into the scan configuration, so the chosen copy
+  remains the group reference even for videos and after switching rows.
+  "Clear results" keeps these manual choices; "Clear cache" removes them.
+- Russian UI: full interface, dynamic phrases and Help translation, bringing
+  the app to ten languages.
+
+### Fixed
+
+- The preview splitter width is saved and restored correctly. Window geometry
+  is applied before the saved preview width, and the splitter is re-applied
+  after the window manager finishes resizing.
+- Video previews and clicks on video comparisons no longer flash console
+  windows on Windows: every helper process (ffmpeg, nvidia-smi, PowerShell,
+  `cmd /c start`, Explorer) is spawned with `CREATE_NO_WINDOW`.
+- The perceptual comparison index no longer scans aspect-ratio-incompatible
+  pairs. The list stays sorted by aspect ratio, and a cheap mean-difference
+  bound prunes pairs that cannot reach the threshold, restoring the previous
+  comparison speed without changing accepted matches.
+
+### Changed
+
+- Keyboard hints and Help now document `o`, `1`/`2`, persistent star/out
+  decisions and the Russian interface in every language.
+- Formatting and lints were cleaned up for the current Rust toolchain.
+
 ## [0.6.4] - 2026-11-10
 
 ### Added

@@ -16,9 +16,9 @@ use umdf_core::config::{
     default_audio_extensions, default_image_extensions, default_video_extensions, is_audio_ext,
     is_image_ext, is_video_ext,
 };
-use umdf_core::{Action, KeepPolicy, Metric, ScanConfig};
 #[cfg(feature = "embeddings")]
 use umdf_core::EmbeddingConfig;
+use umdf_core::{Action, KeepPolicy, Metric, ScanConfig};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -313,22 +313,25 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn build_config(cli: &Cli) -> anyhow::Result<ScanConfig> {
-    let mut cfg = ScanConfig::default();
-    cfg.folders = cli.folders.clone();
-    cfg.recursive = !cli.no_recursive;
-    cfg.min_width = cli.min_width;
-    cfg.min_height = cli.min_height;
-    cfg.min_size = cli.min_size;
-    cfg.grid = cli.grid.clamp(8, 512);
-    cfg.pixel_tolerance = cli.tolerance;
-    cfg.similarity_threshold = cli.threshold.clamp(0.0, 100.0);
-    cfg.only_identical = cli.only_identical;
-    cfg.compare_media_content = cli.compare_media_content;
-    cfg.frame_position_secs = cli.frame_position;
-    cfg.ffmpeg = cli.ffmpeg.clone().or_else(|| {
-        umdf_core::media::find_tool(&["ffmpeg", "ffmpeg.exe"])
-    });
-    cfg.threads = cli.threads.min(256);
+    let mut cfg = ScanConfig {
+        folders: cli.folders.clone(),
+        recursive: !cli.no_recursive,
+        min_width: cli.min_width,
+        min_height: cli.min_height,
+        min_size: cli.min_size,
+        grid: cli.grid.clamp(8, 512),
+        pixel_tolerance: cli.tolerance,
+        similarity_threshold: cli.threshold.clamp(0.0, 100.0),
+        only_identical: cli.only_identical,
+        compare_media_content: cli.compare_media_content,
+        frame_position_secs: cli.frame_position,
+        ffmpeg: cli
+            .ffmpeg
+            .clone()
+            .or_else(|| umdf_core::media::find_tool(&["ffmpeg", "ffmpeg.exe"])),
+        threads: cli.threads.min(256),
+        ..Default::default()
+    };
 
     if let Some(model) = &cli.embeddings_model {
         #[cfg(feature = "embeddings")]

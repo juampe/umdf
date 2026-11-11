@@ -43,10 +43,7 @@ pub fn file_hash(path: &Path) -> anyhow::Result<String> {
 ///
 /// Returns `Ok(None)` when the caller asked to stop; the partially consumed
 /// file is abandoned immediately instead of hashing gigabytes to the end.
-pub fn file_hash_cancellable(
-    path: &Path,
-    cancel: &AtomicBool,
-) -> anyhow::Result<Option<String>> {
+pub fn file_hash_cancellable(path: &Path, cancel: &AtomicBool) -> anyhow::Result<Option<String>> {
     let f = File::open(path)?;
     let mut reader = BufReader::with_capacity(1 << 20, f);
     let mut hasher = Sha256::new();

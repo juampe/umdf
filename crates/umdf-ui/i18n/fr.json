@@ -54,8 +54,9 @@
     "runtime_restart": "Redémarrez UMDF pour utiliser le nouveau runtime.",
     "runtime_reinstall": "Réinstaller CUDA",
     "star": "Définir comme référence",
+    "out": "Retirer du groupe",
     "manual_reference": "Référence manuelle ★",
-    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence",
+    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence · o retirer · 1/2 pivoter",
     "semantic_unavailable": "La recherche sémantique n'est pas incluse dans cette compilation. Compilez avec --features embeddings et ONNX Runtime.",
     "opt_tolerance": "Tolérance de gris",
     "trash_all": "Mettre tous les doublons à la corbeille",
@@ -195,7 +196,8 @@
     "status_paused": "En pause",
     "status_starred": "{path} est désormais la référence de son groupe.",
     "manual_reference_reason": "Vous avez choisi cette copie comme référence.",
-    "comparison_cache_cleared": "Résultats de comparaison vidés ; la prochaine analyse recalculera les paires."
+    "comparison_cache_cleared": "Résultats de comparaison vidés ; la prochaine analyse recalculera les paires.",
+    "status_out": "Retiré de son groupe (le fichier n'a pas été supprimé) : {path}"
   },
   "help": [
     {
@@ -448,7 +450,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ sélectionne · Entrée ouvre l’aperçu agrandi · Échap le ferme · t corbeille · m déplacer · d supprimer · s définit le doublon comme référence du groupe."
+      "text": "↑/↓ sélectionne · Entrée ouvre l’aperçu agrandi · Échap le ferme · t corbeille · m déplacer · d supprimer · s définit le doublon comme référence du groupe · o le retire du groupe · 1/2 fait pivoter l’original/le doublon."
     },
     {
       "kind": 2,
@@ -461,6 +463,14 @@
     {
       "kind": 2,
       "text": "Les aperçus vidéo s’ouvrent dans le lecteur du système ; VLC est recommandé car il lit davantage de codecs sans installation supplémentaire."
+    },
+    {
+      "kind": 2,
+      "text": "« Retirer » (o) sort la copie de son groupe car elle ne ressemble pas à la référence. Le fichier reste sur le disque ; la décision est enregistrée dans cache.db et conservée entre les analyses."
+    },
+    {
+      "kind": 2,
+      "text": "1 fait pivoter l'aperçu de l'original et 2 celui du doublon. La rotation est uniquement visuelle et n'est pas écrite dans le fichier."
     }
   ]
 }

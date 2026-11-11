@@ -65,8 +65,16 @@ pub fn write_xml(path: &Path, items: &[MediaItem], groups: &[Group]) -> anyhow::
             let keep = &items[g.keep];
             out.push_str("    <Match>\n");
             let _ = writeln!(out, "      <Group>{}</Group>", g.number);
-            let _ = writeln!(out, "      <Similarity>{:.3}</Similarity>", g.max_similarity);
-            let _ = writeln!(out, "      <Keep>{}</Keep>", escape_xml(&keep.path.to_string_lossy()));
+            let _ = writeln!(
+                out,
+                "      <Similarity>{:.3}</Similarity>",
+                g.max_similarity
+            );
+            let _ = writeln!(
+                out,
+                "      <Keep>{}</Keep>",
+                escape_xml(&keep.path.to_string_lossy())
+            );
             write_file(&mut out, it);
             out.push_str("    </Match>\n");
         }
@@ -79,7 +87,11 @@ pub fn write_xml(path: &Path, items: &[MediaItem], groups: &[Group]) -> anyhow::
 
 fn write_file(out: &mut String, it: &MediaItem) {
     out.push_str("      <File>\n");
-    let _ = writeln!(out, "        <FileName>{}</FileName>", escape_xml(&it.path.to_string_lossy()));
+    let _ = writeln!(
+        out,
+        "        <FileName>{}</FileName>",
+        escape_xml(&it.path.to_string_lossy())
+    );
     let _ = writeln!(out, "        <FileSize>{}</FileSize>", it.size);
     let _ = writeln!(
         out,
@@ -94,7 +106,9 @@ fn write_file(out: &mut String, it: &MediaItem) {
     let _ = writeln!(
         out,
         "        <DateTime>{}</DateTime>",
-        it.effective_date().map(|d| d.to_rfc3339()).unwrap_or_default()
+        it.effective_date()
+            .map(|d| d.to_rfc3339())
+            .unwrap_or_default()
     );
     out.push_str("      </File>\n");
 }

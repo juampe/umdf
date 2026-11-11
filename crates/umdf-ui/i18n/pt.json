@@ -54,8 +54,9 @@
     "runtime_restart": "Reinicie o UMDF para usar o novo runtime.",
     "runtime_reinstall": "Reinstalar CUDA",
     "star": "Definir como referência",
+    "out": "Remover do grupo",
     "manual_reference": "Referência manual ★",
-    "shortcuts_hint": "Enter pré-visualização · Esc fechar · t lixo · m mover · d eliminar · s referência",
+    "shortcuts_hint": "Enter pré-visualizar · Esc fechar · t lixo · m mover · d apagar · s referência · o remover · 1/2 rodar",
     "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolerância de cinza",
     "trash_all": "Mover todos os duplicados para o lixo",
@@ -195,7 +196,8 @@
     "status_paused": "Em pausa",
     "status_starred": "{path} é agora a referência do seu grupo.",
     "manual_reference_reason": "Escolheu esta cópia como referência.",
-    "comparison_cache_cleared": "Resultados de comparação limpos; o próximo escaneamento recalcula os pares."
+    "comparison_cache_cleared": "Resultados de comparação limpos; o próximo escaneamento recalcula os pares.",
+    "status_out": "Removido do grupo (o ficheiro não foi apagado): {path}"
   },
   "help": [
     {
@@ -448,7 +450,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ seleciona · Enter abre a pré-visualização ampliada · Esc fecha · t lixo · m mover · d eliminar · s define o duplicado como referência do grupo."
+      "text": "↑/↓ seleciona · Enter abre a pré-visualização ampliada · Esc fecha · t lixo · m mover · d eliminar · s define o duplicado como referência do grupo · o remove-o do grupo · 1/2 roda o original/duplicado."
     },
     {
       "kind": 2,
@@ -461,6 +463,14 @@
     {
       "kind": 2,
       "text": "As pré-visualizações de vídeo abrem no leitor do sistema; recomenda-se o VLC por reproduzir mais codecs sem instalações adicionais."
+    },
+    {
+      "kind": 2,
+      "text": "«Remover» (o) tira a cópia do seu grupo porque não se parece com a referência. O ficheiro continua no disco; a decisão é guardada em cache.db e mantém-se entre análises."
+    },
+    {
+      "kind": 2,
+      "text": "1 roda a pré-visualização do original e 2 a do duplicado. A rotação é apenas visual e não é escrita no ficheiro."
     }
   ]
 }

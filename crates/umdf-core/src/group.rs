@@ -2,18 +2,13 @@
 
 use std::collections::HashMap;
 
-use crate::config::{KeepPolicy, ScanConfig};
+use crate::config::{path_key, KeepPolicy, ScanConfig};
 use crate::fingerprint;
 use crate::model::{Group, Match, MediaItem};
 use crate::originality;
 
 /// Similarity of two items with the same rule used by the comparison stage.
-fn direct_score(
-    items: &[MediaItem],
-    a: usize,
-    b: usize,
-    cfg: &ScanConfig,
-) -> Option<f32> {
+fn direct_score(items: &[MediaItem], a: usize, b: usize, cfg: &ScanConfig) -> Option<f32> {
     let ai = &items[a];
     let bi = &items[b];
     if ai.content_hash.is_some() && ai.content_hash == bi.content_hash {
@@ -34,12 +29,7 @@ fn direct_score(
 /// A member joins a group only when it matches the chosen keep directly.
 /// Union-find alone allows chains (A~B, B~C) to put visually unrelated A and C
 /// in the same group, which looked like a 100 % false positive in the UI.
-fn member_matches_keep(
-    items: &[MediaItem],
-    keep: usize,
-    other: usize,
-    cfg: &ScanConfig,
-) -> bool {
+fn member_matches_keep(items: &[MediaItem], keep: usize, other: usize, cfg: &ScanConfig) -> bool {
     let ai = &items[keep];
     let bi = &items[other];
     if ai.content_hash.is_some() && ai.content_hash == bi.content_hash {
@@ -65,15 +55,9 @@ fn member_matches_keep(
         // No fingerprint to check (for example an exact video match): keep it.
         return true;
     };
-    fingerprint::similarity_at_least(
-        fa,
-        fb,
-        cfg.metric,
-        cfg.pixel_tolerance,
-        threshold,
-    )
-    .map(|score| score >= threshold)
-    .unwrap_or(false)
+    fingerprint::similarity_at_least(fa, fb, cfg.metric, cfg.pixel_tolerance, threshold)
+        .map(|score| score >= threshold)
+        .unwrap_or(false)
 }
 
 struct DisjointSet {
@@ -134,20 +118,45 @@ pub fn build_groups(items: &[MediaItem], matches: &[Match], cfg: &ScanConfig) ->
         .into_values()
         .filter(|m| m.len() > 1)
         .filter_map(|mut members| {
+            // Manual "out" decisions exclude a copy from its group; the file
+            // itself is never touched.
+            members.retain(|id| !cfg.manual_out.contains(&path_key(&items[*id].path)));
+            if members.len() <= 1 {
+                return None;
+            }
             let assessments = originality::assess_group(items, &members);
-            match cfg.keep_policy {
-                KeepPolicy::MostLikelyOriginal => members.sort_by(|a, b| {
-                    let ca = assessments.get(a).map(|x| x.confidence).unwrap_or(0.0);
-                    let cb = assessments.get(b).map(|x| x.confidence).unwrap_or(0.0);
-                    cb.partial_cmp(&ca)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| items[*a].file_name().cmp(&items[*b].file_name()))
-                }),
-                other => members.sort_by(|a, b| compare_for_keep(&items[*a], &items[*b], other)),
+            // A starred copy becomes the group reference, even when the
+            // policy would have picked another original.
+            let manual = members
+                .iter()
+                .copied()
+                .filter(|id| cfg.manual_references.contains(&path_key(&items[*id].path)))
+                .min_by(|a, b| items[*a].path.cmp(&items[*b].path));
+            let manual_reference = manual.is_some();
+            if let Some(manual) = manual {
+                members.retain(|id| *id != manual);
+                members.insert(0, manual);
+            } else {
+                match cfg.keep_policy {
+                    KeepPolicy::MostLikelyOriginal => members.sort_by(|a, b| {
+                        let ca = assessments.get(a).map(|x| x.confidence).unwrap_or(0.0);
+                        let cb = assessments.get(b).map(|x| x.confidence).unwrap_or(0.0);
+                        cb.partial_cmp(&ca)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| items[*a].file_name().cmp(&items[*b].file_name()))
+                    }),
+                    other => {
+                        members.sort_by(|a, b| compare_for_keep(&items[*a], &items[*b], other))
+                    }
+                }
             }
             let keep = members[0];
-            // Break transitive chains: only direct matches to the keep stay.
-            members.retain(|member| *member == keep || member_matches_keep(items, keep, *member, cfg));
+            if !manual_reference {
+                // Break transitive chains: only direct matches to the keep stay.
+                members.retain(|member| {
+                    *member == keep || member_matches_keep(items, keep, *member, cfg)
+                });
+            }
             if members.len() <= 1 {
                 return None;
             }
@@ -164,6 +173,7 @@ pub fn build_groups(items: &[MediaItem], matches: &[Match], cfg: &ScanConfig) ->
                 max_similarity,
                 keep_confidence: assessment.map(|a| a.confidence).unwrap_or(100.0),
                 keep_reasons: assessment.map(|a| a.reasons.clone()).unwrap_or_default(),
+                manual_reference,
                 keep,
                 items: members,
                 remove,
@@ -201,11 +211,7 @@ pub fn compare_for_keep(a: &MediaItem, b: &MediaItem, policy: KeepPolicy) -> std
         KeepPolicy::Newest => b.effective_date().cmp(&a.effective_date()),
         KeepPolicy::Oldest => a.effective_date().cmp(&b.effective_date()),
         KeepPolicy::FirstName => a.file_name().cmp(&b.file_name()),
-        KeepPolicy::ShortestPath => a
-            .path
-            .as_os_str()
-            .len()
-            .cmp(&b.path.as_os_str().len()),
+        KeepPolicy::ShortestPath => a.path.as_os_str().len().cmp(&b.path.as_os_str().len()),
     }
 }
 
@@ -226,7 +232,7 @@ pub fn policy_label(policy: KeepPolicy) -> &'static str {
 mod tests {
     use super::*;
     use crate::model::{Fingerprint, MatchKind, MediaKind};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn item(id: usize, name: &str, size: u64) -> MediaItem {
         let mut it = MediaItem::new(id, PathBuf::from(name), MediaKind::Image, size);
@@ -237,12 +243,29 @@ mod tests {
 
     #[test]
     fn chains_merge_into_one_group() {
-        let items = vec![item(0, "a.jpg", 10), item(1, "b.jpg", 20), item(2, "c.jpg", 30)];
-        let matches = vec![
-            Match { a: 0, b: 1, similarity: 95.0, kind: MatchKind::Similar },
-            Match { a: 1, b: 2, similarity: 96.0, kind: MatchKind::Similar },
+        let items = vec![
+            item(0, "a.jpg", 10),
+            item(1, "b.jpg", 20),
+            item(2, "c.jpg", 30),
         ];
-        let cfg = ScanConfig { keep_policy: KeepPolicy::Largest, ..Default::default() };
+        let matches = vec![
+            Match {
+                a: 0,
+                b: 1,
+                similarity: 95.0,
+                kind: MatchKind::Similar,
+            },
+            Match {
+                a: 1,
+                b: 2,
+                similarity: 96.0,
+                kind: MatchKind::Similar,
+            },
+        ];
+        let cfg = ScanConfig {
+            keep_policy: KeepPolicy::Largest,
+            ..Default::default()
+        };
         let groups = build_groups(&items, &matches, &cfg);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].keep, 2);
@@ -254,9 +277,7 @@ mod tests {
         let a_values: Vec<i16> = (0..1024)
             .map(|i| if i % 2 == 0 { 50 } else { -50 })
             .collect();
-        let c_values: Vec<i16> = (0..1024)
-            .map(|i| ((i * 13) % 80) as i16 - 40)
-            .collect();
+        let c_values: Vec<i16> = (0..1024).map(|i| ((i * 13) % 80) as i16 - 40).collect();
         let fingerprint = |values: Vec<i16>| Fingerprint {
             size: 32,
             mean: 100,
@@ -271,9 +292,19 @@ mod tests {
         c.fingerprint = Some(fingerprint(c_values));
         let items = vec![a, b, c];
         let matches = vec![
-            Match { a: 0, b: 1, similarity: 100.0, kind: MatchKind::Similar },
+            Match {
+                a: 0,
+                b: 1,
+                similarity: 100.0,
+                kind: MatchKind::Similar,
+            },
             // The comparison accepted B~C, which would chain A and C together.
-            Match { a: 1, b: 2, similarity: 90.0, kind: MatchKind::Similar },
+            Match {
+                a: 1,
+                b: 2,
+                similarity: 90.0,
+                kind: MatchKind::Similar,
+            },
         ];
         let cfg = ScanConfig {
             keep_policy: KeepPolicy::FirstName,
@@ -288,10 +319,73 @@ mod tests {
     }
 
     #[test]
+    fn manual_out_removes_a_copy_from_its_group() {
+        let items = vec![item(0, "a.jpg", 10), item(1, "b.jpg", 20)];
+        let matches = vec![Match {
+            a: 0,
+            b: 1,
+            similarity: 100.0,
+            kind: MatchKind::Exact,
+        }];
+        let mut cfg = ScanConfig {
+            keep_policy: KeepPolicy::Largest,
+            ..Default::default()
+        };
+        cfg.manual_out.insert(path_key(Path::new("b.jpg")));
+        let groups = build_groups(&items, &matches, &cfg);
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn manual_reference_becomes_the_keep() {
+        let items = vec![
+            item(0, "a.jpg", 10),
+            item(1, "b.jpg", 20),
+            item(2, "c.jpg", 30),
+        ];
+        let matches = vec![
+            Match {
+                a: 0,
+                b: 1,
+                similarity: 95.0,
+                kind: MatchKind::Similar,
+            },
+            Match {
+                a: 1,
+                b: 2,
+                similarity: 90.0,
+                kind: MatchKind::Similar,
+            },
+        ];
+        let mut cfg = ScanConfig {
+            keep_policy: KeepPolicy::Largest,
+            ..Default::default()
+        };
+        cfg.manual_references.insert(path_key(Path::new("b.jpg")));
+        let groups = build_groups(&items, &matches, &cfg);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].manual_reference);
+        assert_eq!(groups[0].keep, 1);
+        // The starred reference keeps the whole connected component, even
+        // though the chain filter would have dropped C.
+        assert!(groups[0].items.contains(&2));
+        assert_eq!(groups[0].items[0], 1);
+    }
+
+    #[test]
     fn leave_one_keeps_a_member() {
         let items = vec![item(0, "a.jpg", 10), item(1, "b.jpg", 10)];
-        let matches = vec![Match { a: 0, b: 1, similarity: 100.0, kind: MatchKind::Exact }];
-        let cfg = ScanConfig { keep_policy: KeepPolicy::Largest, leave_one: true, ..Default::default() };
+        let matches = vec![Match {
+            a: 0,
+            b: 1,
+            similarity: 100.0,
+            kind: MatchKind::Exact,
+        }];
+        let cfg = ScanConfig {
+            keep_policy: KeepPolicy::Largest,
+            leave_one: true,
+            ..Default::default()
+        };
         let groups = build_groups(&items, &matches, &cfg);
         assert_eq!(groups[0].remove.len(), 1);
         assert!(!groups[0].remove.contains(&groups[0].keep));

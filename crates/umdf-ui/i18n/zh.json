@@ -54,8 +54,9 @@
     "runtime_restart": "重启 UMDF 以使用新运行时。",
     "runtime_reinstall": "重新安装 CUDA",
     "star": "设为参考",
+    "out": "从组中移除",
     "manual_reference": "手动参考 ★",
-    "shortcuts_hint": "Enter 预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 参考",
+    "shortcuts_hint": "Enter 预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 设为参照 · o 移出组 · 1/2 旋转",
     "semantic_unavailable": "此版本不包含语义搜索。请使用 --features embeddings 和 ONNX Runtime 重新编译。",
     "opt_tolerance": "像素容差",
     "trash_all": "全部移至回收站",
@@ -195,7 +196,8 @@
     "status_paused": "已暂停",
     "status_starred": "{path} 现在是其分组的参考。",
     "manual_reference_reason": "您选择此副本作为参考。",
-    "comparison_cache_cleared": "比较结果已清除；下次扫描将重新计算配对。"
+    "comparison_cache_cleared": "比较结果已清除；下次扫描将重新计算配对。",
+    "status_out": "已从组中移除（文件未被删除）：{path}"
   },
   "help": [
     {
@@ -448,7 +450,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ 选择 · Enter 打开放大预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 将重复项设为分组参考。"
+      "text": "↑/↓ 选择 · Enter 打开放大预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 将重复项设为分组参考 · o 将其移出组 · 1/2 旋转原图/重复项。"
     },
     {
       "kind": 2,
@@ -461,6 +463,14 @@
     {
       "kind": 2,
       "text": "视频预览在系统播放器中打开；推荐使用 VLC，因为它无需额外安装即可播放更多编码格式。"
+    },
+    {
+      "kind": 2,
+      "text": "“移出组”（o）会把这件副本从组中移除，因为它与参照并不相似。文件仍保留在磁盘上；该决定保存在 cache.db 中，扫描后依然有效。"
+    },
+    {
+      "kind": 2,
+      "text": "1 旋转原图预览，2 旋转重复项预览。旋转仅用于显示，不会写入文件。"
     }
   ]
 }

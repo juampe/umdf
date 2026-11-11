@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
 use umdf_core::config::{
-    default_audio_extensions, default_image_extensions, default_video_extensions,
+    default_audio_extensions, default_image_extensions, default_video_extensions, path_key,
 };
 use umdf_core::{EmbeddingConfig, KeepPolicy, Metric, Progress, ScanConfig, ScanReport};
 
@@ -112,6 +112,7 @@ static FFPROBE: OnceLock<Option<PathBuf>> = OnceLock::new();
 /// Raw RGBA thumbnail/preview data (definitely `Send`, unlike `slint::Image`).
 type ThumbData = (u32, u32, Vec<u8>);
 type PreviewData = (u32, u32, Vec<u8>, String);
+type ThumbJobResult = (usize, Option<ThumbData>, Option<ThumbData>, String, String);
 
 #[derive(Clone)]
 struct UiModel {
@@ -168,7 +169,7 @@ fn main() -> anyhow::Result<()> {
     let lang = Rc::new(Cell::new(boot_lang));
     let boot = Tr::new(boot_lang);
     ui.set_lang_index(boot_lang.index() as i32);
-    ui.set_strings(boot.strings().into());
+    ui.set_strings(boot.strings());
     ui.set_help_lines(ModelRc::from(Rc::new(VecModel::from(boot.help_lines()))));
     ui.set_help_meta(
         format!(
@@ -246,12 +247,6 @@ fn main() -> anyhow::Result<()> {
     ui.set_metric_index(metric_index(&boot_metric));
     ui.set_threads_index(threads_index(boot_threads));
     ui.set_dark_mode(boot_dark);
-    let boot_preview_width = settings
-        .lock()
-        .map(|guard| guard.preview_width)
-        .unwrap_or(340.0);
-    ui.set_preview_width(boot_preview_width.clamp(260.0, 900.0));
-
     // Restore the window geometry saved when the app was closed. The size is
     // not bound in the .slint file, so the window stays resizable/maximizable.
     if let Ok(guard) = settings.lock() {
@@ -261,6 +256,26 @@ fn main() -> anyhow::Result<()> {
         if guard.window_maximized {
             ui.window().set_maximized(true);
         }
+    }
+    // Apply the saved splitter only after the window has its real width:
+    // `preview-max` depends on `root.width`, so doing this earlier clamped the
+    // saved preview size to the small boot window.
+    let boot_preview_width = settings
+        .lock()
+        .map(|guard| guard.preview_width)
+        .unwrap_or(340.0)
+        .clamp(260.0, 2000.0);
+    ui.set_preview_width(boot_preview_width);
+    // Some window managers apply `set_size`/`set_maximized` on the next event
+    // loop turn. Re-apply the saved splitter then, otherwise `changed width`
+    // clamps it to the narrower boot window and it is saved back too small.
+    {
+        let weak = ui.as_weak();
+        slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
+            if let Some(ui) = weak.upgrade() {
+                ui.set_preview_width(boot_preview_width);
+            }
+        });
     }
     ui.set_exclude_trash(boot_exclude_trash);
     ui.set_exclude_trash_label(boot.exclude_trash_label().into());
@@ -280,7 +295,7 @@ fn main() -> anyhow::Result<()> {
         ui.set_semantic_model(active_model.clone().into());
         if let Some(found) = installed
             .iter()
-            .find(|model| model.path == PathBuf::from(&active_model))
+            .find(|model| model.path == Path::new(&active_model))
         {
             ui.set_semantic_preset(if found.preset == "clip" { 1 } else { 0 });
             ui.set_semantic_input_size(found.input_size as i32);
@@ -814,6 +829,7 @@ fn main() -> anyhow::Result<()> {
         let ui_handle = ui.as_weak();
         let rows = rows.clone();
         let lang = lang.clone();
+        let cache = cache.clone();
         ui.on_star_row(move |index| {
             let Some(ui) = ui_handle.upgrade() else {
                 return;
@@ -829,6 +845,29 @@ fn main() -> anyhow::Result<()> {
             let old_keep_path = target.original_path.clone();
             let old_keep_name = target.original.clone();
             let old_keep_thumb = target.original_thumb.clone();
+
+            // Persist the choice before mutating the model. Only one reference
+            // is stored per group, so references held by the previous original
+            // (or another starred member) are cleared first.
+            let new_key = path_key(Path::new(new_keep_path.as_str()));
+            let mut previous = Vec::new();
+            for i in 0..rows.row_count() {
+                if let Some(row) = rows.row_data(i) {
+                    if row.group == group {
+                        previous.push(path_key(Path::new(row.original_path.as_str())));
+                    }
+                }
+            }
+            for key in previous {
+                if key != new_key {
+                    let _ = cache.set_manual_reference(&key, false);
+                }
+            }
+            if let Err(error) = cache.set_manual_reference(&new_key, true) {
+                umdf_core::log_error(format_args!(
+                    "UMDF: could not save the starred reference: {error}"
+                ));
+            }
 
             // The user decided this copy is the best one, so every row of the
             // group now uses it as the reference. The previously suggested
@@ -864,6 +903,57 @@ fn main() -> anyhow::Result<()> {
                 ui.set_keep_reason(reason.into());
                 ui.invoke_select_row(index);
             }
+        });
+    }
+
+    // ---- preview rotation (display only) ------------------------------------
+    {
+        let ui_handle = ui.as_weak();
+        ui.on_rotate_preview(move |left| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            if left {
+                let next = (ui.get_preview_left_rotation() + 90) % 360;
+                ui.set_preview_left_rotation(next);
+            } else {
+                let next = (ui.get_preview_right_rotation() + 90) % 360;
+                ui.set_preview_right_rotation(next);
+            }
+        });
+    }
+
+    // ---- out: remove a copy from its group without touching the file --------
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        let ui_stats = ui_stats.clone();
+        let preview_gen = preview_gen.clone();
+        let cache = cache.clone();
+        ui.on_out_row(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(row) = rows.row_data(index as usize) else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            let path = PathBuf::from(row.duplicate_path.as_str());
+            // The user says this copy does not look like the reference, so it
+            // is not a duplicate. Keep the file on disk, remove the row.
+            let key = path_key(&path);
+            if let Err(error) = cache.set_manual_out(&key, true) {
+                umdf_core::log_error(format_args!(
+                    "UMDF: could not save the manual out decision: {error}"
+                ));
+            }
+            let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            let idx = index as usize;
+            rows.remove(idx);
+            ui.set_status(tr.status_out(&path).into());
+            advance_after_removal(&ui, &rows, &tr, idx, &preview_gen);
+            update_counters(&ui, &rows, &tr, &ui_stats, size);
         });
     }
 
@@ -1074,7 +1164,6 @@ fn main() -> anyhow::Result<()> {
             #[cfg(all(feature = "embeddings", not(windows)))]
             {
                 ui.set_models_status("CUDA runtime auto-install is only available on Windows".into());
-                return;
             }
             #[cfg(all(feature = "embeddings", windows))]
             {
@@ -1096,7 +1185,7 @@ fn main() -> anyhow::Result<()> {
                             zip.to_string_lossy().replace('\'', "''"),
                             dir.to_string_lossy().replace('\'', "''"),
                         );
-                        let status = std::process::Command::new("powershell")
+                        let status = quiet_command("powershell")
                             .args([
                                 "-NoProfile",
                                 "-ExecutionPolicy",
@@ -1225,6 +1314,8 @@ fn main() -> anyhow::Result<()> {
                 return;
             };
             ui.set_selected_row(index);
+            ui.set_preview_left_rotation(0);
+            ui.set_preview_right_rotation(0);
             ui.set_keep_confidence(row.keep_confidence.clone());
             ui.set_keep_reason(row.keep_reason.clone());
             ui.set_preview_left_playable(is_video_path(row.original_path.as_str()));
@@ -1317,9 +1408,7 @@ fn main() -> anyhow::Result<()> {
             cancel.store(false, Ordering::Relaxed);
             save_ui_settings(&ui, &settings, &folders);
 
-            let mut cfg = ScanConfig::default();
-            cfg.folders = folders.borrow().clone();
-            cfg.exclude_dirs = if ui.get_exclude_trash() {
+            let exclude_dirs = if ui.get_exclude_trash() {
                 settings
                     .lock()
                     .ok()
@@ -1328,14 +1417,19 @@ fn main() -> anyhow::Result<()> {
             } else {
                 Vec::new()
             };
-            cfg.recursive = ui.get_recursive();
-            cfg.only_identical = ui.get_only_identical();
-            cfg.compare_media_content = ui.get_compare_media();
-            cfg.similarity_threshold = ui.get_threshold();
-            cfg.pixel_tolerance = ui.get_tolerance().round().clamp(0.0, 255.0) as u8;
-            cfg.keep_policy = KEEP_POLICIES[ui.get_keep_index().clamp(0, 7) as usize];
-            cfg.metric = METRICS[ui.get_metric_index().clamp(0, 4) as usize];
-            cfg.threads = THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize];
+            let mut cfg = ScanConfig {
+                folders: folders.borrow().clone(),
+                exclude_dirs,
+                recursive: ui.get_recursive(),
+                only_identical: ui.get_only_identical(),
+                compare_media_content: ui.get_compare_media(),
+                similarity_threshold: ui.get_threshold(),
+                pixel_tolerance: ui.get_tolerance().round().clamp(0.0, 255.0) as u8,
+                keep_policy: KEEP_POLICIES[ui.get_keep_index().clamp(0, 7) as usize],
+                metric: METRICS[ui.get_metric_index().clamp(0, 4) as usize],
+                threads: THREAD_OPTIONS[ui.get_threads_index().clamp(0, 6) as usize],
+                ..Default::default()
+            };
             if ui.get_semantic_enabled() && !cfg!(feature = "embeddings") {
                 ui.set_status(tr.no_embeddings_build().into());
                 return;
@@ -1354,12 +1448,12 @@ fn main() -> anyhow::Result<()> {
                         threshold: ui.get_semantic_threshold().clamp(0.0, 1.0),
                         use_cuda: ui.get_semantic_device() == 0,
                         mean: if clip {
-                            [0.481_454_66, 0.457_827_5, 0.408_210_73]
+                            [0.481_454_7, 0.457_827_5, 0.408_210_7]
                         } else {
                             [0.485, 0.456, 0.406]
                         },
                         std: if clip {
-                            [0.268_629_54, 0.261_302_58, 0.275_777_11]
+                            [0.268_629_55, 0.261_302_6, 0.275_777_1]
                         } else {
                             [0.229, 0.224, 0.225]
                         },
@@ -1372,6 +1466,9 @@ fn main() -> anyhow::Result<()> {
                 .chain(default_audio_extensions())
                 .collect();
             cfg.leave_one = true;
+            let (manual_references, manual_out) = cache.manual_choices();
+            cfg.manual_references = manual_references;
+            cfg.manual_out = manual_out;
             cfg.ffmpeg = umdf_core::media::find_tool(&["ffmpeg", "ffmpeg.exe"]);
             if ui.get_compare_media() && cfg.ffmpeg.is_none() {
                 ui.set_status(tr.status_ffmpeg_missing().into());
@@ -1997,11 +2094,12 @@ fn update_cache_label(ui: &AppWindow, cache: &CacheDb) {
     );
     ui.set_models_counters(
         format!(
-            "{} fp · {} emb · {} meta · {} res · {}",
+            "{} fp · {} emb · {} meta · {} res · {} choices · {}",
             stats.fingerprints,
             stats.embeddings,
             stats.metadata,
             stats.comparisons,
+            stats.manual_choices,
             human_bytes(stats.bytes)
         )
         .into(),
@@ -2292,11 +2390,23 @@ fn apply_report(
                 size: human_bytes(item.size).into(),
                 original_path: keep_path.into(),
                 duplicate_path: dup_path.into(),
-                keep_confidence: tr.original_likely(group.keep_confidence).into(),
-                keep_reason: reasons.into(),
+                keep_confidence: if group.manual_reference {
+                    tr.strings().manual_reference.clone()
+                } else {
+                    tr.original_likely(group.keep_confidence).into()
+                },
+                keep_reason: if group.manual_reference {
+                    tr.manual_reference_reason().into()
+                } else {
+                    reasons.into()
+                },
                 keep_pct: group.keep_confidence,
-                keep_codes: group.keep_reasons.join(",").into(),
-                starred: false,
+                keep_codes: if group.manual_reference {
+                    "manual".into()
+                } else {
+                    group.keep_reasons.join(",").into()
+                },
+                starred: group.manual_reference,
                 original_thumb: slint::Image::default(),
                 duplicate_thumb: slint::Image::default(),
             });
@@ -2361,19 +2471,18 @@ fn spawn_thumbnails(
             if generation.load(Ordering::SeqCst) != my_generation {
                 return;
             }
-            let computed: Vec<(usize, Option<ThumbData>, Option<ThumbData>, String, String)> =
-                chunk
-                    .par_iter()
-                    .map(|(idx, left, right)| {
-                        (
-                            *idx,
-                            thumb_data(left, &cache),
-                            thumb_data(right, &cache),
-                            left.clone(),
-                            right.clone(),
-                        )
-                    })
-                    .collect();
+            let computed: Vec<ThumbJobResult> = chunk
+                .par_iter()
+                .map(|(idx, left, right)| {
+                    (
+                        *idx,
+                        thumb_data(left, &cache),
+                        thumb_data(right, &cache),
+                        left.clone(),
+                        right.clone(),
+                    )
+                })
+                .collect();
 
             for (idx, left, right, left_path, right_path) in computed {
                 let ui_weak = ui_weak.clone();
@@ -2538,6 +2647,19 @@ fn current_dir() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
 }
 
+/// Spawn a console helper without flashing a terminal over the GUI.
+fn quiet_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 /// Keep the status-bar counters honest after rows leave the list.
 fn update_counters(
     ui: &AppWindow,
@@ -2648,7 +2770,7 @@ fn on_path(names: &[&str]) -> bool {
 fn runtime_report(lang: Lang) -> (String, String, bool) {
     let status = umdf_core::embeddings::runtime_status();
     let provider = umdf_core::embeddings::cuda_provider_available();
-    let nvidia = std::process::Command::new("nvidia-smi")
+    let nvidia = quiet_command("nvidia-smi")
         .args(["--query-gpu=name,driver_version", "--format=csv,noheader"])
         .output()
         .map(|output| output.status.success() && !output.stdout.is_empty())
@@ -2667,6 +2789,9 @@ fn runtime_report(lang: Lang) -> (String, String, bool) {
         (Lang::Es, "CUDA") => "CUDA listo",
         (Lang::Es, "CPU") => "CPU (GPU no instalada)",
         (Lang::Es, _) => "runtime no encontrado",
+        (Lang::Ru, "CUDA") => "CUDA готова",
+        (Lang::Ru, "CPU") => "CPU (GPU не установлена)",
+        (Lang::Ru, _) => "среда не найдена",
         (_, "CUDA") => "CUDA ready",
         (_, "CPU") => "CPU (GPU not installed)",
         (_, _) => "runtime not found",
@@ -2674,6 +2799,13 @@ fn runtime_report(lang: Lang) -> (String, String, bool) {
     let details = match lang {
         Lang::Es => format!(
             "ONNX: {status} · proveedor CUDA: {} · NVIDIA: {} · cuDNN/cuBLAS: {} · ffmpeg: {}",
+            yes(provider),
+            yes(nvidia),
+            yes(cudnn),
+            yes(ffmpeg)
+        ),
+        Lang::Ru => format!(
+            "ONNX: {status} · провайдер CUDA: {} · NVIDIA: {} · cuDNN/cuBLAS: {} · ffmpeg: {}",
             yes(provider),
             yes(nvidia),
             yes(cudnn),
@@ -2695,6 +2827,7 @@ fn runtime_report(lang: Lang) -> (String, String, bool) {
 fn runtime_report(lang: Lang) -> (String, String, bool) {
     let head = match lang {
         Lang::Es => "No incluido en esta compilación",
+        Lang::Ru => "Не включено в эту сборку",
         _ => "Not included in this build",
     };
     (head.to_string(), String::new(), false)
@@ -2704,22 +2837,22 @@ fn open_folder(path: &Path) {
     let _ = std::fs::create_dir_all(path);
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("explorer").arg(path).spawn();
+        let _ = quiet_command("explorer").arg(path).spawn();
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("open").arg(path).spawn();
+        let _ = quiet_command("open").arg(path).spawn();
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+        let _ = quiet_command("xdg-open").arg(path).spawn();
     }
 }
 
 #[cfg(all(feature = "embeddings", windows))]
 fn cuda_ort_url() -> &'static str {
     // The NVIDIA installer exposes the supported CUDA major in its banner.
-    let cuda13 = std::process::Command::new("nvidia-smi")
+    let cuda13 = quiet_command("nvidia-smi")
         .output()
         .ok()
         .map(|output| !String::from_utf8_lossy(&output.stdout).contains("CUDA Version: 12"))
@@ -2744,18 +2877,18 @@ fn is_video_path(path: &str) -> bool {
 fn open_media(path: &str) {
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("cmd")
+        let _ = quiet_command("cmd")
             .args(["/C", "start", ""])
             .arg(path)
             .spawn();
     }
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("open").arg(path).spawn();
+        let _ = quiet_command("open").arg(path).spawn();
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+        let _ = quiet_command("xdg-open").arg(path).spawn();
     }
 }
 
@@ -2769,7 +2902,7 @@ fn load_media_image(path: &Path) -> Option<image::DynamicImage> {
     }
     let ffmpeg = FFMPEG.get().and_then(|tool| tool.as_ref())?;
     for seconds in ["1", "0"] {
-        let output = std::process::Command::new(ffmpeg)
+        let output = quiet_command(ffmpeg)
             .args(["-loglevel", "error", "-ss", seconds, "-i"])
             .arg(path)
             .args(["-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"])

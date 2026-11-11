@@ -21,10 +21,17 @@ matches, and proposes which copy to keep using an explainable
   (`original` by default).
 * **Safe actions** — trash, move or delete with a dry run, confirmation for
   bulk actions and a hard "leave one" guarantee.
+* **Manual decisions** — star a copy to make it the reference of its group, or
+  take a copy out of a group when it does not look like the reference. Star and
+  out choices are saved in `cache.db` and survive rescans; "out" never deletes
+  or moves the file.
+* **Preview helpers** — drag the splitter to resize the preview; keys `1` and
+  `2` rotate the original/duplicate (display only) and the ★ button stars the
+  current duplicate.
 * **Exports** — CSV and XML.
-* **Desktop UI in Slint** — light/dark theme, nine languages (English,
-  Spanish, French, German, Portuguese, Italian, Simplified Chinese, Japanese
-  and Korean), folder picker, thumbnails, side-by-side preview and
+* **Desktop UI in Slint** — light/dark theme, ten languages (English,
+  Spanish, French, German, Portuguese, Italian, Simplified Chinese, Japanese,
+  Korean and Russian), folder picker, thumbnails, side-by-side preview and
   keyboard-driven chained deletion. Noto Sans CJK is embedded for CJK text.
 
 ## Layout
@@ -49,9 +56,9 @@ is disabled and the UI explains how to install ONNX Runtime and set
 
 | Format | Command |
 |---|---|
-| `.deb` | `sudo apt install ./umdf_0.6.4_amd64.deb` |
-| `.rpm` | `sudo dnf install ./umdf-0.6.4-1.x86_64.rpm` |
-| `.AppImage` | `chmod +x umdf-0.6.4-x86_64.AppImage && ./umdf-0.6.4-x86_64.AppImage` |
+| `.deb` | `sudo apt install ./umdf_0.6.5_amd64.deb` |
+| `.rpm` | `sudo dnf install ./umdf-0.6.5-1.x86_64.rpm` |
+| `.AppImage` | `chmod +x umdf-0.6.5-x86_64.AppImage && ./umdf-0.6.5-x86_64.AppImage` |
 | `.tar.gz` | extract and run `umdf` / `umdf-ui`; bundles ONNX Runtime |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -315,9 +322,9 @@ Layout is a modern light/dark card design:
   `--threads N`) overrides it.
 * **Previews and thumbnails are decoded off the UI thread**, with
   latest-request-wins coalescing and a small cache.
-* **Language selector** switches the whole interface and Help between nine
+* **Language selector** switches the whole interface and Help between ten
   languages at runtime: English, Español, Français, Deutsch, Português,
-  Italiano, 简体中文, 日本語 and 한국어. The choice is persisted in
+  Italiano, 简体中文, 日本語, 한국어 and Русский. The choice is persisted in
   `config.toml` (`language = "fr"`, ...). Noto Sans CJK is embedded, so no
   extra font installation is needed.
 * **Light / dark mode** with a single `Theme` global; native widgets follow

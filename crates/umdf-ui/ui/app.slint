@@ -106,6 +106,7 @@ export struct Strings {
     runtime_restart: string,
     runtime_reinstall: string,
     star: string,
+    out: string,
     manual_reference: string,
     shortcuts_hint: string,
     semantic_unavailable: string,
@@ -371,8 +372,11 @@ component PreviewPane inherits Rectangle {
     in property <image> source;
     in property <string> info;
     in property <bool> playable: false;
+    /// Display-only rotation in degrees (0, 90, 180 or 270).
+    in property <int> rotation: 0;
     callback open();
     callback play();
+    callback rotate();
 
     background: transparent;
     horizontal-stretch: 1;
@@ -391,6 +395,12 @@ component PreviewPane inherits Rectangle {
                 vertical-alignment: center;
                 horizontal-stretch: 1;
             }
+            FlatButton {
+                label: "⟳";
+                minw: 28px;
+                bg: Theme.soft;
+                clicked => { root.rotate(); }
+            }
             if root.playable : FlatButton {
                 label: "▶";
                 minw: 28px;
@@ -406,10 +416,15 @@ component PreviewPane inherits Rectangle {
             clip: true;
 
             Image {
-                width: parent.width;
-                height: parent.height;
+                // Odd quarter turns swap the box before rotating so the
+                // picture still fills the pane without being clipped.
+                width: Math.mod(root.rotation, 180) == 0 ? parent.width : parent.height;
+                height: Math.mod(root.rotation, 180) == 0 ? parent.height : parent.width;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
                 source: root.source;
                 image-fit: contain;
+                transform-rotation: root.rotation * 1deg;
             }
             TouchArea {
                 mouse-cursor: pointer;
@@ -594,6 +609,8 @@ export component AppWindow inherits Window {
     in-out property <string> preview-right-info: "";
     in-out property <bool> preview-left-playable: false;
     in-out property <bool> preview-right-playable: false;
+    in-out property <int> preview-left-rotation: 0;
+    in-out property <int> preview-right-rotation: 0;
     in-out property <string> keep-confidence: "";
     in-out property <string> keep-reason: "";
 
@@ -609,6 +626,7 @@ export component AppWindow inherits Window {
     callback persist-settings();
     callback request-thumbnails(offset: length, height: length);
     callback play-preview(left: bool);
+    callback rotate-preview(left: bool);
     callback start();
     callback stop();
     callback toggle-pause();
@@ -645,6 +663,7 @@ export component AppWindow inherits Window {
     callback move-row(int);
     callback delete-row(int);
     callback star-row(int);
+    callback out-row(int);
     callback apply-all(string);
     callback confirm-apply();
     callback confirm-cancel();
@@ -717,6 +736,20 @@ export component AppWindow inherits Window {
                 if (root.selected-row >= 0) {
                     root.star-row(root.selected-row);
                 }
+                return accept;
+            }
+            if (event.text == Key.O) {
+                if (root.selected-row >= 0) {
+                    root.out-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.Digit1) {
+                root.rotate-preview(true);
+                return accept;
+            }
+            if (event.text == Key.Digit2) {
+                root.rotate-preview(false);
                 return accept;
             }
             if (event.text == Key.Return) {
@@ -840,7 +873,7 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-theme(); }
                             }
                             ComboBox {
-                                model: ["English", "Español", "Français", "Deutsch", "Português", "Italiano", "中文", "日本語", "한국어"];
+                                model: ["English", "Español", "Français", "Deutsch", "Português", "Italiano", "中文", "日本語", "한국어", "Русский"];
                                 current-index <=> root.lang-index;
                                 selected => { root.set-lang(root.lang-index); }
                                 width: 154px;
@@ -1364,7 +1397,9 @@ export component AppWindow inherits Window {
                                     source: root.preview-left;
                                     info: root.preview-left-info;
                                     playable: root.preview-left-playable;
+                                    rotation: root.preview-left-rotation;
                                     play => { root.play-preview(true); }
+                                    rotate => { root.rotate-preview(true); }
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
@@ -1372,7 +1407,9 @@ export component AppWindow inherits Window {
                                     source: root.preview-right;
                                     info: root.preview-right-info;
                                     playable: root.preview-right-playable;
+                                    rotation: root.preview-right-rotation;
                                     play => { root.play-preview(false); }
+                                    rotate => { root.rotate-preview(false); }
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                             }
@@ -1383,7 +1420,9 @@ export component AppWindow inherits Window {
                                     source: root.preview-left;
                                     info: root.preview-left-info;
                                     playable: root.preview-left-playable;
+                                    rotation: root.preview-left-rotation;
                                     play => { root.play-preview(true); }
+                                    rotate => { root.rotate-preview(true); }
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
@@ -1391,7 +1430,9 @@ export component AppWindow inherits Window {
                                     source: root.preview-right;
                                     info: root.preview-right-info;
                                     playable: root.preview-right-playable;
+                                    rotation: root.preview-right-rotation;
                                     play => { root.play-preview(false); }
+                                    rotate => { root.rotate-preview(false); }
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                             }
@@ -1439,6 +1480,17 @@ export component AppWindow inherits Window {
                                 hover: Theme.danger_hover;
                                 enabled: root.selected-row >= 0;
                                 clicked => { root.delete-row(root.selected-row); }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 6px;
+                            FlatButton {
+                                label: root.strings.out;
+                                minw: 132px;
+                                horizontal-stretch: 1;
+                                bg: Theme.soft;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.out-row(root.selected-row); }
                             }
                             FlatButton {
                                 label: "★";
@@ -1532,6 +1584,20 @@ export component AppWindow inherits Window {
                             }
                             return accept;
                         }
+                        if (event.text == Key.O) {
+                            if (root.selected-row >= 0) {
+                                root.out-row(root.selected-row);
+                            }
+                            return accept;
+                        }
+                        if (event.text == Key.Digit1) {
+                            root.rotate-preview(true);
+                            return accept;
+                        }
+                        if (event.text == Key.Digit2) {
+                            root.rotate-preview(false);
+                            return accept;
+                        }
                         if (event.text == Key.DownArrow) {
                             root.move-selection(1);
                             return accept;
@@ -1576,7 +1642,9 @@ export component AppWindow inherits Window {
                             source: root.preview-left;
                             info: root.preview-left-info;
                             playable: root.preview-left-playable;
+                            rotation: root.preview-left-rotation;
                             play => { root.play-preview(true); }
+                            rotate => { root.rotate-preview(true); }
                             open => {}
                         }
                         PreviewPane {
@@ -1584,7 +1652,9 @@ export component AppWindow inherits Window {
                             source: root.preview-right;
                             info: root.preview-right-info;
                             playable: root.preview-right-playable;
+                            rotation: root.preview-right-rotation;
                             play => { root.play-preview(false); }
+                            rotate => { root.rotate-preview(false); }
                             open => {}
                         }
                     }
@@ -1613,6 +1683,13 @@ export component AppWindow inherits Window {
                             hover: Theme.danger_hover;
                             enabled: root.selected-row >= 0;
                             clicked => { root.delete-row(root.selected-row); }
+                        }
+                        FlatButton {
+                            label: root.strings.out;
+                            minw: 132px;
+                            bg: Theme.soft;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.out-row(root.selected-row); }
                         }
                         FlatButton {
                             label: root.strings.star;

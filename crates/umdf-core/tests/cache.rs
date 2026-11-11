@@ -8,9 +8,11 @@ use std::sync::Mutex;
 
 use umdf_core::{run_with_progress_cached, Fingerprint, ScanCache, ScanConfig};
 
+type FingerprintEntry = (u64, Option<i64>, u32, Fingerprint);
+
 #[derive(Default)]
 struct MemoryCache {
-    fingerprints: Mutex<HashMap<PathBuf, (u64, Option<i64>, u32, Fingerprint)>>,
+    fingerprints: Mutex<HashMap<PathBuf, FingerprintEntry>>,
     hits: AtomicUsize,
     misses: AtomicUsize,
     stores: AtomicUsize,
@@ -25,10 +27,12 @@ impl ScanCache for MemoryCache {
         grid: u32,
     ) -> Option<Fingerprint> {
         let guard = self.fingerprints.lock().unwrap();
-        let found = guard.get(path).and_then(|(cached_size, cached_modified, cached_grid, fp)| {
-            (*cached_size == size && *cached_modified == modified_ms && *cached_grid == grid)
-                .then(|| fp.clone())
-        });
+        let found = guard
+            .get(path)
+            .and_then(|(cached_size, cached_modified, cached_grid, fp)| {
+                (*cached_size == size && *cached_modified == modified_ms && *cached_grid == grid)
+                    .then(|| fp.clone())
+            });
         if found.is_some() {
             self.hits.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -79,18 +83,19 @@ fn cached_scan_returns_the_same_groups_and_reuses_values() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let img = image::GrayImage::from_fn(32, 32, |x, y| {
-        image::Luma([((x * 11 + y * 5) % 256) as u8])
-    });
+    let img =
+        image::GrayImage::from_fn(32, 32, |x, y| image::Luma([((x * 11 + y * 5) % 256) as u8]));
     let a = dir.join("a.png");
     let b = dir.join("b.png");
     img.save(&a).unwrap();
     std::fs::copy(&a, &b).unwrap();
 
-    let mut cfg = ScanConfig::default();
-    cfg.folders = vec![dir.clone()];
-    cfg.pixel_tolerance = 0;
-    cfg.similarity_threshold = 100.0;
+    let cfg = ScanConfig {
+        folders: vec![dir.clone()],
+        pixel_tolerance: 0,
+        similarity_threshold: 100.0,
+        ..Default::default()
+    };
 
     let cache = MemoryCache::default();
 
@@ -115,9 +120,8 @@ fn cached_scan_returns_the_same_groups_and_reuses_values() {
     );
 
     // Replacing one file invalidates only that entry.
-    let other = image::GrayImage::from_fn(32, 32, |x, y| {
-        image::Luma([((x * 3 + y * 17) % 256) as u8])
-    });
+    let other =
+        image::GrayImage::from_fn(32, 32, |x, y| image::Luma([((x * 3 + y * 17) % 256) as u8]));
     other.save(&b).unwrap();
 
     let third = run_with_progress_cached(&cfg, None, Some(&cache)).expect("third scan");

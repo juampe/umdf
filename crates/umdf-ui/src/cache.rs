@@ -187,6 +187,8 @@ pub struct CacheStats {
     pub comparisons: u64,
     pub bytes: u64,
     pub comparison_bytes: u64,
+    /// Manual star/out decisions stored by the user.
+    pub manual_choices: u64,
 }
 
 fn put_text(out: &mut Vec<u8>, text: &str) {
@@ -959,7 +961,12 @@ impl CacheDb {
                  created_at TEXT NOT NULL DEFAULT (datetime('now'))
              );
              CREATE INDEX IF NOT EXISTS comparison_cache_created
-                 ON comparison_cache(created_at);",
+                 ON comparison_cache(created_at);
+             CREATE TABLE IF NOT EXISTS manual_choice_cache (
+                 path TEXT PRIMARY KEY,
+                 choice TEXT NOT NULL,
+                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );",
         )
         .context("creating cache schema")?;
         // Existing databases predate `fp_version`. Adding the column with a
@@ -1454,6 +1461,11 @@ impl CacheDb {
                 |row| row.get::<_, i64>(0),
             )
             .unwrap_or(0);
+        let manual_choices = conn
+            .query_row("SELECT COUNT(*) FROM manual_choice_cache", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap_or(0);
         CacheStats {
             fingerprints: fingerprints.max(0) as u64,
             embeddings: embeddings.max(0) as u64,
@@ -1461,7 +1473,76 @@ impl CacheDb {
             comparisons: comparisons.max(0) as u64,
             bytes: (fingerprint_bytes + embedding_bytes + comparison_bytes).max(0) as u64,
             comparison_bytes: comparison_bytes.max(0) as u64,
+            manual_choices: manual_choices.max(0) as u64,
         }
+    }
+
+    /// Manual star/out decisions stored by the user.
+    ///
+    /// Returns `(references, out)`. Both sets use the same normalised
+    /// `umdf_core::config::path_key` as the scan, so Windows case and
+    /// `\\?\` prefixes do not create duplicate decisions.
+    pub fn manual_choices(&self) -> (HashSet<String>, HashSet<String>) {
+        let mut references = HashSet::new();
+        let mut out = HashSet::new();
+        let Some(conn) = self.checkout() else {
+            return (references, out);
+        };
+        let Ok(mut stmt) = conn.prepare("SELECT path, choice FROM manual_choice_cache") else {
+            return (references, out);
+        };
+        let Ok(rows) = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) else {
+            return (references, out);
+        };
+        for row in rows.flatten() {
+            match row.1.as_str() {
+                "reference" => {
+                    references.insert(row.0);
+                }
+                "out" => {
+                    out.insert(row.0);
+                }
+                _ => {}
+            }
+        }
+        (references, out)
+    }
+
+    /// Store or clear a starred group reference.
+    pub fn set_manual_reference(&self, path: &str, on: bool) -> Result<()> {
+        self.set_manual_choice(path, "reference", on)
+    }
+
+    /// Store or clear a manual "remove from group" decision. The file is
+    /// never deleted or moved.
+    pub fn set_manual_out(&self, path: &str, on: bool) -> Result<()> {
+        self.set_manual_choice(path, "out", on)
+    }
+
+    fn set_manual_choice(&self, path: &str, choice: &str, on: bool) -> Result<()> {
+        self.flush();
+        let conn = self
+            .checkout()
+            .ok_or_else(|| anyhow::anyhow!("cache connection unavailable"))?;
+        if on {
+            // A file is either the reference or out of its group, never both.
+            conn.execute(
+                "INSERT INTO manual_choice_cache (path, choice, updated_at)
+                 VALUES (?1, ?2, datetime('now'))
+                 ON CONFLICT(path) DO UPDATE SET
+                     choice = excluded.choice,
+                     updated_at = excluded.updated_at",
+                params![path, choice],
+            )?;
+        } else {
+            conn.execute(
+                "DELETE FROM manual_choice_cache WHERE path = ?1 AND choice = ?2",
+                params![path, choice],
+            )?;
+        }
+        Ok(())
     }
 
     /// Drop only the cached whole-library comparison results. Fingerprints,
@@ -1490,7 +1571,8 @@ impl CacheDb {
              DELETE FROM content_hash_cache;
              DELETE FROM media_signature_cache;
              DELETE FROM video_frame_cache;
-             DELETE FROM comparison_cache;",
+             DELETE FROM comparison_cache;
+             DELETE FROM manual_choice_cache;",
         )?;
         if let Ok(mut memory) = self.memory.write() {
             *memory = MemoryCache::default();
@@ -2134,8 +2216,10 @@ fn encode_i16(values: &[i16]) -> Vec<u8> {
 
 fn decode_i16(bytes: &[u8]) -> Vec<i16> {
     bytes
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|[a, b]| i16::from_le_bytes([*a, *b]))
         .collect()
 }
 
@@ -2149,8 +2233,10 @@ fn encode_f32(values: &[f32]) -> Vec<u8> {
 
 fn decode_f32(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|[a, b, c, d]| f32::from_le_bytes([*a, *b, *c, *d]))
         .collect()
 }
 
@@ -2303,6 +2389,39 @@ mod tests {
         assert!(db.get_video_frame(file, 10, Some(101), 1.5, 2).is_none());
         assert!(db.get_video_frame(file, 10, Some(100), 1.4, 2).is_none());
 
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn manual_choices_round_trip_and_clear_semantics() {
+        let (path, db) = temp_db("manual");
+        assert_eq!(db.manual_choices(), (HashSet::new(), HashSet::new()));
+
+        db.set_manual_reference("/photos/a.jpg", true).unwrap();
+        db.set_manual_out("/photos/b.jpg", true).unwrap();
+        let (references, out) = db.manual_choices();
+        assert!(references.contains("/photos/a.jpg"));
+        assert!(out.contains("/photos/b.jpg"));
+        assert_eq!(db.stats().manual_choices, 2);
+
+        // A file cannot be both the reference and out of its group.
+        db.set_manual_out("/photos/a.jpg", true).unwrap();
+        let (references, out) = db.manual_choices();
+        assert!(!references.contains("/photos/a.jpg"));
+        assert!(out.contains("/photos/a.jpg"));
+
+        db.set_manual_reference("/photos/b.jpg", true).unwrap();
+        let (references, out) = db.manual_choices();
+        assert!(references.contains("/photos/b.jpg"));
+        assert!(!out.contains("/photos/b.jpg"));
+
+        // Clearing comparison results keeps manual decisions.
+        db.clear_comparison().unwrap();
+        assert_eq!(db.stats().manual_choices, 2);
+
+        // Clearing the whole cache removes them too.
+        db.clear().unwrap();
+        assert_eq!(db.manual_choices(), (HashSet::new(), HashSet::new()));
         let _ = std::fs::remove_file(path);
     }
 
@@ -2519,10 +2638,12 @@ mod tests {
         }
 
         let (path, db) = temp_db("warm");
-        let mut cfg = umdf_core::ScanConfig::default();
-        cfg.folders = vec![dir.clone()];
-        cfg.pixel_tolerance = 0;
-        cfg.similarity_threshold = 100.0;
+        let cfg = umdf_core::ScanConfig {
+            folders: vec![dir.clone()],
+            pixel_tolerance: 0,
+            similarity_threshold: 100.0,
+            ..Default::default()
+        };
 
         let first = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).expect("first scan");
         assert_eq!(first.items.len(), 4);
@@ -2554,10 +2675,12 @@ mod tests {
             img.save(dir.join(format!("{i:05}.png"))).unwrap();
         }
         let (path, db) = temp_db("warm-bench");
-        let mut cfg = umdf_core::ScanConfig::default();
-        cfg.folders = vec![dir.clone()];
-        cfg.pixel_tolerance = 0;
-        cfg.similarity_threshold = 100.0;
+        let cfg = umdf_core::ScanConfig {
+            folders: vec![dir.clone()],
+            pixel_tolerance: 0,
+            similarity_threshold: 100.0,
+            ..Default::default()
+        };
 
         let first = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();
         let second = umdf_core::run_with_progress_cached(&cfg, None, Some(&db)).unwrap();

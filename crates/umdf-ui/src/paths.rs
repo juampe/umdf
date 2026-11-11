@@ -56,7 +56,10 @@ mod tests {
 
     #[test]
     fn leaves_normal_paths_alone() {
-        assert_eq!(display_path(Path::new("/home/me/Pictures")), "/home/me/Pictures");
+        assert_eq!(
+            display_path(Path::new("/home/me/Pictures")),
+            "/home/me/Pictures"
+        );
         assert_eq!(display_path(Path::new(r"C:\Users\me")), r"C:\Users\me");
     }
 }

@@ -108,7 +108,11 @@ pub fn assess_group(items: &[MediaItem], members: &[usize]) -> HashMap<usize, As
     // Explain the best member relative to the others.
     if let Some(best) = out
         .iter()
-        .max_by(|a, b| a.1.confidence.partial_cmp(&b.1.confidence).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|a, b| {
+            a.1.confidence
+                .partial_cmp(&b.1.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|(id, _)| *id)
     {
         let mut reasons = Vec::new();
@@ -246,13 +250,30 @@ pub fn name_score(item: &MediaItem) -> f32 {
     let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(&name);
 
     let camera_prefixes = [
-        "img_", "dsc_", "dscf", "dscn", "pxl_", "gopr", "g001", "dji_", "mvimg", "vid_",
-        "p1000", "cimg", "sam_", "photo_",
+        "img_", "dsc_", "dscf", "dscn", "pxl_", "gopr", "g001", "dji_", "mvimg", "vid_", "p1000",
+        "cimg", "sam_", "photo_",
     ];
     let strong = [
-        "copy", "copia", "edited", "editado", "resized", "resize", "small", "thumb",
-        "thumbnail", "compressed", "compress", "whatsapp", "telegram", "facebook",
-        "instagram", "screenshot", "captura", "capture", "duplicate", "dup",
+        "copy",
+        "copia",
+        "edited",
+        "editado",
+        "resized",
+        "resize",
+        "small",
+        "thumb",
+        "thumbnail",
+        "compressed",
+        "compress",
+        "whatsapp",
+        "telegram",
+        "facebook",
+        "instagram",
+        "screenshot",
+        "captura",
+        "capture",
+        "duplicate",
+        "dup",
     ];
 
     let hits = strong.iter().filter(|m| stem.contains(**m)).count();
@@ -274,7 +295,11 @@ pub fn name_score(item: &MediaItem) -> f32 {
 fn has_copy_suffix(stem: &str) -> bool {
     let bytes = stem.as_bytes();
     if let Some(open) = stem.rfind('(') {
-        if stem.ends_with(')') && stem[open + 1..stem.len() - 1].chars().all(|c| c.is_ascii_digit()) {
+        if stem.ends_with(')')
+            && stem[open + 1..stem.len() - 1]
+                .chars()
+                .all(|c| c.is_ascii_digit())
+        {
             return true;
         }
     }
@@ -291,7 +316,14 @@ fn has_copy_suffix(stem: &str) -> bool {
 
 pub fn location_score(item: &MediaItem) -> f32 {
     let path = item.path.to_string_lossy().to_ascii_lowercase();
-    let original = ["/dcim/", "/camera/", "/cameras/", "/photos/", "/pictures/", "/fotos/"];
+    let original = [
+        "/dcim/",
+        "/camera/",
+        "/cameras/",
+        "/photos/",
+        "/pictures/",
+        "/fotos/",
+    ];
     let derivative = [
         "downloads",
         "descargas",
@@ -321,7 +353,12 @@ mod tests {
     use std::path::PathBuf;
 
     fn item(id: usize, name: &str, size: u64, w: u32, h: u32) -> MediaItem {
-        let mut it = MediaItem::new(id, PathBuf::from(format!("/photos/DCIM/{name}")), MediaKind::Image, size);
+        let mut it = MediaItem::new(
+            id,
+            PathBuf::from(format!("/photos/DCIM/{name}")),
+            MediaKind::Image,
+            size,
+        );
         it.width = Some(w);
         it.height = Some(h);
         it

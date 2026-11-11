@@ -67,11 +67,11 @@ pub fn collect_candidates_cancellable(
                 return true;
             }
             let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            !excluded.iter().any(|excluded| name == *excluded)
+            !excluded.contains(&name)
         });
         for entry in entries.filter_map(Result::ok) {
             visited += 1;
-            if visited % 256 == 0 && cancel.load(Ordering::Relaxed) {
+            if visited.is_multiple_of(256) && cancel.load(Ordering::Relaxed) {
                 return (out, true);
             }
             if !entry.file_type().is_file() {
@@ -146,7 +146,7 @@ pub fn list_directories(path: &Path) -> Vec<(String, PathBuf)> {
             ));
         }
     }
-    out.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    out.sort_by_key(|entry| entry.0.to_lowercase());
     out
 }
 
@@ -167,10 +167,12 @@ mod tests {
         std::fs::write(root.join(".dtrash").join("c.jpg"), b"c").unwrap();
         std::fs::write(root.join("$RECYCLE.BIN").join("d.jpg"), b"d").unwrap();
 
-        let mut cfg = ScanConfig::default();
-        cfg.folders = vec![root.clone()];
-        cfg.extensions = vec!["jpg".to_string()];
-        cfg.exclude_dirs = vec![".dtrash".into(), ".trash".into(), "$recycle.bin".into()];
+        let cfg = ScanConfig {
+            folders: vec![root.clone()],
+            extensions: vec!["jpg".to_string()],
+            exclude_dirs: vec![".dtrash".into(), ".trash".into(), "$recycle.bin".into()],
+            ..Default::default()
+        };
         let files = collect_candidates(&cfg);
         assert_eq!(files.len(), 1);
         assert!(files[0].path.ends_with("keep/a.jpg"));

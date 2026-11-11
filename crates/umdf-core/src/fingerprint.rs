@@ -75,9 +75,9 @@ fn load_oriented_recovered_jpeg(path: &Path) -> anyhow::Result<DynamicImage> {
 }
 
 fn find_jpeg_start(bytes: &[u8]) -> Option<usize> {
-    bytes.windows(3).position(|window| {
-        window[0] == 0xFF && window[1] == 0xD8 && window[2] == 0xFF
-    })
+    bytes
+        .windows(3)
+        .position(|window| window[0] == 0xFF && window[1] == 0xD8 && window[2] == 0xFF)
 }
 
 pub fn load_fingerprint(path: &Path, grid: u32) -> anyhow::Result<Fingerprint> {
@@ -246,8 +246,7 @@ pub fn pixel_tolerance_similarity_at_least(
     let allowed_mismatches = if min_percent <= 0.0 {
         usize::MAX
     } else {
-        (((100.0 - min_percent.clamp(0.0, 100.0)) / 100.0) * n as f32).floor()
-            as usize
+        (((100.0 - min_percent.clamp(0.0, 100.0)) / 100.0) * n as f32).floor() as usize
     };
     let mut matching = 0usize;
     let mut mismatches = 0usize;
@@ -416,13 +415,19 @@ mod tests {
     #[test]
     fn identical_is_100() {
         let a = fp(vec![10, -10, 5, -5, 0, 7, -7, 3, -3], 3);
-        assert_eq!(similarity(&a, &a, Metric::NormalizedSignAgreement, 0), Some(100.0));
+        assert_eq!(
+            similarity(&a, &a, Metric::NormalizedSignAgreement, 0),
+            Some(100.0)
+        );
         assert_eq!(similarity(&a, &a, Metric::Pearson, 0), Some(100.0));
         assert_eq!(similarity(&a, &a, Metric::Ssim, 0), Some(100.0));
         // The legacy metric normalises by a fixed 250 samples, so a 3x3 grid
         // never reaches its acceptance threshold. Verify it on a full grid.
         let big = half_half();
-        assert_eq!(similarity(&big, &big, Metric::LegacySignAgreement, 0), Some(100.0));
+        assert_eq!(
+            similarity(&big, &big, Metric::LegacySignAgreement, 0),
+            Some(100.0)
+        );
     }
 
     #[test]
@@ -467,9 +472,7 @@ mod tests {
 
     #[test]
     fn structured_pair_survives_brightness_changes() {
-        let values: Vec<i16> = (0..1024)
-            .map(|i| ((i * 37) % 120) as i16 - 60)
-            .collect();
+        let values: Vec<i16> = (0..1024).map(|i| ((i * 37) % 120) as i16 - 60).collect();
         let a = Fingerprint {
             size: 32,
             mean: 100,

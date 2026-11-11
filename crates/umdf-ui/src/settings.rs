@@ -19,7 +19,7 @@ pub struct Settings {
     pub models_dir: PathBuf,
     /// `"cuda"` or `"cpu"`.
     pub device: String,
-    /// UI language code (`en`, `es`, `fr`, `de`, `pt`, `it`, `zh`, `ja`, `ko`).
+    /// UI language code (`en`, `es`, `fr`, `de`, `pt`, `it`, `zh`, `ja`, `ko`, `ru`).
     pub language: String,
     /// Cosine-similarity threshold for semantic comparisons (0..1).
     pub similarity: f32,
@@ -290,14 +290,16 @@ mod tests {
 
     #[test]
     fn toml_round_trip() {
-        let mut settings = Settings::default();
-        settings.similarity = 0.83;
-        settings.device = "cpu".to_string();
-        settings.language = "fr".to_string();
-        settings.recursive = false;
-        settings.pixel_similarity = 87.0;
-        settings.exclude_trash = false;
-        settings.folders = vec![PathBuf::from("/tmp/photos")];
+        let mut settings = Settings {
+            similarity: 0.83,
+            device: "cpu".to_string(),
+            language: "fr".to_string(),
+            recursive: false,
+            pixel_similarity: 87.0,
+            exclude_trash: false,
+            folders: vec![PathBuf::from("/tmp/photos")],
+            ..Default::default()
+        };
         settings.models.push(InstalledModel {
             name: "CLIP".into(),
             path: PathBuf::from("/tmp/clip.onnx"),

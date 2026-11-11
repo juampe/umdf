@@ -44,10 +44,7 @@ fn run_with_timeout(
     timeout: Duration,
     cancel: &AtomicBool,
 ) -> anyhow::Result<std::process::Output> {
-    let mut child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
     let started = Instant::now();
     loop {
         if child.try_wait()?.is_some() {

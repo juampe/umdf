@@ -78,7 +78,6 @@ fn runtime_in(dir: &Path) -> Option<PathBuf> {
     fallback
 }
 
-
 /// First user-writable runtime folder (CUDA by convention).
 pub fn cuda_runtime_dir() -> Option<PathBuf> {
     user_runtime_dirs().into_iter().next()
@@ -94,12 +93,14 @@ fn user_runtime_dirs() -> Vec<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| {
-            std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".local").join("share"))
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share"))
         });
     #[cfg(target_os = "macos")]
-    let base = std::env::var_os("HOME")
-        .map(|home| PathBuf::from(home).join("Library").join("Application Support"));
+    let base = std::env::var_os("HOME").map(|home| {
+        PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+    });
     let Some(base) = base else {
         return Vec::new();
     };
@@ -225,8 +226,8 @@ pub fn inspect_model(path: &Path) -> Result<ModelInfo> {
             ValueType::Tensor { shape, .. } => {
                 shape.last().copied().filter(|v| *v > 0).map(|v| v as usize)
             }
-        _ => None,
-    });
+            _ => None,
+        });
 
     Ok(ModelInfo {
         input_name: input.name().to_string(),
@@ -261,7 +262,7 @@ impl EmbeddingEngine {
             forced_cpu = true;
         }
         let session = if cuda_requested {
-            match Self::build_session(&env, cfg, true) {
+            match Self::build_session(env, cfg, true) {
                 Ok(session) => {
                     used_cuda = true;
                     session
@@ -271,11 +272,11 @@ impl EmbeddingEngine {
                         "UMDF: CUDA execution provider unavailable ({error}); falling back to CPU"
                     ));
                     forced_cpu = true;
-                    Self::build_session(&env, cfg, false)?
+                    Self::build_session(env, cfg, false)?
                 }
             }
         } else {
-            Self::build_session(&env, cfg, false)?
+            Self::build_session(env, cfg, false)?
         };
 
         let input_name = session

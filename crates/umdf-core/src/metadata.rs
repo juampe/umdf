@@ -28,14 +28,10 @@ pub struct ExifMeta {
 pub fn exif_meta(path: &Path) -> Option<ExifMeta> {
     let file = File::open(path).ok()?;
     let mut reader = BufReader::new(file);
-    let exif = exif::Reader::new()
-        .read_from_container(&mut reader)
-        .ok()?;
+    let exif = exif::Reader::new().read_from_container(&mut reader).ok()?;
 
     let field_count = exif.fields().count() as u32;
-    let camera = exif
-        .get_field(exif::Tag::Make, exif::In::PRIMARY)
-        .is_some()
+    let camera = exif.get_field(exif::Tag::Make, exif::In::PRIMARY).is_some()
         || exif
             .get_field(exif::Tag::Model, exif::In::PRIMARY)
             .is_some();
@@ -44,9 +40,12 @@ pub fn exif_meta(path: &Path) -> Option<ExifMeta> {
         .get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
         .or_else(|| exif.get_field(exif::Tag::DateTime, exif::In::PRIMARY))
         .and_then(|field| {
-            NaiveDateTime::parse_from_str(field.display_value().to_string().trim(), "%Y-%m-%d %H:%M:%S")
-                .ok()
-                .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
+            NaiveDateTime::parse_from_str(
+                field.display_value().to_string().trim(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .ok()
+            .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc))
         });
 
     Some(ExifMeta {

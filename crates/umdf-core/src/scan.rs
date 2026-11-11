@@ -102,6 +102,8 @@ pub struct Stats {
     pub comparison_from_cache: bool,
     /// Pairs that survived the perceptual index and were fully compared.
     pub comparison_candidates: u64,
+    /// Time spent building the comparison cache signature.
+    pub comparison_signature_ms: u128,
 }
 
 #[derive(Debug)]
@@ -471,6 +473,8 @@ fn comparison_signature(items: &[MediaItem], index: &[usize], cfg: &ScanConfig) 
     format!("{:x}", hasher.finalize())
 }
 
+type ExtractResult = Option<(MediaItem, Option<Vec<f32>>, bool)>;
+
 fn run_inner(
     cfg: &ScanConfig,
     tx: Option<&Sender<Progress>>,
@@ -478,8 +482,10 @@ fn run_inner(
     cache: Option<&dyn ScanCache>,
 ) -> anyhow::Result<ScanReport> {
     let started = Instant::now();
-    let mut stats = Stats::default();
-    stats.threads = threads;
+    let mut stats = Stats {
+        threads,
+        ..Default::default()
+    };
 
     let cancel_ref: &AtomicBool = cfg.cancel.as_deref().unwrap_or(&NEVER_CANCELLED);
     let pause_ref = cfg.pause.as_deref();
@@ -567,7 +573,7 @@ fn run_inner(
             break;
         }
         let base = scanned;
-        let results: Vec<Option<(MediaItem, Option<Vec<f32>>, bool)>> = chunk
+        let results: Vec<ExtractResult> = chunk
             .par_iter()
             .enumerate()
             .map(|(k, cand)| {
@@ -831,7 +837,7 @@ fn run_inner(
                                             if let Some(cache) = cache {
                                                 let (path, size, modified) = &meta[slot];
                                                 cache.store_embedding(
-                                                    path, &model_key, *size, *modified, &vector,
+                                                    path, model_key, *size, *modified, &vector,
                                                 );
                                             }
                                             vectors[slot] = Some(vector);
@@ -1013,7 +1019,9 @@ fn run_inner(
 
         // A repeated scan of an unchanged library reuses the previous match
         // list instead of recomputing billions of pairs.
+        let signature_started = Instant::now();
         let comparison_sig = comparison_signature(&items, &index, cfg);
+        stats.comparison_signature_ms = signature_started.elapsed().as_millis();
         let cached = cache.and_then(|cache| cache.comparison(&comparison_sig));
         if let Some(cached) = cached {
             let ids: HashMap<&Path, usize> = index
@@ -1044,11 +1052,11 @@ fn run_inner(
                 },
             );
         } else {
-            // Cheap perceptual index. For `dpf` a pair that reaches the
-            // threshold can only differ by a bounded amount in global mean
-            // grey, and flat images are rejected by the structural check
-            // anyway. Sorting by mean and scanning a narrow window removes
-            // most of the O(n²) pairs before the pixel loop starts.
+            // Cheap pre-filter. Flat images are rejected by the structural
+            // check anyway, and for `dpf` a pair that reaches the threshold
+            // can only differ by a bounded amount in global mean grey. The
+            // list stays sorted by aspect ratio so the 1.5x gate is still a
+            // sliding window; the mean check skips the pixel loop cheaply.
             let mut means = vec![0i32; items.len()];
             let mut stddevs = vec![0f64; items.len()];
             for &id in &index {
@@ -1057,34 +1065,25 @@ fn run_inner(
                     stddevs[id] = fingerprint::fingerprint_stddev(fp);
                 }
             }
-            let use_mean_index = cfg.metric == Metric::PixelTolerance;
+            let use_mean_bound = cfg.metric == Metric::PixelTolerance;
             if matches!(cfg.metric, Metric::PixelTolerance | Metric::Ssim) {
-                index.retain(|id| stddevs[*id] >= 3.0);
+                // Flat fingerprints cannot produce reliable perceptual
+                // matches, but they may still match through embeddings.
+                index.retain(|id| items[*id].embedding.is_some() || stddevs[*id] >= 3.0);
             }
-            if use_mean_index {
-                index.sort_by(|a, b| {
-                    means[*a].cmp(&means[*b]).then_with(|| {
-                        ratios[*a]
-                            .partial_cmp(&ratios[*b])
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                });
-            } else {
-                // Sort by aspect ratio so the 1.5x gate becomes a sliding
-                // window.
-                index.sort_by(|a, b| {
-                    ratios[*a]
-                        .partial_cmp(&ratios[*b])
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-            }
+            // Sort by aspect ratio so the 1.5x gate becomes a sliding window.
+            index.sort_by(|a, b| {
+                ratios[*a]
+                    .partial_cmp(&ratios[*b])
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
             let grid_len = index
                 .first()
                 .and_then(|&id| items[id].fingerprint.as_ref())
                 .map(|fp| fp.values.len())
                 .unwrap_or(0) as f64;
-            let mean_bound = if use_mean_index && grid_len > 0.0 {
+            let mean_bound = if use_mean_bound && grid_len > 0.0 {
                 let threshold = cfg.similarity_threshold.clamp(0.0, 100.0) as f64;
                 let allowed = ((100.0 - threshold) / 100.0 * grid_len).floor();
                 let tolerance = cfg.pixel_tolerance as f64;
@@ -1154,20 +1153,22 @@ fn run_inner(
                     let ai_fingerprint = items[ai].fingerprint.as_ref();
                     let mut seen = 0usize;
                     let mut pending: u64 = 0;
-                    let end = if use_mean_index {
-                        i + 1
-                            + index[i + 1..]
-                                .partition_point(|&bj| means[bj] <= means[ai] + mean_bound)
-                    } else {
-                        index.len()
-                    };
-                    for &bj in &index[i + 1..end] {
+                    for &bj in &index[i + 1..] {
                         let rb = ratios[bj];
                         if ra.max(rb) / ra.min(rb) > LEGACY_ASPECT_TOLERANCE {
-                            if use_mean_index {
-                                continue;
-                            }
                             break;
+                        }
+                        // The mean bound only applies to fingerprint
+                        // comparisons. Semantic embeddings can match images
+                        // with very different global brightness.
+                        if use_mean_bound
+                            && ai_embedding.is_none()
+                            && items[bj].embedding.is_none()
+                            && ai_fingerprint.is_some()
+                            && items[bj].fingerprint.is_some()
+                            && (means[ai] - means[bj]).abs() > mean_bound
+                        {
+                            continue;
                         }
                         if let Some(hash) = ai_hash {
                             if items[bj].content_hash.as_deref() == Some(hash) {
@@ -1290,11 +1291,12 @@ fn run_inner(
         .filter(|item| item.extract_error.is_some())
         .count();
     crate::log_error(format_args!(
-        "UMDF: scan complete: files={} extract={}ms hash={}ms compare={}ms group={}ms total={}ms pairs={} candidates={} comparison_cached={} errors={}",
+        "UMDF: scan complete: files={} extract={}ms hash={}ms compare={}ms sig={}ms group={}ms total={}ms pairs={} candidates={} comparison_cached={} errors={}",
         stats.files_scanned,
         stats.extract_ms,
         stats.hash_ms,
         stats.compare_ms,
+        stats.comparison_signature_ms,
         stats.group_ms,
         stats.elapsed_ms,
         stats.pairs_compared,
@@ -1313,6 +1315,7 @@ fn run_inner(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn extract_item(
     index: usize,
     cand: &walk::Candidate,
@@ -1634,10 +1637,11 @@ fn video_frame_fingerprint(
     grid: u32,
     cancel: &AtomicBool,
 ) -> anyhow::Result<Fingerprint> {
+    let stamp = hash::hex::encode(file.to_string_lossy().as_bytes());
     let tmp = std::env::temp_dir().join(format!(
         "umdf-frame-{}-{}.png",
         std::process::id(),
-        hash::hex::encode(file.to_string_lossy().as_bytes())[..12].to_string()
+        &stamp[..12]
     ));
     media::extract_frame(ffmpeg, file, at_secs, &tmp, cancel)?;
     let fp = fingerprint::load_fingerprint(&tmp, grid);
@@ -1667,10 +1671,13 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    type FingerprintEntry = (u64, Option<i64>, u32, Fingerprint);
+    type MetadataEntry = (u64, Option<i64>, CachedMetadata);
+
     #[derive(Default)]
     struct MemoryCache {
-        fingerprints: Mutex<HashMap<PathBuf, (u64, Option<i64>, u32, Fingerprint)>>,
-        metadata: Mutex<HashMap<PathBuf, (u64, Option<i64>, CachedMetadata)>>,
+        fingerprints: Mutex<HashMap<PathBuf, FingerprintEntry>>,
+        metadata: Mutex<HashMap<PathBuf, MetadataEntry>>,
     }
 
     impl ScanCache for MemoryCache {
@@ -1778,11 +1785,13 @@ mod tests {
         valid_image(&root.join("a.png"));
         valid_image(&root.join("b.png"));
 
-        let mut cfg = ScanConfig::default();
-        cfg.folders = vec![root.clone()];
-        cfg.extensions = vec!["png".into()];
         let pause = Arc::new(AtomicBool::new(true));
-        cfg.pause = Some(pause.clone());
+        let cfg = ScanConfig {
+            folders: vec![root.clone()],
+            extensions: vec!["png".into()],
+            pause: Some(pause.clone()),
+            ..Default::default()
+        };
 
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -1804,9 +1813,11 @@ mod tests {
         valid_image(&root.join("a.png"));
         valid_image(&root.join("b.png"));
 
-        let mut cfg = ScanConfig::default();
-        cfg.folders = vec![root.clone()];
-        cfg.extensions = vec!["png".into()];
+        let cfg = ScanConfig {
+            folders: vec![root.clone()],
+            extensions: vec!["png".into()],
+            ..Default::default()
+        };
         let cache = MemoryCache::default();
 
         let first = run_with_progress_cached(&cfg, None, Some(&cache)).unwrap();
@@ -1840,9 +1851,11 @@ mod tests {
             .collect();
         std::fs::write(root.join("broken.jpg"), junk).unwrap();
 
-        let mut cfg = ScanConfig::default();
-        cfg.folders = vec![root.clone()];
-        cfg.extensions = vec!["png".into(), "jpg".into()];
+        let cfg = ScanConfig {
+            folders: vec![root.clone()],
+            extensions: vec!["png".into(), "jpg".into()],
+            ..Default::default()
+        };
         let report = run(&cfg).expect("a corrupt image must not abort the scan");
 
         assert_eq!(report.stats.files_scanned, 3);

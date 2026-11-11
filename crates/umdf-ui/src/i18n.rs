@@ -24,10 +24,11 @@ pub enum Lang {
     Zh,
     Ja,
     Ko,
+    Ru,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 9] = [
+    pub const ALL: [Lang; 10] = [
         Lang::En,
         Lang::Es,
         Lang::Fr,
@@ -37,6 +38,7 @@ impl Lang {
         Lang::Zh,
         Lang::Ja,
         Lang::Ko,
+        Lang::Ru,
     ];
 
     pub fn index(self) -> usize {
@@ -61,6 +63,7 @@ impl Lang {
             Lang::Zh => "zh",
             Lang::Ja => "ja",
             Lang::Ko => "ko",
+            Lang::Ru => "ru",
         }
     }
 
@@ -83,7 +86,7 @@ pub struct Tr {
     pub lang: Lang,
 }
 
-const CATALOG_TEXTS: [&str; 9] = [
+const CATALOG_TEXTS: [&str; 10] = [
     include_str!("../i18n/en.json"),
     include_str!("../i18n/es.json"),
     include_str!("../i18n/fr.json"),
@@ -93,9 +96,10 @@ const CATALOG_TEXTS: [&str; 9] = [
     include_str!("../i18n/zh.json"),
     include_str!("../i18n/ja.json"),
     include_str!("../i18n/ko.json"),
+    include_str!("../i18n/ru.json"),
 ];
 
-static CATALOGS: [OnceLock<Catalog>; 9] = [const { OnceLock::new() }; 9];
+static CATALOGS: [OnceLock<Catalog>; 10] = [const { OnceLock::new() }; 10];
 
 fn catalog(lang: Lang) -> &'static Catalog {
     CATALOGS[lang.index()].get_or_init(|| {
@@ -175,6 +179,7 @@ struct StringsRaw {
     runtime_restart: String,
     runtime_reinstall: String,
     star: String,
+    out: String,
     manual_reference: String,
     shortcuts_hint: String,
     semantic_unavailable: String,
@@ -270,6 +275,7 @@ impl StringsRaw {
             runtime_restart: self.runtime_restart.clone().into(),
             runtime_reinstall: self.runtime_reinstall.clone().into(),
             star: self.star.clone().into(),
+            out: self.out.clone().into(),
             manual_reference: self.manual_reference.clone().into(),
             shortcuts_hint: self.shortcuts_hint.clone().into(),
             semantic_unavailable: self.semantic_unavailable.clone().into(),
@@ -680,6 +686,10 @@ impl Tr {
         self.fmt("status_starred", &[("path", display_path(path))])
     }
 
+    pub fn status_out(&self, path: &Path) -> String {
+        self.fmt("status_out", &[("path", display_path(path))])
+    }
+
     pub fn manual_reference_reason(&self) -> String {
         self.phrase("manual_reference_reason").into()
     }
@@ -812,6 +822,22 @@ impl Tr {
     }
 }
 
+pub fn human_bytes(n: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+    let f = n as f64;
+    if f >= GB {
+        format!("{:.2} GB", f / GB)
+    } else if f >= MB {
+        format!("{:.2} MB", f / MB)
+    } else if f >= KB {
+        format!("{:.0} KB", f / KB)
+    } else {
+        format!("{n} B")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -860,21 +886,5 @@ mod tests {
             assert_eq!(Lang::from_code(lang.code()), Some(lang));
             assert_eq!(Lang::from_index(lang.index() as i32), lang);
         }
-    }
-}
-
-pub fn human_bytes(n: u64) -> String {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-    let f = n as f64;
-    if f >= GB {
-        format!("{:.2} GB", f / GB)
-    } else if f >= MB {
-        format!("{:.2} MB", f / MB)
-    } else if f >= KB {
-        format!("{:.0} KB", f / KB)
-    } else {
-        format!("{n} B")
     }
 }

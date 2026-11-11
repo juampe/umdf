@@ -8,7 +8,10 @@ fn main() {
         resource.set_icon(icon.to_string_lossy().as_ref());
         resource.set("ProductName", "UMDF — Universal Media Duplicate Finder");
         resource.set("FileDescription", "Universal Media Duplicate Finder");
-        resource.set("LegalCopyright", "Copyright (C) 2026 Juan Pedro Paredes Caballero. GPL-3.0-only.");
+        resource.set(
+            "LegalCopyright",
+            "Copyright (C) 2026 Juan Pedro Paredes Caballero. GPL-3.0-only.",
+        );
         resource
             .compile()
             .expect("failed to embed Windows resources");

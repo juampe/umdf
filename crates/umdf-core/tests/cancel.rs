@@ -22,9 +22,11 @@ fn stop_returns_partial_results_promptly() {
     }
 
     let flag = Arc::new(AtomicBool::new(false));
-    let mut cfg = ScanConfig::default();
-    cfg.folders = vec![dir.clone()];
-    cfg.cancel = Some(flag.clone());
+    let cfg = ScanConfig {
+        folders: vec![dir.clone()],
+        cancel: Some(flag.clone()),
+        ..Default::default()
+    };
 
     let (tx, rx) = channel::<Progress>();
     let started = Instant::now();

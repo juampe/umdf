@@ -54,8 +54,9 @@
     "runtime_restart": "Restart UMDF to use the new runtime.",
     "runtime_reinstall": "Reinstall CUDA",
     "star": "Set as reference",
+    "out": "Remove from group",
     "manual_reference": "Manual reference ★",
-    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star",
+    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star · o out · 1/2 rotate",
     "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
     "opt_tolerance": "Pixel tolerance",
     "trash_all": "Trash all duplicates",
@@ -195,7 +196,8 @@
     "status_paused": "Paused",
     "status_starred": "{path} is now the reference for its group.",
     "manual_reference_reason": "You chose this copy as the reference.",
-    "comparison_cache_cleared": "Comparison results cleared; the next scan will recompute the pairs."
+    "comparison_cache_cleared": "Comparison results cleared; the next scan will recompute the pairs.",
+    "status_out": "Removed from its group (the file was not deleted): {path}"
   },
   "help": [
     {
@@ -448,7 +450,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ select · Enter opens the enlarged preview · Esc closes it · t trash · m move · d delete · s set the duplicate as the group reference."
+      "text": "↑/↓ select · Enter opens the enlarged preview · Esc closes it · t trash · m move · d delete · s set the duplicate as the group reference · o remove it from the group · 1/2 rotate the original/duplicate."
     },
     {
       "kind": 2,
@@ -461,6 +463,14 @@
     {
       "kind": 2,
       "text": "Video previews open in the system player; VLC is recommended because it plays more codecs without extra installations."
+    },
+    {
+      "kind": 2,
+      "text": "“Out” (o) removes the copy from its group because it does not look like the reference. The file stays on disk; the decision is saved in cache.db and survives scans."
+    },
+    {
+      "kind": 2,
+      "text": "1 rotates the original preview and 2 the duplicate. Rotation is display-only and is not written to the file."
     }
   ]
 }

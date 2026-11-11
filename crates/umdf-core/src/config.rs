@@ -1,6 +1,7 @@
 //! Scan configuration and the decision policies.
 
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -116,6 +117,25 @@ impl Default for EmbeddingConfig {
     }
 }
 
+/// Stable, case-normalised key for user decisions that are stored by path.
+///
+/// Windows paths are case-insensitive and may arrive with or without the
+/// extended-length prefix, so the same helper is used by the cache and by the
+/// grouping stage.
+pub fn path_key(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    if !cfg!(windows) {
+        return text.into_owned();
+    }
+    let mut key = text.replace('/', "\\");
+    if let Some(rest) = key.strip_prefix(r"\\?\UNC\") {
+        key = format!(r"\\{rest}");
+    } else if let Some(rest) = key.strip_prefix(r"\\?\") {
+        key = rest.to_string();
+    }
+    key.to_lowercase()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanConfig {
     pub folders: Vec<PathBuf>,
@@ -160,6 +180,14 @@ pub struct ScanConfig {
     /// After the policy, keep one item per group even if the policy marked
     /// everything.
     pub leave_one: bool,
+
+    /// Path keys (`path_key`) manually chosen as the reference of their group.
+    #[serde(default)]
+    pub manual_references: HashSet<String>,
+    /// Path keys (`path_key`) the user removed from their group because they
+    /// do not look alike at all. The files stay on disk.
+    #[serde(default)]
+    pub manual_out: HashSet<String>,
     pub action: Action,
     /// When false nothing is modified on disk; only a plan is produced.
     pub apply: bool,
@@ -206,6 +234,8 @@ impl Default for ScanConfig {
             ffmpeg: None,
             keep_policy: KeepPolicy::MostLikelyOriginal,
             leave_one: true,
+            manual_references: HashSet::new(),
+            manual_out: HashSet::new(),
             action: Action::None,
             apply: false,
             cancel: None,
@@ -225,17 +255,21 @@ pub fn default_image_extensions() -> Vec<String> {
 }
 
 pub fn default_video_extensions() -> Vec<String> {
-    ["mp4", "m4v", "mkv", "ts", "mpg", "mpeg", "avi", "mov", "webm", "3gp", "3g2", "wmv"]
-        .into_iter()
-        .map(String::from)
-        .collect()
+    [
+        "mp4", "m4v", "mkv", "ts", "mpg", "mpeg", "avi", "mov", "webm", "3gp", "3g2", "wmv",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
 }
 
 pub fn default_audio_extensions() -> Vec<String> {
-    ["m4a", "m4b", "alac", "aac", "mp3", "flac", "ogg", "opus", "wav", "wma", "aiff"]
-        .into_iter()
-        .map(String::from)
-        .collect()
+    [
+        "m4a", "m4b", "alac", "aac", "mp3", "flac", "ogg", "opus", "wav", "wma", "aiff",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
 }
 
 /// Extensions that we treat as "media content can be probed with ffmpeg".

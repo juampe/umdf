@@ -212,7 +212,6 @@ impl Fingerprint {
         }
         out
     }
-
 }
 
 /// How two files were considered a match.
@@ -262,6 +261,9 @@ pub struct Group {
     pub keep_confidence: f32,
     /// Human-readable reasons for the originality score.
     pub keep_reasons: Vec<String>,
+    /// The reference was chosen manually by the user (star), not by policy.
+    #[serde(default)]
+    pub manual_reference: bool,
     /// Total bytes that would be reclaimed if `remove` is applied.
     pub reclaimable_bytes: u64,
 }

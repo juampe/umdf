@@ -20,10 +20,12 @@ fn stop_during_comparison_is_prompt() {
     }
 
     let flag = Arc::new(AtomicBool::new(false));
-    let mut cfg = ScanConfig::default();
-    cfg.folders = vec![dir.clone()];
-    cfg.cancel = Some(flag.clone());
-    cfg.similarity_threshold = 99.0;
+    let cfg = ScanConfig {
+        folders: vec![dir.clone()],
+        cancel: Some(flag.clone()),
+        similarity_threshold: 99.0,
+        ..Default::default()
+    };
 
     let (tx, rx) = channel::<Progress>();
     let started = Instant::now();

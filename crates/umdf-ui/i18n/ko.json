@@ -54,8 +54,9 @@
     "runtime_restart": "새 런타임을 사용하려면 UMDF를 다시 시작하세요.",
     "runtime_reinstall": "CUDA 재설치",
     "star": "참조로 설정",
+    "out": "그룹에서 제외",
     "manual_reference": "수동 참조 ★",
-    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조",
+    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조 · o 제외 · 1/2 회전",
     "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
     "opt_tolerance": "픽셀 허용 오차",
     "trash_all": "모든 중복을 휴지통으로",
@@ -195,7 +196,8 @@
     "status_paused": "일시정지됨",
     "status_starred": "{path}이(가) 그룹의 참조가 되었습니다.",
     "manual_reference_reason": "이 복사본을 참조로 선택했습니다.",
-    "comparison_cache_cleared": "비교 결과를 지웠습니다. 다음 스캔에서 쌍을 다시 계산합니다."
+    "comparison_cache_cleared": "비교 결과를 지웠습니다. 다음 스캔에서 쌍을 다시 계산합니다.",
+    "status_out": "그룹에서 제외했습니다(파일은 삭제되지 않음): {path}"
   },
   "help": [
     {
@@ -448,7 +450,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ 선택 · Enter 확대 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 중복을 그룹 참조로 설정."
+      "text": "↑/↓ 선택 · Enter 확대 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 중복을 그룹 참조로 설정 · o 그룹에서 제외 · 1/2 원본/중복 회전."
     },
     {
       "kind": 2,
@@ -461,6 +463,14 @@
     {
       "kind": 2,
       "text": "비디오 미리보기는 시스템 플레이어에서 열립니다. 추가 설치 없이 더 많은 코덱을 재생하므로 VLC를 권장합니다."
+    },
+    {
+      "kind": 2,
+      "text": "‘그룹에서 제외’(o)는 참조와 닮지 않았기 때문에 이 복사본을 그룹에서 뺍니다. 파일은 디스크에 그대로 남으며, 결정은 cache.db에 저장되어 검색 후에도 유지됩니다."
+    },
+    {
+      "kind": 2,
+      "text": "1은 원본 미리보기, 2는 중복 미리보기를 회전합니다. 회전은 화면 표시용일 뿐 파일에는 기록되지 않습니다."
     }
   ]
 }
