@@ -142,6 +142,10 @@ pub struct ScanConfig {
     pub recursive: bool,
     /// Directory names to skip while walking (trash/recycle bins, ...).
     pub exclude_dirs: Vec<String>,
+    /// Exact directories to skip while walking (for example the configured
+    /// Move destination, even when it has a custom name).
+    #[serde(default)]
+    pub exclude_paths: Vec<PathBuf>,
 
     /// Lower-case extensions without the dot. Empty = every configured kind.
     pub extensions: Vec<String>,
@@ -217,6 +221,7 @@ impl Default for ScanConfig {
             folders: Vec::new(),
             recursive: true,
             exclude_dirs: Vec::new(),
+            exclude_paths: Vec::new(),
             extensions: default_image_extensions(),
             min_width: 0,
             min_height: 0,

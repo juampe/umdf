@@ -8,7 +8,7 @@ mod paths;
 mod settings;
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -195,7 +195,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (models_dir, device, threshold, active_model, installed) = {
+    let (models_dir, device, threshold, active_model, installed, semantic_enabled) = {
         let guard = settings.lock().expect("settings lock");
         (
             guard.models_dir.clone(),
@@ -203,6 +203,7 @@ fn main() -> anyhow::Result<()> {
             guard.similarity,
             guard.active_model.clone(),
             guard.models.clone(),
+            guard.semantic_enabled,
         )
     };
     let (
@@ -287,11 +288,15 @@ fn main() -> anyhow::Result<()> {
     ui.set_semantic_threshold(threshold);
     ui.set_semantic_threshold_label(format!("{threshold:.2}").into());
 
+    // Restore the user's last choice instead of enabling semantic search just
+    // because a model is registered (or disabling it after a restart).
+    if cfg!(feature = "embeddings") {
+        ui.set_semantic_enabled(semantic_enabled);
+    }
     if cfg!(feature = "embeddings")
         && !active_model.is_empty()
         && Path::new(&active_model).is_file()
     {
-        ui.set_semantic_enabled(true);
         ui.set_semantic_model(active_model.clone().into());
         if let Some(found) = installed
             .iter()
@@ -1041,6 +1046,7 @@ fn main() -> anyhow::Result<()> {
             }
             if let Ok(mut guard) = settings.lock() {
                 guard.active_model = model.path.to_string_lossy().to_string();
+                guard.semantic_enabled = true;
                 guard.set_device_index(ui.get_semantic_device());
                 guard.similarity = model.threshold;
                 guard.upsert_model(InstalledModel {
@@ -1085,6 +1091,9 @@ fn main() -> anyhow::Result<()> {
             let was_active = if let Ok(mut guard) = settings.lock() {
                 let was_active = guard.active_model == model.path.to_string_lossy();
                 guard.remove_model(&model.path);
+                if was_active {
+                    guard.semantic_enabled = false;
+                }
                 let _ = guard.save();
                 was_active
             } else {
@@ -1408,18 +1417,29 @@ fn main() -> anyhow::Result<()> {
             cancel.store(false, Ordering::Relaxed);
             save_ui_settings(&ui, &settings, &folders);
 
-            let exclude_dirs = if ui.get_exclude_trash() {
-                settings
-                    .lock()
-                    .ok()
-                    .map(|guard| guard.trash_dirs.clone())
-                    .unwrap_or_default()
+            let (exclude_dirs, exclude_paths) = if ui.get_exclude_trash() {
+                let guard = settings.lock().ok();
+                let dirs = guard
+                    .as_ref()
+                    .map(|guard| guard.effective_trash_dirs())
+                    .unwrap_or_else(|| Settings::default().trash_dirs);
+                drop(guard);
+                // Never scan the folder where Move sends duplicates, even if
+                // the user picked a custom name outside `trash_dirs`.
+                let destination = ui.get_move_dest().to_string();
+                let paths = if destination.trim().is_empty() {
+                    Vec::new()
+                } else {
+                    vec![PathBuf::from(destination.trim())]
+                };
+                (dirs, paths)
             } else {
-                Vec::new()
+                (Vec::new(), Vec::new())
             };
             let mut cfg = ScanConfig {
                 folders: folders.borrow().clone(),
                 exclude_dirs,
+                exclude_paths,
                 recursive: ui.get_recursive(),
                 only_identical: ui.get_only_identical(),
                 compare_media_content: ui.get_compare_media(),
@@ -1762,6 +1782,82 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
+    // ---- actions on both files of a row (Shift+T/M/D) ----------------------
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        let ui_stats = ui_stats.clone();
+        let preview_gen = preview_gen.clone();
+        ui.on_trash_row_both(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            apply_pair_action(
+                &ui,
+                &rows,
+                &tr,
+                &ui_stats,
+                &preview_gen,
+                index,
+                PairVerb::Trash,
+                None,
+            );
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        let ui_stats = ui_stats.clone();
+        let preview_gen = preview_gen.clone();
+        ui.on_delete_row_both(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            apply_pair_action(
+                &ui,
+                &rows,
+                &tr,
+                &ui_stats,
+                &preview_gen,
+                index,
+                PairVerb::Delete,
+                None,
+            );
+        });
+    }
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        let ui_stats = ui_stats.clone();
+        let preview_gen = preview_gen.clone();
+        ui.on_move_row_both(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let tr = Tr::new(lang.get());
+            let dest = PathBuf::from(ui.get_move_dest().to_string());
+            if dest.as_os_str().is_empty() {
+                ui.set_status(tr.status_move_dest_missing().into());
+                return;
+            }
+            apply_pair_action(
+                &ui,
+                &rows,
+                &tr,
+                &ui_stats,
+                &preview_gen,
+                index,
+                PairVerb::Move,
+                Some(&dest),
+            );
+        });
+    }
+
     // ---- bulk actions -------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
@@ -2051,6 +2147,7 @@ fn save_ui_settings(
             guard.window_height = (size.height as f32 / scale).clamp(600.0, 12000.0);
         }
         guard.exclude_trash = ui.get_exclude_trash();
+        guard.semantic_enabled = ui.get_semantic_enabled();
         if let Err(error) = guard.save() {
             umdf_core::log_error(format_args!("UMDF: could not save config.toml: {error}"));
         }
@@ -2072,6 +2169,103 @@ fn register_bundled_fonts() {
             );
         }
     });
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PairVerb {
+    Trash,
+    Move,
+    Delete,
+}
+
+/// Apply an action to both files of the selected row (Shift+T/M/D).
+///
+/// Every row that points at one of the removed files is dropped, so deleting
+/// the group reference does not leave other rows showing a path that no longer
+/// exists.
+#[allow(clippy::too_many_arguments)]
+fn apply_pair_action(
+    ui: &AppWindow,
+    rows: &VecModel<RowItem>,
+    tr: &Tr,
+    stats: &RefCell<UiStats>,
+    preview_gen: &AtomicU64,
+    index: i32,
+    verb: PairVerb,
+    destination: Option<&Path>,
+) {
+    if index < 0 {
+        return;
+    }
+    let Some(row) = rows.row_data(index as usize) else {
+        return;
+    };
+    let paths = [
+        PathBuf::from(row.original_path.as_str()),
+        PathBuf::from(row.duplicate_path.as_str()),
+    ];
+    let mut removed_keys: HashSet<String> = HashSet::new();
+    let mut removed_bytes = 0u64;
+    let mut failed: Option<PathBuf> = None;
+
+    if verb == PairVerb::Move {
+        if let Some(destination) = destination {
+            let _ = std::fs::create_dir_all(destination);
+        }
+    }
+
+    for path in &paths {
+        if !path.is_file() {
+            failed = Some(path.clone());
+            continue;
+        }
+        let size = std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
+        let ok = match verb {
+            PairVerb::Trash => trash::delete(path).is_ok(),
+            PairVerb::Delete => std::fs::remove_file(path).is_ok(),
+            PairVerb::Move => destination.is_some_and(|destination| {
+                let target = umdf_core::action::unique_destination(destination, path);
+                std::fs::rename(path, &target).is_ok()
+            }),
+        };
+        if ok {
+            removed_keys.insert(path_key(path));
+            removed_bytes += size;
+        } else {
+            failed = Some(path.clone());
+        }
+    }
+
+    let mut kept = Vec::new();
+    for row in rows.iter() {
+        let touches_removed = removed_keys
+            .contains(&path_key(Path::new(row.original_path.as_str())))
+            || removed_keys.contains(&path_key(Path::new(row.duplicate_path.as_str())));
+        if !touches_removed {
+            kept.push(row);
+        }
+    }
+    rows.set_vec(kept);
+    update_counters(ui, rows, tr, stats, removed_bytes);
+    advance_after_removal(ui, rows, tr, index as usize, preview_gen);
+
+    if let Some(path) = failed {
+        ui.set_status(
+            match verb {
+                PairVerb::Trash => tr.status_trash_failed(&path),
+                PairVerb::Move => tr.status_move_failed(&path),
+                PairVerb::Delete => tr.status_delete_failed(&path),
+            }
+            .into(),
+        );
+    } else {
+        let message = match verb {
+            PairVerb::Trash => tr.status_trashed_pair(&paths[0], &paths[1]),
+            PairVerb::Move => tr.status_moved_pair(&paths[0], &paths[1]),
+            PairVerb::Delete => tr.status_deleted_pair(&paths[0], &paths[1]),
+        };
+        ui.set_status(message.into());
+    }
 }
 
 fn verb_for(kind: &str) -> Verb {

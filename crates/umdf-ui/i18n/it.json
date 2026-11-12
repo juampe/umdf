@@ -56,7 +56,7 @@
     "star": "Imposta come riferimento",
     "out": "Rimuovi dal gruppo",
     "manual_reference": "Riferimento manuale ★",
-    "shortcuts_hint": "Invio anteprima · Esc chiudi · t cestino · m sposta · d elimina · s riferimento · o rimuovi · 1/2 ruota",
+    "shortcuts_hint": "Invio anteprima · Esc chiudi · t cestino · m sposta · d elimina · s riferimento · o rimuovi · 1/2 ruota · Maiusc+T/M/D entrambi",
     "semantic_unavailable": "La ricerca semantica non è inclusa in questa build. Compila con --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolleranza di grigio",
     "trash_all": "Sposta tutti i duplicati nel cestino",
@@ -197,7 +197,10 @@
     "status_starred": "{path} è ora il riferimento del suo gruppo.",
     "manual_reference_reason": "Hai scelto questa copia come riferimento.",
     "comparison_cache_cleared": "Risultati di confronto svuotati; la prossima analisi ricalcolerà le coppie.",
-    "status_out": "Rimosso dal gruppo (il file non è stato eliminato): {path}"
+    "status_out": "Rimosso dal gruppo (il file non è stato eliminato): {path}",
+    "status_trashed_pair": "Entrambi spostati nel cestino: {a} e {b}",
+    "status_deleted_pair": "Entrambi eliminati: {a} e {b}",
+    "status_moved_pair": "Entrambi spostati: {a} e {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ seleziona · Invio apre l’anteprima ingrandita · Esc la chiude · t cestino · m sposta · d elimina · s imposta il duplicato come riferimento del gruppo · o lo rimuove dal gruppo · 1/2 ruota l’originale/il duplicato."
+      "text": "↑/↓ seleziona · Invio apre l’anteprima ingrandita · Esc la chiude · t cestino · m sposta · d elimina · s imposta il duplicato come riferimento del gruppo · o lo rimuove dal gruppo · 1/2 ruota l’originale/il duplicato. Maiusc+T/M/D applica cestino/sposta/elimina a entrambi i file della riga."
     },
     {
       "kind": 2,

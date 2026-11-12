@@ -56,7 +56,7 @@
     "star": "Set as reference",
     "out": "Remove from group",
     "manual_reference": "Manual reference ★",
-    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star · o out · 1/2 rotate",
+    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star · o out · 1/2 rotate · Shift+T/M/D both",
     "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
     "opt_tolerance": "Pixel tolerance",
     "trash_all": "Trash all duplicates",
@@ -197,7 +197,10 @@
     "status_starred": "{path} is now the reference for its group.",
     "manual_reference_reason": "You chose this copy as the reference.",
     "comparison_cache_cleared": "Comparison results cleared; the next scan will recompute the pairs.",
-    "status_out": "Removed from its group (the file was not deleted): {path}"
+    "status_out": "Removed from its group (the file was not deleted): {path}",
+    "status_trashed_pair": "Moved both to trash: {a} and {b}",
+    "status_deleted_pair": "Deleted both: {a} and {b}",
+    "status_moved_pair": "Moved both: {a} and {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ select · Enter opens the enlarged preview · Esc closes it · t trash · m move · d delete · s set the duplicate as the group reference · o remove it from the group · 1/2 rotate the original/duplicate."
+      "text": "↑/↓ select · Enter opens the enlarged preview · Esc closes it · t trash · m move · d delete · s set the duplicate as the group reference · o remove it from the group · 1/2 rotate the original/duplicate. Shift+T/M/D applies trash/move/delete to both files in the row."
     },
     {
       "kind": 2,

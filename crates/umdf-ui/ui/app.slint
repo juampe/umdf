@@ -662,6 +662,9 @@ export component AppWindow inherits Window {
     callback trash-row(int);
     callback move-row(int);
     callback delete-row(int);
+    callback trash-row-both(int);
+    callback move-row-both(int);
+    callback delete-row-both(int);
     callback star-row(int);
     callback out-row(int);
     callback apply-all(string);
@@ -714,31 +717,43 @@ export component AppWindow inherits Window {
                 }
                 return accept;
             }
-            if (event.text == Key.T) {
+            if (event.text == Key.T || event.text == "T") {
                 if (root.selected-row >= 0) {
-                    root.trash-row(root.selected-row);
+                    if (event.modifiers.shift) {
+                        root.trash-row-both(root.selected-row);
+                    } else {
+                        root.trash-row(root.selected-row);
+                    }
                 }
                 return accept;
             }
-            if (event.text == Key.M) {
+            if (event.text == Key.M || event.text == "M") {
                 if (root.selected-row >= 0) {
-                    root.move-row(root.selected-row);
+                    if (event.modifiers.shift) {
+                        root.move-row-both(root.selected-row);
+                    } else {
+                        root.move-row(root.selected-row);
+                    }
                 }
                 return accept;
             }
-            if (event.text == Key.D) {
+            if (event.text == Key.D || event.text == "D") {
                 if (root.selected-row >= 0) {
-                    root.delete-row(root.selected-row);
+                    if (event.modifiers.shift) {
+                        root.delete-row-both(root.selected-row);
+                    } else {
+                        root.delete-row(root.selected-row);
+                    }
                 }
                 return accept;
             }
-            if (event.text == Key.S) {
+            if (event.text == Key.S || event.text == "S") {
                 if (root.selected-row >= 0) {
                     root.star-row(root.selected-row);
                 }
                 return accept;
             }
-            if (event.text == Key.O) {
+            if (event.text == Key.O || event.text == "O") {
                 if (root.selected-row >= 0) {
                     root.out-row(root.selected-row);
                 }
@@ -1065,6 +1080,7 @@ export component AppWindow inherits Window {
                                         text: root.strings.opt_semantic;
                                         checked <=> root.semantic-enabled;
                                         enabled: root.embeddings-supported;
+                                        toggled => { root.persist-settings(); }
                                     }
                                     if !root.embeddings-supported && !root.semantic-runtime-missing : Text {
                                         text: root.strings.semantic_unavailable;
@@ -1560,31 +1576,43 @@ export component AppWindow inherits Window {
                             scope.focus();
                             return accept;
                         }
-                        if (event.text == Key.T) {
+                        if (event.text == Key.T || event.text == "T") {
                             if (root.selected-row >= 0) {
-                                root.trash-row(root.selected-row);
+                                if (event.modifiers.shift) {
+                                    root.trash-row-both(root.selected-row);
+                                } else {
+                                    root.trash-row(root.selected-row);
+                                }
                             }
                             return accept;
                         }
-                        if (event.text == Key.M) {
+                        if (event.text == Key.M || event.text == "M") {
                             if (root.selected-row >= 0) {
-                                root.move-row(root.selected-row);
+                                if (event.modifiers.shift) {
+                                    root.move-row-both(root.selected-row);
+                                } else {
+                                    root.move-row(root.selected-row);
+                                }
                             }
                             return accept;
                         }
-                        if (event.text == Key.D) {
+                        if (event.text == Key.D || event.text == "D") {
                             if (root.selected-row >= 0) {
-                                root.delete-row(root.selected-row);
+                                if (event.modifiers.shift) {
+                                    root.delete-row-both(root.selected-row);
+                                } else {
+                                    root.delete-row(root.selected-row);
+                                }
                             }
                             return accept;
                         }
-                        if (event.text == Key.S) {
+                        if (event.text == Key.S || event.text == "S") {
                             if (root.selected-row >= 0) {
                                 root.star-row(root.selected-row);
                             }
                             return accept;
                         }
-                        if (event.text == Key.O) {
+                        if (event.text == Key.O || event.text == "O") {
                             if (root.selected-row >= 0) {
                                 root.out-row(root.selected-row);
                             }

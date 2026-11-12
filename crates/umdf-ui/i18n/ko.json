@@ -56,7 +56,7 @@
     "star": "참조로 설정",
     "out": "그룹에서 제외",
     "manual_reference": "수동 참조 ★",
-    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조 · o 제외 · 1/2 회전",
+    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조 · o 제외 · 1/2 회전 · Shift+T/M/D 둘 다",
     "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
     "opt_tolerance": "픽셀 허용 오차",
     "trash_all": "모든 중복을 휴지통으로",
@@ -197,7 +197,10 @@
     "status_starred": "{path}이(가) 그룹의 참조가 되었습니다.",
     "manual_reference_reason": "이 복사본을 참조로 선택했습니다.",
     "comparison_cache_cleared": "비교 결과를 지웠습니다. 다음 스캔에서 쌍을 다시 계산합니다.",
-    "status_out": "그룹에서 제외했습니다(파일은 삭제되지 않음): {path}"
+    "status_out": "그룹에서 제외했습니다(파일은 삭제되지 않음): {path}",
+    "status_trashed_pair": "두 파일을 휴지통으로 이동했습니다: {a} 및 {b}",
+    "status_deleted_pair": "두 파일을 삭제했습니다: {a} 및 {b}",
+    "status_moved_pair": "두 파일을 이동했습니다: {a} 및 {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ 선택 · Enter 확대 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 중복을 그룹 참조로 설정 · o 그룹에서 제외 · 1/2 원본/중복 회전."
+      "text": "↑/↓ 선택 · Enter 확대 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 중복을 그룹 참조로 설정 · o 그룹에서 제외 · 1/2 원본/중복 회전. Shift+T/M/D는 행의 두 파일에 휴지통/이동/삭제를 적용합니다."
     },
     {
       "kind": 2,

@@ -56,7 +56,7 @@
     "star": "Als Referenz festlegen",
     "out": "Aus Gruppe entfernen",
     "manual_reference": "Manuelle Referenz ★",
-    "shortcuts_hint": "Enter Vorschau · Esc schließen · t Papierkorb · m verschieben · d löschen · s Referenz · o entfernen · 1/2 drehen",
+    "shortcuts_hint": "Enter Vorschau · Esc schließen · t Papierkorb · m verschieben · d löschen · s Referenz · o entfernen · 1/2 drehen · Umschalt+T/M/D beide",
     "semantic_unavailable": "Die semantische Suche ist in diesem Build nicht enthalten. Kompilieren Sie mit --features embeddings und ONNX Runtime.",
     "opt_tolerance": "Graustufen-Toleranz",
     "trash_all": "Alle Duplikate in den Papierkorb",
@@ -197,7 +197,10 @@
     "status_starred": "{path} ist jetzt die Referenz der Gruppe.",
     "manual_reference_reason": "Sie haben diese Kopie als Referenz gewählt.",
     "comparison_cache_cleared": "Vergleichsergebnisse gelöscht; der nächste Scan berechnet die Paare neu.",
-    "status_out": "Aus der Gruppe entfernt (die Datei wurde nicht gelöscht): {path}"
+    "status_out": "Aus der Gruppe entfernt (die Datei wurde nicht gelöscht): {path}",
+    "status_trashed_pair": "Beide in den Papierkorb verschoben: {a} und {b}",
+    "status_deleted_pair": "Beide gelöscht: {a} und {b}",
+    "status_moved_pair": "Beide verschoben: {a} und {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ auswählen · Enter öffnet die große Vorschau · Esc schließt sie · t Papierkorb · m verschieben · d löschen · s legt das Duplikat als Gruppenreferenz fest · o entfernt es aus der Gruppe · 1/2 dreht Original/Duplikat."
+      "text": "↑/↓ auswählen · Enter öffnet die große Vorschau · Esc schließt sie · t Papierkorb · m verschieben · d löschen · s legt das Duplikat als Gruppenreferenz fest · o entfernt es aus der Gruppe · 1/2 dreht Original/Duplikat. Umschalt+T/M/D wendet Papierkorb/Verschieben/Löschen auf beide Dateien der Zeile an."
     },
     {
       "kind": 2,

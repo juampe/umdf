@@ -23,6 +23,9 @@ pub struct Settings {
     pub language: String,
     /// Cosine-similarity threshold for semantic comparisons (0..1).
     pub similarity: f32,
+    /// Whether semantic (embedding) search is enabled. Kept separate from
+    /// `active_model` so disabling it survives a restart.
+    pub semantic_enabled: bool,
     /// Absolute path of the active model, empty when none is selected.
     pub active_model: String,
     /// Models registered after a download (or added by hand).
@@ -78,6 +81,7 @@ impl Default for Settings {
             device: "cpu".to_string(),
             language: "en".to_string(),
             similarity: 0.90,
+            semantic_enabled: false,
             active_model: String::new(),
             models: Vec::new(),
             folders: Vec::new(),
@@ -121,13 +125,28 @@ impl Settings {
     pub fn load() -> Self {
         let path = Self::path();
         if path.is_file() {
-            match std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|text| toml::from_str::<Settings>(&text).ok())
-            {
-                Some(settings) => return settings,
-                None => umdf_core::log_error(format_args!(
-                    "UMDF: could not parse {}; using defaults",
+            match std::fs::read_to_string(&path) {
+                Ok(text) => match toml::from_str::<Settings>(&text) {
+                    Ok(mut settings) => {
+                        // Before 0.6.6 the AI toggle was inferred from the
+                        // active model. Keep that behaviour for existing
+                        // configurations, then let the saved flag take over.
+                        if !text.contains("semantic_enabled")
+                            && !settings.active_model.is_empty()
+                            && Path::new(&settings.active_model).is_file()
+                        {
+                            settings.semantic_enabled = true;
+                            let _ = settings.save();
+                        }
+                        return settings;
+                    }
+                    Err(_) => umdf_core::log_error(format_args!(
+                        "UMDF: could not parse {}; using defaults",
+                        path.display()
+                    )),
+                },
+                Err(_) => umdf_core::log_error(format_args!(
+                    "UMDF: could not read {}; using defaults",
                     path.display()
                 )),
             }
@@ -168,6 +187,19 @@ impl Settings {
 
     pub fn set_device_index(&mut self, index: i32) {
         self.device = if index == 0 { "cuda" } else { "cpu" }.to_string();
+    }
+
+    /// Trash directories to skip during walks.
+    ///
+    /// Old configurations (or one edited by hand) may have an empty list. Fall
+    /// back to the built-in defaults so moving files to `.dtrash` can never
+    /// make them reappear in a scan by accident.
+    pub fn effective_trash_dirs(&self) -> Vec<String> {
+        if self.trash_dirs.is_empty() {
+            Settings::default().trash_dirs
+        } else {
+            self.trash_dirs.clone()
+        }
     }
 
     pub fn upsert_model(&mut self, model: InstalledModel) {
@@ -286,6 +318,23 @@ mod tests {
         assert!(settings.trash_dirs.iter().any(|d| d == ".dtrash"));
         assert_eq!(settings.metric, "dpf");
         assert_eq!(settings.keep_policy, "original");
+        assert!(!settings.semantic_enabled);
+        assert_eq!(
+            settings.effective_trash_dirs(),
+            Settings::default().trash_dirs
+        );
+    }
+
+    #[test]
+    fn empty_trash_dirs_fall_back_to_the_defaults() {
+        let settings = Settings {
+            trash_dirs: Vec::new(),
+            ..Default::default()
+        };
+        assert!(settings
+            .effective_trash_dirs()
+            .iter()
+            .any(|d| d == ".dtrash"));
     }
 
     #[test]
@@ -297,6 +346,7 @@ mod tests {
             recursive: false,
             pixel_similarity: 87.0,
             exclude_trash: false,
+            semantic_enabled: true,
             folders: vec![PathBuf::from("/tmp/photos")],
             ..Default::default()
         };
@@ -316,6 +366,7 @@ mod tests {
         assert!(!back.recursive);
         assert!((back.pixel_similarity - 87.0).abs() < f32::EPSILON);
         assert!(!back.exclude_trash);
+        assert!(back.semantic_enabled);
         assert_eq!(back.folders, vec![PathBuf::from("/tmp/photos")]);
         assert!((back.similarity - 0.83).abs() < f32::EPSILON);
         assert_eq!(back.models.len(), 1);

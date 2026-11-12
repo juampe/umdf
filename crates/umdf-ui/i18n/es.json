@@ -56,7 +56,7 @@
     "star": "Usar como referencia",
     "out": "Sacar del grupo",
     "manual_reference": "Referencia manual ★",
-    "shortcuts_hint": "Intro vista previa · Esc cerrar · t papelera · m mover · d borrar · s referencia · o fuera · 1/2 rotar",
+    "shortcuts_hint": "Intro vista previa · Esc cerrar · t papelera · m mover · d borrar · s referencia · o fuera · 1/2 rotar · Mayús+T/M/D ambos",
     "semantic_unavailable": "Esta compilación no incluye búsqueda semántica. Compila con --features embeddings y ONNX Runtime.",
     "opt_tolerance": "Tolerancia de gris",
     "trash_all": "A la papelera",
@@ -197,7 +197,10 @@
     "status_starred": "{path} es ahora la referencia de su grupo.",
     "manual_reference_reason": "Has elegido esta copia como referencia.",
     "comparison_cache_cleared": "Resultados de comparación vaciados; el próximo escaneo recalculará los pares.",
-    "status_out": "Sacado de su grupo (el archivo no se ha borrado): {path}"
+    "status_out": "Sacado de su grupo (el archivo no se ha borrado): {path}",
+    "status_trashed_pair": "Enviados ambos a la papelera: {a} y {b}",
+    "status_deleted_pair": "Eliminados ambos: {a} y {b}",
+    "status_moved_pair": "Movidos ambos: {a} y {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ selecciona · Intro abre la vista ampliada · Esc la cierra · t papelera · m mover · d borrar · s usar el duplicado como referencia del grupo · o sacarlo del grupo · 1/2 rotar el original/duplicado."
+      "text": "↑/↓ selecciona · Intro abre la vista ampliada · Esc la cierra · t papelera · m mover · d borrar · s usar el duplicado como referencia del grupo · o sacarlo del grupo · 1/2 rotar el original/duplicado. Mayús+T/M/D aplica papelera/mover/eliminar a los dos archivos de la fila."
     },
     {
       "kind": 2,

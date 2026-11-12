@@ -56,7 +56,7 @@
     "star": "Définir comme référence",
     "out": "Retirer du groupe",
     "manual_reference": "Référence manuelle ★",
-    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence · o retirer · 1/2 pivoter",
+    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence · o retirer · 1/2 pivoter · Maj+T/M/D les deux",
     "semantic_unavailable": "La recherche sémantique n'est pas incluse dans cette compilation. Compilez avec --features embeddings et ONNX Runtime.",
     "opt_tolerance": "Tolérance de gris",
     "trash_all": "Mettre tous les doublons à la corbeille",
@@ -197,7 +197,10 @@
     "status_starred": "{path} est désormais la référence de son groupe.",
     "manual_reference_reason": "Vous avez choisi cette copie comme référence.",
     "comparison_cache_cleared": "Résultats de comparaison vidés ; la prochaine analyse recalculera les paires.",
-    "status_out": "Retiré de son groupe (le fichier n'a pas été supprimé) : {path}"
+    "status_out": "Retiré de son groupe (le fichier n'a pas été supprimé) : {path}",
+    "status_trashed_pair": "Les deux déplacés vers la corbeille : {a} et {b}",
+    "status_deleted_pair": "Les deux supprimés : {a} et {b}",
+    "status_moved_pair": "Les deux déplacés : {a} et {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ sélectionne · Entrée ouvre l’aperçu agrandi · Échap le ferme · t corbeille · m déplacer · d supprimer · s définit le doublon comme référence du groupe · o le retire du groupe · 1/2 fait pivoter l’original/le doublon."
+      "text": "↑/↓ sélectionne · Entrée ouvre l’aperçu agrandi · Échap le ferme · t corbeille · m déplacer · d supprimer · s définit le doublon comme référence du groupe · o le retire du groupe · 1/2 fait pivoter l’original/le doublon. Maj+T/M/D applique corbeille/déplacer/supprimer aux deux fichiers de la ligne."
     },
     {
       "kind": 2,

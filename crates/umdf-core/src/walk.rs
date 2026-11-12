@@ -47,6 +47,20 @@ pub fn collect_candidates_cancellable(
     let mut out = Vec::new();
     let mut seen = BTreeSet::new();
     let mut visited = 0usize;
+    let mut skipped_dirs = 0usize;
+
+    let excluded: Vec<String> = cfg
+        .exclude_dirs
+        .iter()
+        .map(|name| name.trim().trim_matches(['/', '\\']).to_ascii_lowercase())
+        .filter(|name| !name.is_empty())
+        .collect();
+    let excluded_paths: Vec<String> = cfg
+        .exclude_paths
+        .iter()
+        .map(|path| crate::config::path_key(path))
+        .filter(|path| !path.is_empty())
+        .collect();
 
     for folder in &cfg.folders {
         let walker = if cfg.recursive {
@@ -55,19 +69,17 @@ pub fn collect_candidates_cancellable(
             WalkDir::new(folder).max_depth(1).follow_links(false)
         };
 
-        let excluded: Vec<String> = cfg
-            .exclude_dirs
-            .iter()
-            .map(|name| name.trim().trim_matches(['/', '\\']).to_ascii_lowercase())
-            .filter(|name| !name.is_empty())
-            .collect();
         let entries = walker.into_iter().filter_entry(|entry| {
             // Never skip the folder the user explicitly selected.
             if entry.depth() == 0 || !entry.file_type().is_dir() {
                 return true;
             }
             let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            !excluded.contains(&name)
+            if excluded.contains(&name) || path_is_under_any(entry.path(), &excluded_paths) {
+                skipped_dirs += 1;
+                return false;
+            }
+            true
         });
         for entry in entries.filter_map(Result::ok) {
             visited += 1;
@@ -119,8 +131,30 @@ pub fn collect_candidates_cancellable(
         }
     }
 
+    if skipped_dirs > 0 {
+        crate::log_error(format_args!(
+            "UMDF: walk skipped {skipped_dirs} trash directories (names: {excluded:?}, paths: {excluded_paths:?})"
+        ));
+    }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     (out, false)
+}
+
+/// True when `path` is one of the excluded directories or a descendant.
+///
+/// Keys come from [`crate::config::path_key`], so Windows paths are compared
+/// case-insensitively and without the extended-length prefix.
+fn path_is_under_any(path: &Path, excluded: &[String]) -> bool {
+    if excluded.is_empty() {
+        return false;
+    }
+    let key = crate::config::path_key(path);
+    excluded.iter().any(|root| {
+        key == *root
+            || key
+                .strip_prefix(root)
+                .is_some_and(|rest| rest.starts_with('/') || rest.starts_with('\\'))
+    })
 }
 
 /// True when `path` lives inside `root` (used by the "shortest path" policy).
@@ -175,6 +209,28 @@ mod tests {
         };
         let files = collect_candidates(&cfg);
         assert_eq!(files.len(), 1);
+        assert!(files[0].path.ends_with("keep/a.jpg"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn excludes_an_explicit_destination_directory() {
+        let root = std::env::temp_dir().join(format!("umdf-walk-dest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("keep")).unwrap();
+        std::fs::create_dir_all(root.join("Moved here")).unwrap();
+        std::fs::write(root.join("keep").join("a.jpg"), b"a").unwrap();
+        std::fs::write(root.join("Moved here").join("b.jpg"), b"b").unwrap();
+
+        let cfg = ScanConfig {
+            folders: vec![root.clone()],
+            extensions: vec!["jpg".to_string()],
+            exclude_paths: vec![root.join("Moved here")],
+            ..Default::default()
+        };
+        let files = collect_candidates(&cfg);
+        assert_eq!(files.len(), 1, "the move destination must not be scanned");
         assert!(files[0].path.ends_with("keep/a.jpg"));
 
         let _ = std::fs::remove_dir_all(&root);

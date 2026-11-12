@@ -56,7 +56,7 @@
     "star": "设为参考",
     "out": "从组中移除",
     "manual_reference": "手动参考 ★",
-    "shortcuts_hint": "Enter 预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 设为参照 · o 移出组 · 1/2 旋转",
+    "shortcuts_hint": "Enter 预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 设为参照 · o 移出组 · 1/2 旋转 · Shift+T/M/D 两个",
     "semantic_unavailable": "此版本不包含语义搜索。请使用 --features embeddings 和 ONNX Runtime 重新编译。",
     "opt_tolerance": "像素容差",
     "trash_all": "全部移至回收站",
@@ -197,7 +197,10 @@
     "status_starred": "{path} 现在是其分组的参考。",
     "manual_reference_reason": "您选择此副本作为参考。",
     "comparison_cache_cleared": "比较结果已清除；下次扫描将重新计算配对。",
-    "status_out": "已从组中移除（文件未被删除）：{path}"
+    "status_out": "已从组中移除（文件未被删除）：{path}",
+    "status_trashed_pair": "已将两个文件移入回收站：{a} 和 {b}",
+    "status_deleted_pair": "已删除两个文件：{a} 和 {b}",
+    "status_moved_pair": "已移动两个文件：{a} 和 {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ 选择 · Enter 打开放大预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 将重复项设为分组参考 · o 将其移出组 · 1/2 旋转原图/重复项。"
+      "text": "↑/↓ 选择 · Enter 打开放大预览 · Esc 关闭 · t 回收站 · m 移动 · d 删除 · s 将重复项设为分组参考 · o 将其移出组 · 1/2 旋转原图/重复项。 Shift+T/M/D 会对行内两个文件执行回收站/移动/删除。"
     },
     {
       "kind": 2,

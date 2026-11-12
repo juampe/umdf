@@ -20,7 +20,9 @@ matches, and proposes which copy to keep using an explainable
 * **Groups and decisions** — union-find groups and six keep policies
   (`original` by default).
 * **Safe actions** — trash, move or delete with a dry run, confirmation for
-  bulk actions and a hard "leave one" guarantee.
+  bulk actions and a hard "leave one" guarantee. Lowercase `t`/`m`/`d` act on
+  the duplicate; hold Shift (`T`/`M`/`D`) to apply the action to both files in
+  the row.
 * **Manual decisions** — star a copy to make it the reference of its group, or
   take a copy out of a group when it does not look like the reference. Star and
   out choices are saved in `cache.db` and survive rescans; "out" never deletes
@@ -56,9 +58,9 @@ is disabled and the UI explains how to install ONNX Runtime and set
 
 | Format | Command |
 |---|---|
-| `.deb` | `sudo apt install ./umdf_0.6.5_amd64.deb` |
-| `.rpm` | `sudo dnf install ./umdf-0.6.5-1.x86_64.rpm` |
-| `.AppImage` | `chmod +x umdf-0.6.5-x86_64.AppImage && ./umdf-0.6.5-x86_64.AppImage` |
+| `.deb` | `sudo apt install ./umdf_0.6.6_amd64.deb` |
+| `.rpm` | `sudo dnf install ./umdf-0.6.6-1.x86_64.rpm` |
+| `.AppImage` | `chmod +x umdf-0.6.6-x86_64.AppImage && ./umdf-0.6.6-x86_64.AppImage` |
 | `.tar.gz` | extract and run `umdf` / `umdf-ui`; bundles ONNX Runtime |
 
 The packages install `umdf` and `umdf-ui`, a desktop entry, icons and the
@@ -314,7 +316,8 @@ Layout is a modern light/dark card design:
 * **Delete in chain**: after Trash / Move / Delete the next row is selected
   automatically (and its preview loaded), so you can keep comparing and
   deleting. `↑`/`↓` move the selection and `Supr`/`Delete` removes the selected
-  duplicate. Counters update live.
+  duplicate. Hold Shift with `T`/`M`/`D` to act on both files in the row.
+  Counters update live.
 * **Help** button with a formatted, scrollable guide (including what the gray
   tolerance means).
 * **Parallel by default**: decoding, hashing and comparison use a dedicated

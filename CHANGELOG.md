@@ -4,6 +4,33 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.6] - 2026-11-12
+
+### Added
+
+- Shift shortcuts act on both files of the selected row: `Shift+T` trashes,
+  `Shift+M` moves and `Shift+D` deletes the original and the duplicate. The
+  lowercase keys keep acting only on the duplicate. Rows that referenced either
+  removed file are dropped so the list never shows missing paths.
+- The Move destination is excluded from scans even when it is a custom folder
+  not listed in `trash_dirs`, so moved duplicates never reappear.
+- The walk log records how many trash directories were skipped and which
+  names/paths were used, making exclusion problems visible in `umdf.log`.
+
+### Fixed
+
+- The semantic-search option is now persisted in `config.toml`
+  (`semantic_enabled`). Disabling it survives a restart instead of being
+  re-enabled whenever a model is registered.
+- An empty `trash_dirs` list falls back to the built-in defaults instead of
+  scanning `.dtrash` and other trash folders.
+- The semantic checkbox saves immediately when toggled, and choosing or
+  removing the active model keeps the stored flag in sync.
+
+### Changed
+
+- Shortcut hints and Help in all ten languages document the Shift actions.
+
 ## [0.6.5] - 2026-11-11
 
 ### Added

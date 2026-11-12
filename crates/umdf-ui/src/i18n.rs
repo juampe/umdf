@@ -539,6 +539,27 @@ impl Tr {
         self.fmt("status_moved", &[("path", display_path(path))])
     }
 
+    pub fn status_trashed_pair(&self, a: &Path, b: &Path) -> String {
+        self.fmt(
+            "status_trashed_pair",
+            &[("a", display_path(a)), ("b", display_path(b))],
+        )
+    }
+
+    pub fn status_deleted_pair(&self, a: &Path, b: &Path) -> String {
+        self.fmt(
+            "status_deleted_pair",
+            &[("a", display_path(a)), ("b", display_path(b))],
+        )
+    }
+
+    pub fn status_moved_pair(&self, a: &Path, b: &Path) -> String {
+        self.fmt(
+            "status_moved_pair",
+            &[("a", display_path(a)), ("b", display_path(b))],
+        )
+    }
+
     pub fn status_move_failed(&self, path: &Path) -> String {
         self.fmt("status_move_failed", &[("path", display_path(path))])
     }
@@ -856,6 +877,9 @@ mod tests {
                 "status_finished_skipped",
                 "status_cache_hits",
                 "status_paused",
+                "status_trashed_pair",
+                "status_deleted_pair",
+                "status_moved_pair",
                 "help_config",
             ] {
                 assert!(

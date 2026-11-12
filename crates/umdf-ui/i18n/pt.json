@@ -56,7 +56,7 @@
     "star": "Definir como referência",
     "out": "Remover do grupo",
     "manual_reference": "Referência manual ★",
-    "shortcuts_hint": "Enter pré-visualizar · Esc fechar · t lixo · m mover · d apagar · s referência · o remover · 1/2 rodar",
+    "shortcuts_hint": "Enter pré-visualizar · Esc fechar · t lixo · m mover · d apagar · s referência · o remover · 1/2 rodar · Shift+T/M/D ambos",
     "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolerância de cinza",
     "trash_all": "Mover todos os duplicados para o lixo",
@@ -197,7 +197,10 @@
     "status_starred": "{path} é agora a referência do seu grupo.",
     "manual_reference_reason": "Escolheu esta cópia como referência.",
     "comparison_cache_cleared": "Resultados de comparação limpos; o próximo escaneamento recalcula os pares.",
-    "status_out": "Removido do grupo (o ficheiro não foi apagado): {path}"
+    "status_out": "Removido do grupo (o ficheiro não foi apagado): {path}",
+    "status_trashed_pair": "Ambos movidos para a lixeira: {a} e {b}",
+    "status_deleted_pair": "Ambos excluídos: {a} e {b}",
+    "status_moved_pair": "Ambos movidos: {a} e {b}"
   },
   "help": [
     {
@@ -450,7 +453,7 @@
     },
     {
       "kind": 2,
-      "text": "↑/↓ seleciona · Enter abre a pré-visualização ampliada · Esc fecha · t lixo · m mover · d eliminar · s define o duplicado como referência do grupo · o remove-o do grupo · 1/2 roda o original/duplicado."
+      "text": "↑/↓ seleciona · Enter abre a pré-visualização ampliada · Esc fecha · t lixo · m mover · d eliminar · s define o duplicado como referência do grupo · o remove-o do grupo · 1/2 roda o original/duplicado. Shift+T/M/D aplica lixeira/mover/excluir aos dois arquivos da linha."
     },
     {
       "kind": 2,
