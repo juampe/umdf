@@ -4,6 +4,28 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.7] - 2026-11-13
+
+### Fixed
+
+- The "original" heuristic now strongly favors the higher-quality copy when
+  both candidates have the same resolution. Bytes per pixel is the heaviest
+  signal, so a heavily recompressed 945 KB file no longer beats a 6.56 MB source
+  just because it has an older file date, richer EXIF (editors add fields) or a
+  cleaner name. The reported pair now keeps the 6.56 MB file with the
+  "better quality per pixel/bitrate" reason.
+- File-age evidence is damped when the group spans only hours or days. Copies
+  are often written moments after the original, and sync tools rewrite
+  timestamps, so small date gaps can no longer outvote a large quality gap.
+- Both preview panes are sized explicitly and therefore render at exactly the
+  same width and height, even when one heading is empty or the file names have
+  different lengths. Two copies with the same pixel dimensions now appear at
+  the same size in the preview and in the lightbox.
+
+### Changed
+
+- Help in all ten languages explains the equal-resolution quality rule.
+
 ## [0.6.6] - 2026-11-12
 
 ### Added

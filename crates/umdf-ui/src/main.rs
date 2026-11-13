@@ -1168,7 +1168,6 @@ fn main() -> anyhow::Result<()> {
             #[cfg(not(feature = "embeddings"))]
             {
                 ui.set_models_status("AI runtime is not included in this build".into());
-                return;
             }
             #[cfg(all(feature = "embeddings", not(windows)))]
             {

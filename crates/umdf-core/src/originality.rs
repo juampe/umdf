@@ -8,12 +8,19 @@
 //!
 //! | Signal | Weight | More original when… |
 //! |--------|-------:|---------------------|
-//! | resolution | 0.22 | more pixels (photos/video) |
-//! | quality    | 0.20 | more bytes per pixel (or per second of audio) |
-//! | age        | 0.20 | older file time (derivatives are written later) |
-//! | metadata   | 0.14 | richer EXIF, camera make/model present |
+//! | resolution | 0.20 | more pixels (photos/video) |
+//! | quality    | 0.34 | more bytes per pixel (or per second of audio) |
+//! | age        | 0.12 | older file time, but only when the gap is weeks/months |
+//! | metadata   | 0.10 | richer EXIF, camera make/model present |
 //! | name       | 0.14 | no "copy", "(1)", "edited", "resized", "whatsapp"… |
 //! | location   | 0.10 | DCIM/Camera/Pictures rather than Downloads/Desktop/temp |
+//!
+//! Quality is the heaviest signal by design: it is direct evidence of
+//! recompression. At identical dimensions a file that is several times larger
+//! is almost always the source, while file dates, extra EXIF (editors often add
+//! fields) and copy-marked names are weaker and easily rewritten. `W_QUALITY`
+//! deliberately exceeds `W_AGE + W_METADATA + W_NAME` so a dramatic quality
+//! gap cannot be outvoted by those proxies.
 
 use std::collections::HashMap;
 
@@ -21,11 +28,14 @@ use crate::model::{MediaItem, MediaKind};
 
 // Resolution alone must not beat the fingerprint of a derivative (copy name,
 // download folder, lower bytes-per-pixel), so it is weighted below the sum of
-// the "is this a copy?" signals.
-const W_RESOLUTION: f32 = 0.22;
-const W_QUALITY: f32 = 0.20;
-const W_AGE: f32 = 0.20;
-const W_METADATA: f32 = 0.14;
+// the "is this a copy?" signals. Quality is deliberately the heaviest signal:
+// at identical dimensions a 7x smaller file is overwhelmingly a recompressed
+// derivative, whereas an older file date is weak evidence (copies, sync tools
+// and editors often preserve or rewrite timestamps).
+const W_RESOLUTION: f32 = 0.20;
+const W_QUALITY: f32 = 0.34;
+const W_AGE: f32 = 0.12;
+const W_METADATA: f32 = 0.10;
 const W_NAME: f32 = 0.14;
 const W_LOCATION: f32 = 0.10;
 
@@ -82,7 +92,7 @@ pub fn assess_group(items: &[MediaItem], members: &[usize]) -> HashMap<usize, As
         let item = &items[*id];
         let signals = Signals {
             resolution: normalise(resolutions[pos], res_range),
-            quality: normalise(qualities[pos], qual_range),
+            quality: normalise_log(qualities[pos], qual_range),
             age: age_score(ages[pos], &ages),
             metadata: normalise(metadata[pos], meta_range),
             name: name_score(item),
@@ -129,7 +139,7 @@ pub fn assess_group(items: &[MediaItem], members: &[usize]) -> HashMap<usize, As
         {
             reasons.push(reason::QUALITY.to_string());
         }
-        if age_score(ages[pos], &ages) >= 1.0 {
+        if age_score(ages[pos], &ages) >= 0.9 {
             reasons.push(reason::AGE.to_string());
         }
         if out.get(&best).map(|a| a.signals.metadata).unwrap_or(0.0) >= 0.75 {
@@ -213,6 +223,27 @@ fn normalise(value: f64, range: Option<(f64, f64)>) -> f32 {
     }
 }
 
+/// Quality is compared on a logarithmic scale: each doubling in bytes per
+/// pixel is a comparable step in compression, no matter whether the files are
+/// tiny thumbnails or large camera JPEGs. A linear min/max scale makes the same
+/// relative difference look negligible when one outlier dominates the group.
+fn normalise_log(value: f64, range: Option<(f64, f64)>) -> f32 {
+    match range {
+        Some((lo, hi)) if hi > lo => {
+            // `ln_1p` keeps zero/negative values finite while preserving order.
+            let value = value.max(0.0).ln_1p();
+            let lo = lo.max(0.0).ln_1p();
+            let hi = hi.max(0.0).ln_1p();
+            if hi > lo {
+                ((value - lo) / (hi - lo)) as f32
+            } else {
+                0.5
+            }
+        }
+        _ => 0.5,
+    }
+}
+
 fn age_score(day: Option<i64>, all: &[Option<i64>]) -> f32 {
     let Some(day) = day else { return 0.5 };
     let mut lo = i64::MAX;
@@ -226,9 +257,14 @@ fn age_score(day: Option<i64>, all: &[Option<i64>]) -> f32 {
     if !seen || hi == lo {
         return 0.5;
     }
-    // Oldest day -> 1.0, newest -> 0.0.
+    // Oldest day -> 1.0, newest -> 0.0, but only once the group spans a
+    // meaningful amount of time. A copy written an hour (or a day) after the
+    // original is normal, and sync/editing tools rewrite timestamps, so small
+    // gaps are weak evidence. The signal saturates at 30 days.
     let span = (hi - lo) as f32;
-    ((hi - day) as f32 / span).clamp(0.0, 1.0)
+    let strength = (span / 30.0).clamp(0.0, 1.0);
+    let rank = ((hi - day) as f32 / span).clamp(0.0, 1.0);
+    0.5 + 0.5 * strength * rank
 }
 
 /// Absolute metadata richness (0..1). Normalised inside the group so that a
@@ -394,5 +430,63 @@ mod tests {
         let mut b = item(1, "b.jpg", 1, 10, 10);
         b.path = PathBuf::from("/home/me/Downloads/b.jpg");
         assert!(location_score(&a) > location_score(&b));
+    }
+
+    fn dated(mut it: MediaItem, timestamp: i64) -> MediaItem {
+        it.modified = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0);
+        it
+    }
+
+    #[test]
+    fn much_higher_quality_wins_at_equal_resolution() {
+        // Reproduces the reported pair: same 4624x3472 photo, but one copy is
+        // 945 KB and the other 6.56 MB. The smaller file is older and has no
+        // copy marker in its name; that must not make it the original.
+        let mut small = dated(
+            item(0, "2021-12-11 13.47.57.jpg", 945_000, 4624, 3472),
+            1_638_900_000, // 2021-12-07
+        );
+        // The recompressed file may even have richer EXIF (editors add fields)
+        // and a cleaner name. Quality must still win.
+        small.exif_fields = 15;
+        small.exif_camera = true;
+        let mut big = dated(
+            item(1, "2021-12-11 14.47.57_14.jpg", 6_560_000, 4624, 3472),
+            1_654_000_000, // 2022-06-01
+        );
+        big.exif_fields = 12;
+        big.exif_camera = true;
+
+        let scores = assess_group(&[small, big.clone()], &[0, 1]);
+        assert!(
+            scores[&1].confidence > scores[&0].confidence,
+            "larger file must win: {} vs {}",
+            scores[&1].confidence,
+            scores[&0].confidence
+        );
+        assert!(scores[&1].reasons.iter().any(|r| r == reason::QUALITY));
+    }
+
+    #[test]
+    fn hour_apart_dates_are_not_strong_evidence() {
+        let a = dated(item(0, "a.jpg", 1_000_000, 4000, 3000), 1_638_000_000);
+        let b = dated(item(1, "b.jpg", 1_000_000, 4000, 3000), 1_638_003_600);
+
+        let scores = assess_group(&[a, b], &[0, 1]);
+        assert!((scores[&0].signals.age - 0.5).abs() < 0.01);
+        assert!((scores[&1].signals.age - 0.5).abs() < 0.01);
+        // No age reason can be justified by a one-hour gap.
+        assert!(!scores[&0].reasons.iter().any(|r| r == reason::AGE));
+        assert!(!scores[&1].reasons.iter().any(|r| r == reason::AGE));
+    }
+
+    #[test]
+    fn older_file_wins_when_quality_matches_and_gap_is_large() {
+        let old = dated(item(0, "old.jpg", 1_000_000, 4000, 3000), 1_600_000_000);
+        let new = dated(item(1, "new.jpg", 1_000_000, 4000, 3000), 1_650_000_000);
+
+        let scores = assess_group(&[old, new], &[0, 1]);
+        assert!(scores[&0].confidence > scores[&1].confidence);
+        assert!(scores[&0].reasons.iter().any(|r| r == reason::AGE));
     }
 }

@@ -360,7 +360,7 @@
       "kind": 0
     },
     {
-      "text": "The 'original' policy computes a heuristic score from resolution, bytes per pixel, age, EXIF richness, name markers and location. It is not a probability and does not guarantee the original; the preview shows the score and reasons.",
+      "text": "The 'original' policy computes a heuristic score from resolution, bytes per pixel, age, EXIF richness, name markers and location. It is not a probability and does not guarantee the original; the preview shows the score and reasons. When two copies share the same resolution, the one with much more data per pixel (the larger file) is strongly preferred, because the smaller one is usually a recompressed copy.",
       "kind": 1
     },
     {

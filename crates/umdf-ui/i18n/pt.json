@@ -360,7 +360,7 @@
       "kind": 0
     },
     {
-      "text": "A política «original» calcula uma pontuação heurística a partir da resolução, bytes por píxel, idade, riqueza EXIF, marcas no nome e localização. Não é uma probabilidade nem garante o original; a pré-visualização mostra a pontuação e os motivos.",
+      "text": "A política «original» calcula uma pontuação heurística a partir da resolução, bytes por píxel, idade, riqueza EXIF, marcas no nome e localização. Não é uma probabilidade nem garante o original; a pré-visualização mostra a pontuação e os motivos. Quando duas cópias têm a mesma resolução, a que tem muitos mais dados por píxel (o ficheiro maior) é fortemente preferida, porque a mais pequena costuma ser uma cópia recomprimida.",
       "kind": 1
     },
     {

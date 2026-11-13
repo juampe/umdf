@@ -381,6 +381,11 @@ component PreviewPane inherits Rectangle {
     background: transparent;
     horizontal-stretch: 1;
     vertical-stretch: 1;
+    // Let the pane follow its explicitly assigned width instead of feeding the
+    // heading/file-name text back into the layout as a minimum size. This keeps
+    // same-size original/duplicate images rendered at the same size.
+    min-width: 0px;
+    preferred-width: 0px;
 
     VerticalLayout {
         spacing: 4px;
@@ -394,6 +399,7 @@ component PreviewPane inherits Rectangle {
                 font-weight: 600;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
+                overflow: elide;
             }
             FlatButton {
                 label: "⟳";
@@ -1406,9 +1412,19 @@ export component AppWindow inherits Window {
                             vertical-stretch: 1;
                             background: transparent;
 
-                            if root.preview-width >= 420px : HorizontalLayout {
-                                spacing: 8px;
+                            // The panes are positioned explicitly instead of
+                            // using a layout: a layout gives each pane a width
+                            // based on its content (the "Duplicate" heading and
+                            // the file name), which made two same-size photos
+                            // render at different sizes.
+                            if root.preview-width >= 420px : Rectangle {
+                                width: parent.width;
+                                height: parent.height;
                                 PreviewPane {
+                                    x: 0;
+                                    y: 0;
+                                    width: (parent.width - 8px) / 2;
+                                    height: parent.height;
                                     heading: "";
                                     source: root.preview-left;
                                     info: root.preview-left-info;
@@ -1419,6 +1435,10 @@ export component AppWindow inherits Window {
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
+                                    x: (parent.width + 8px) / 2;
+                                    y: 0;
+                                    width: (parent.width - 8px) / 2;
+                                    height: parent.height;
                                     heading: root.strings.duplicate;
                                     source: root.preview-right;
                                     info: root.preview-right-info;
@@ -1429,9 +1449,14 @@ export component AppWindow inherits Window {
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                             }
-                            if root.preview-width < 420px : VerticalLayout {
-                                spacing: 6px;
+                            if root.preview-width < 420px : Rectangle {
+                                width: parent.width;
+                                height: parent.height;
                                 PreviewPane {
+                                    x: 0;
+                                    y: 0;
+                                    width: parent.width;
+                                    height: (parent.height - 6px) / 2;
                                     heading: "";
                                     source: root.preview-left;
                                     info: root.preview-left-info;
@@ -1442,6 +1467,10 @@ export component AppWindow inherits Window {
                                     open => { root.lightbox-open = true; scope.focus(); }
                                 }
                                 PreviewPane {
+                                    x: 0;
+                                    y: (parent.height + 6px) / 2;
+                                    width: parent.width;
+                                    height: (parent.height - 6px) / 2;
                                     heading: root.strings.duplicate;
                                     source: root.preview-right;
                                     info: root.preview-right-info;
@@ -1663,9 +1692,13 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    HorizontalLayout {
-                        spacing: 10px;
+                    Rectangle {
+                        vertical-stretch: 1;
                         PreviewPane {
+                            x: 0;
+                            y: 0;
+                            width: (parent.width - 10px) / 2;
+                            height: parent.height;
                             heading: root.strings.original;
                             source: root.preview-left;
                             info: root.preview-left-info;
@@ -1676,6 +1709,10 @@ export component AppWindow inherits Window {
                             open => {}
                         }
                         PreviewPane {
+                            x: (parent.width + 10px) / 2;
+                            y: 0;
+                            width: (parent.width - 10px) / 2;
+                            height: parent.height;
                             heading: root.strings.duplicate;
                             source: root.preview-right;
                             info: root.preview-right-info;

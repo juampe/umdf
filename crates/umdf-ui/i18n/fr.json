@@ -360,7 +360,7 @@
       "kind": 0
     },
     {
-      "text": "La politique « original » calcule un score heuristique à partir de la résolution, des octets par pixel, de l'âge, de la richesse EXIF, des marqueurs de nom et de l'emplacement. Ce n'est pas une probabilité et cela ne garantit pas l'original ; l'aperçu affiche le score et les raisons.",
+      "text": "La politique « original » calcule un score heuristique à partir de la résolution, des octets par pixel, de l'âge, de la richesse EXIF, des marqueurs de nom et de l'emplacement. Ce n'est pas une probabilité et cela ne garantit pas l'original ; l'aperçu affiche le score et les raisons. Lorsque deux copies ont la même résolution, celle qui contient beaucoup plus de données par pixel (le fichier le plus volumineux) est fortement privilégiée, car la plus petite est généralement une copie recompressée.",
       "kind": 1
     },
     {
