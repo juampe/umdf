@@ -18,9 +18,9 @@
 //! Quality is the heaviest signal by design: it is direct evidence of
 //! recompression. At identical dimensions a file that is several times larger
 //! is almost always the source, while file dates, extra EXIF (editors often add
-//! fields) and copy-marked names are weaker and easily rewritten. `W_QUALITY`
-//! deliberately exceeds `W_AGE + W_METADATA + W_NAME` so a dramatic quality
-//! gap cannot be outvoted by those proxies.
+//! fields) and copy-marked names are weaker and easily rewritten. Its weight is
+//! intentionally larger than the resolution weight and larger than the usual
+//! combined age/metadata/name advantage, so a dramatic quality gap wins.
 
 use std::collections::HashMap;
 
