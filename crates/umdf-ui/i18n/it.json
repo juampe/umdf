@@ -55,8 +55,9 @@
     "runtime_reinstall": "Reinstalla CUDA",
     "star": "Imposta come riferimento",
     "out": "Rimuovi dal gruppo",
+    "ignore_group": "Ignora gruppo",
     "manual_reference": "Riferimento manuale ★",
-    "shortcuts_hint": "Invio anteprima · Esc chiudi · t cestino · m sposta · d elimina · s riferimento · o rimuovi · 1/2 ruota · Maiusc+T/M/D entrambi",
+    "shortcuts_hint": "Invio anteprima · Esc chiudi · t cestino · m sposta · d elimina · s riferimento · o rimuovi · g ignora gruppo · 1/2 ruota · Maiusc+T/M/D entrambi",
     "semantic_unavailable": "La ricerca semantica non è inclusa in questa build. Compila con --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolleranza di grigio",
     "trash_all": "Sposta tutti i duplicati nel cestino",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "Hai scelto questa copia come riferimento.",
     "comparison_cache_cleared": "Risultati di confronto svuotati; la prossima analisi ricalcolerà le coppie.",
     "status_out": "Rimosso dal gruppo (il file non è stato eliminato): {path}",
+    "status_out_group": "Gruppo ignorato: {count} foto rimosse dall'elenco (i file restano su disco).",
     "status_trashed_pair": "Entrambi spostati nel cestino: {a} e {b}",
     "status_deleted_pair": "Entrambi eliminati: {a} e {b}",
     "status_moved_pair": "Entrambi spostati: {a} e {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "«Rimuovi» (o) toglie la copia dal suo gruppo perché non assomiglia al riferimento. Il file resta sul disco; la decisione viene salvata in cache.db e rimane tra le scansioni."
+    },
+    {
+      "kind": 2,
+      "text": "«Ignora gruppo» (g) rimuove l'intero gruppo corrente dall'elenco perché probabilmente è una raffica o una variante voluta. Tutti i file restano su disco e vengono ricordati come «out» in cache.db, quindi il gruppo non ricompare nelle scansioni successive."
     },
     {
       "kind": 2,

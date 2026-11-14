@@ -107,6 +107,7 @@ export struct Strings {
     runtime_reinstall: string,
     star: string,
     out: string,
+    ignore_group: string,
     manual_reference: string,
     shortcuts_hint: string,
     semantic_unavailable: string,
@@ -673,6 +674,7 @@ export component AppWindow inherits Window {
     callback delete-row-both(int);
     callback star-row(int);
     callback out-row(int);
+    callback ignore-group(int);
     callback apply-all(string);
     callback confirm-apply();
     callback confirm-cancel();
@@ -762,6 +764,12 @@ export component AppWindow inherits Window {
             if (event.text == Key.O || event.text == "O") {
                 if (root.selected-row >= 0) {
                     root.out-row(root.selected-row);
+                }
+                return accept;
+            }
+            if (event.text == Key.G || event.text == "G") {
+                if (root.selected-row >= 0) {
+                    root.ignore-group(root.selected-row);
                 }
                 return accept;
             }
@@ -1531,11 +1539,19 @@ export component AppWindow inherits Window {
                             spacing: 6px;
                             FlatButton {
                                 label: root.strings.out;
-                                minw: 132px;
+                                minw: 96px;
                                 horizontal-stretch: 1;
                                 bg: Theme.soft;
                                 enabled: root.selected-row >= 0;
                                 clicked => { root.out-row(root.selected-row); }
+                            }
+                            FlatButton {
+                                label: root.strings.ignore_group;
+                                minw: 96px;
+                                horizontal-stretch: 1;
+                                bg: Theme.soft;
+                                enabled: root.selected-row >= 0;
+                                clicked => { root.ignore-group(root.selected-row); }
                             }
                             FlatButton {
                                 label: "★";
@@ -1647,6 +1663,12 @@ export component AppWindow inherits Window {
                             }
                             return accept;
                         }
+                        if (event.text == Key.G || event.text == "G") {
+                            if (root.selected-row >= 0) {
+                                root.ignore-group(root.selected-row);
+                            }
+                            return accept;
+                        }
                         if (event.text == Key.Digit1) {
                             root.rotate-preview(true);
                             return accept;
@@ -1755,6 +1777,13 @@ export component AppWindow inherits Window {
                             bg: Theme.soft;
                             enabled: root.selected-row >= 0;
                             clicked => { root.out-row(root.selected-row); }
+                        }
+                        FlatButton {
+                            label: root.strings.ignore_group;
+                            minw: 132px;
+                            bg: Theme.soft;
+                            enabled: root.selected-row >= 0;
+                            clicked => { root.ignore-group(root.selected-row); }
                         }
                         FlatButton {
                             label: root.strings.star;

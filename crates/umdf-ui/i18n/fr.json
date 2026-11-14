@@ -55,8 +55,9 @@
     "runtime_reinstall": "Réinstaller CUDA",
     "star": "Définir comme référence",
     "out": "Retirer du groupe",
+    "ignore_group": "Ignorer groupe",
     "manual_reference": "Référence manuelle ★",
-    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence · o retirer · 1/2 pivoter · Maj+T/M/D les deux",
+    "shortcuts_hint": "Entrée aperçu · Échap fermer · t corbeille · m déplacer · d supprimer · s référence · o retirer · g ignorer groupe · 1/2 pivoter · Maj+T/M/D les deux",
     "semantic_unavailable": "La recherche sémantique n'est pas incluse dans cette compilation. Compilez avec --features embeddings et ONNX Runtime.",
     "opt_tolerance": "Tolérance de gris",
     "trash_all": "Mettre tous les doublons à la corbeille",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "Vous avez choisi cette copie comme référence.",
     "comparison_cache_cleared": "Résultats de comparaison vidés ; la prochaine analyse recalculera les paires.",
     "status_out": "Retiré de son groupe (le fichier n'a pas été supprimé) : {path}",
+    "status_out_group": "Groupe ignoré : {count} photos retirées de la liste (les fichiers restent sur le disque).",
     "status_trashed_pair": "Les deux déplacés vers la corbeille : {a} et {b}",
     "status_deleted_pair": "Les deux supprimés : {a} et {b}",
     "status_moved_pair": "Les deux déplacés : {a} et {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "« Retirer » (o) sort la copie de son groupe car elle ne ressemble pas à la référence. Le fichier reste sur le disque ; la décision est enregistrée dans cache.db et conservée entre les analyses."
+    },
+    {
+      "kind": 2,
+      "text": "« Ignorer groupe » (g) retire tout le groupe actuel de la liste, car il s'agit probablement d'une rafale ou d'une variante voulue. Tous les fichiers restent sur le disque et sont mémorisés comme « out » dans cache.db, donc le groupe ne revient pas lors des analyses suivantes."
     },
     {
       "kind": 2,

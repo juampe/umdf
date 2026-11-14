@@ -55,8 +55,9 @@
     "runtime_reinstall": "CUDA 재설치",
     "star": "참조로 설정",
     "out": "그룹에서 제외",
+    "ignore_group": "그룹 무시",
     "manual_reference": "수동 참조 ★",
-    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조 · o 제외 · 1/2 회전 · Shift+T/M/D 둘 다",
+    "shortcuts_hint": "Enter 미리보기 · Esc 닫기 · t 휴지통 · m 이동 · d 삭제 · s 참조 · o 제외 · g 그룹 무시 · 1/2 회전 · Shift+T/M/D 둘 다",
     "semantic_unavailable": "이 빌드에는 의미론적 검색이 포함되어 있지 않습니다. --features embeddings 및 ONNX Runtime으로 다시 빌드하세요.",
     "opt_tolerance": "픽셀 허용 오차",
     "trash_all": "모든 중복을 휴지통으로",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "이 복사본을 참조로 선택했습니다.",
     "comparison_cache_cleared": "비교 결과를 지웠습니다. 다음 스캔에서 쌍을 다시 계산합니다.",
     "status_out": "그룹에서 제외했습니다(파일은 삭제되지 않음): {path}",
+    "status_out_group": "그룹을 무시했습니다: 목록에서 사진 {count}장을 제거했습니다(파일은 디스크에 유지됩니다).",
     "status_trashed_pair": "두 파일을 휴지통으로 이동했습니다: {a} 및 {b}",
     "status_deleted_pair": "두 파일을 삭제했습니다: {a} 및 {b}",
     "status_moved_pair": "두 파일을 이동했습니다: {a} 및 {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "‘그룹에서 제외’(o)는 참조와 닮지 않았기 때문에 이 복사본을 그룹에서 뺍니다. 파일은 디스크에 그대로 남으며, 결정은 cache.db에 저장되어 검색 후에도 유지됩니다."
+    },
+    {
+      "kind": 2,
+      "text": "“그룹 무시”(g)는 현재 그룹 전체를 목록에서 제거합니다. 연사 사진이나 의도적으로 남긴 변형일 가능성이 높기 때문입니다. 모든 파일은 디스크에 그대로 남고 cache.db에 out으로 기록되어 이후 검사에서도 그룹이 다시 나타나지 않습니다."
     },
     {
       "kind": 2,

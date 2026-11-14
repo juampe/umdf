@@ -55,8 +55,9 @@
     "runtime_reinstall": "Reinstalar CUDA",
     "star": "Definir como referência",
     "out": "Remover do grupo",
+    "ignore_group": "Ignorar grupo",
     "manual_reference": "Referência manual ★",
-    "shortcuts_hint": "Enter pré-visualizar · Esc fechar · t lixo · m mover · d apagar · s referência · o remover · 1/2 rodar · Shift+T/M/D ambos",
+    "shortcuts_hint": "Enter pré-visualizar · Esc fechar · t lixo · m mover · d apagar · s referência · o remover · g ignorar grupo · 1/2 rodar · Shift+T/M/D ambos",
     "semantic_unavailable": "A pesquisa semântica não está incluída nesta compilação. Compile com --features embeddings e ONNX Runtime.",
     "opt_tolerance": "Tolerância de cinza",
     "trash_all": "Mover todos os duplicados para o lixo",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "Escolheu esta cópia como referência.",
     "comparison_cache_cleared": "Resultados de comparação limpos; o próximo escaneamento recalcula os pares.",
     "status_out": "Removido do grupo (o ficheiro não foi apagado): {path}",
+    "status_out_group": "Grupo ignorado: {count} fotos removidas da lista (os ficheiros ficam no disco).",
     "status_trashed_pair": "Ambos movidos para a lixeira: {a} e {b}",
     "status_deleted_pair": "Ambos excluídos: {a} e {b}",
     "status_moved_pair": "Ambos movidos: {a} e {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "«Remover» (o) tira a cópia do seu grupo porque não se parece com a referência. O ficheiro continua no disco; a decisão é guardada em cache.db e mantém-se entre análises."
+    },
+    {
+      "kind": 2,
+      "text": "«Ignorar grupo» (g) remove todo o grupo atual da lista porque provavelmente é uma rajada ou uma variante intencional. Todos os ficheiros ficam no disco e são memorizados como «out» em cache.db, pelo que o grupo não volta em análises posteriores."
     },
     {
       "kind": 2,

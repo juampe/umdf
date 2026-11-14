@@ -4,6 +4,18 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.9] - 2026-11-14
+
+### Added
+
+- `g` (and an **Ignore group** button in the preview and the enlarged view)
+  removes the whole current group from the match list. It is meant for bursts
+  and intended variants the user wants to keep: every photo in the group stays
+  on disk, and all of them are remembered as out in `cache.db`, so the group
+  does not return on later scans.
+- The status bar reports how many photos were removed from the list, and Help
+  in all ten languages documents the new shortcut.
+
 ## [0.6.8] - 2026-11-14
 
 ### Fixed

@@ -962,6 +962,44 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
+    // ---- g: ignore the whole current group without touching any file --------
+    {
+        let ui_handle = ui.as_weak();
+        let rows = rows.clone();
+        let lang = lang.clone();
+        let ui_stats = ui_stats.clone();
+        let preview_gen = preview_gen.clone();
+        let cache = cache.clone();
+        ui.on_ignore_group(move |index| {
+            let Some(ui) = ui_handle.upgrade() else {
+                return;
+            };
+            let Some(row) = rows.row_data(index.max(0) as usize) else {
+                return;
+            };
+            let group = row.group.clone();
+            let tr = Tr::new(lang.get());
+            // A group shows one row per removed member, all sharing `group`.
+            // Mark every referenced path as "out" so the whole group stays
+            // hidden after a rescan. This is a burst the user wants to keep:
+            // no file is deleted, moved or trashed.
+            let (first, paths, removed_bytes) = take_group_rows(&rows, group.as_str());
+            let Some(first) = first else {
+                return;
+            };
+            for key in &paths {
+                if let Err(error) = cache.set_manual_out(key, true) {
+                    umdf_core::log_error(format_args!(
+                        "UMDF: could not save the manual out decision: {error}"
+                    ));
+                }
+            }
+            ui.set_status(tr.status_out_group(paths.len()).into());
+            advance_after_removal(&ui, &rows, &tr, first, &preview_gen);
+            update_counters(&ui, &rows, &tr, &ui_stats, removed_bytes);
+        });
+    }
+
     // ---- model manager ------------------------------------------------------
     {
         let ui_handle = ui.as_weak();
@@ -2868,6 +2906,33 @@ fn update_counters(
     ui.set_space_label(tr.reclaimable(&human_bytes(state.reclaimable)).into());
 }
 
+/// Remove every row that belongs to `group`, returning the lowest removed
+/// index, the normalised paths the group referenced (original and duplicate)
+/// and the duplicate bytes that leave the list. No file is touched.
+fn take_group_rows(rows: &VecModel<RowItem>, group: &str) -> (Option<usize>, HashSet<String>, u64) {
+    let mut paths = HashSet::new();
+    let mut removed_bytes = 0u64;
+    let mut first = None;
+    let mut i = 0;
+    while i < rows.row_count() {
+        let Some(current) = rows.row_data(i) else {
+            break;
+        };
+        if current.group != group {
+            i += 1;
+            continue;
+        }
+        let original = Path::new(current.original_path.as_str());
+        let duplicate = Path::new(current.duplicate_path.as_str());
+        removed_bytes += std::fs::metadata(duplicate).map(|m| m.len()).unwrap_or(0);
+        paths.insert(path_key(original));
+        paths.insert(path_key(duplicate));
+        first.get_or_insert(i);
+        rows.remove(i);
+    }
+    (first, paths, removed_bytes)
+}
+
 /// After deleting/trashing/moving the row at `removed_index`, select the row
 /// that took its place (or the last one) and load its preview, so the user can
 /// keep pressing Delete while visually comparing.
@@ -3152,4 +3217,68 @@ fn preview_data(
         guard.insert(path.to_string(), value.clone());
     }
     value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn row(group: &str, original: &str, duplicate: &str) -> RowItem {
+        RowItem {
+            group: group.into(),
+            original: original.into(),
+            duplicate: duplicate.into(),
+            similarity: "100%".into(),
+            size: "0 B".into(),
+            original_path: original.into(),
+            duplicate_path: duplicate.into(),
+            keep_confidence: "".into(),
+            keep_reason: "".into(),
+            keep_pct: 100.0,
+            keep_codes: "".into(),
+            starred: false,
+            original_thumb: slint::Image::default(),
+            duplicate_thumb: slint::Image::default(),
+        }
+    }
+
+    #[test]
+    fn ignoring_a_group_removes_only_its_rows_and_keeps_every_path() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("umdf-group-{stamp}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let keep = dir.join("keep.jpg");
+        let dup = dir.join("dup.jpg");
+        let other = dir.join("other.jpg");
+        std::fs::write(&keep, vec![0u8; 11]).unwrap();
+        std::fs::write(&dup, vec![0u8; 23]).unwrap();
+        std::fs::write(&other, vec![0u8; 5]).unwrap();
+
+        let keep_s = keep.to_string_lossy().to_string();
+        let dup_s = dup.to_string_lossy().to_string();
+        let other_s = other.to_string_lossy().to_string();
+        let rows = VecModel::from(vec![
+            row("1", &keep_s, &dup_s),
+            row("2", &other_s, &dup_s),
+            row("1", &keep_s, &other_s),
+        ]);
+
+        let (first, paths, bytes) = take_group_rows(&rows, "1");
+
+        assert_eq!(first, Some(0));
+        assert_eq!(rows.row_count(), 1);
+        assert_eq!(rows.row_data(0).unwrap().group, "2");
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&path_key(&keep)));
+        assert!(paths.contains(&path_key(&dup)));
+        assert!(paths.contains(&path_key(&other)));
+        // Only the row-1 duplicate bytes count: 23 + 5.
+        assert_eq!(bytes, 28);
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

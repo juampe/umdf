@@ -55,8 +55,9 @@
     "runtime_reinstall": "Reinstalar CUDA",
     "star": "Usar como referencia",
     "out": "Sacar del grupo",
+    "ignore_group": "Ignorar grupo",
     "manual_reference": "Referencia manual ★",
-    "shortcuts_hint": "Intro vista previa · Esc cerrar · t papelera · m mover · d borrar · s referencia · o fuera · 1/2 rotar · Mayús+T/M/D ambos",
+    "shortcuts_hint": "Intro vista previa · Esc cerrar · t papelera · m mover · d borrar · s referencia · o fuera · g ignorar grupo · 1/2 rotar · Mayús+T/M/D ambos",
     "semantic_unavailable": "Esta compilación no incluye búsqueda semántica. Compila con --features embeddings y ONNX Runtime.",
     "opt_tolerance": "Tolerancia de gris",
     "trash_all": "A la papelera",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "Has elegido esta copia como referencia.",
     "comparison_cache_cleared": "Resultados de comparación vaciados; el próximo escaneo recalculará los pares.",
     "status_out": "Sacado de su grupo (el archivo no se ha borrado): {path}",
+    "status_out_group": "Grupo ignorado: {count} fotos quitadas de la lista (los archivos se conservan en el disco).",
     "status_trashed_pair": "Enviados ambos a la papelera: {a} y {b}",
     "status_deleted_pair": "Eliminados ambos: {a} y {b}",
     "status_moved_pair": "Movidos ambos: {a} y {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "«Fuera» (o) saca la copia de su grupo porque no se parece a la referencia. El archivo permanece en el disco; la decisión se guarda en cache.db y se mantiene entre escaneos."
+    },
+    {
+      "kind": 2,
+      "text": "«Ignorar grupo» (g) quita de la lista todo el grupo actual porque probablemente sea una ráfaga o una variante intencionada. Todos los archivos permanecen en el disco y se recuerdan como fuera del grupo en cache.db, así que el grupo no vuelve en escaneos posteriores."
     },
     {
       "kind": 2,

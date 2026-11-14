@@ -55,8 +55,9 @@
     "runtime_reinstall": "CUDA を再インストール",
     "star": "参照に設定",
     "out": "グループから除外",
+    "ignore_group": "グループ無視",
     "manual_reference": "手動参照 ★",
-    "shortcuts_hint": "Enter プレビュー · Esc 閉じる · t ゴミ箱 · m 移動 · d 削除 · s 参照 · o 除外 · 1/2 回転 · Shift+T/M/D 両方",
+    "shortcuts_hint": "Enter プレビュー · Esc 閉じる · t ゴミ箱 · m 移動 · d 削除 · s 参照 · o 除外 · g グループ無視 · 1/2 回転 · Shift+T/M/D 両方",
     "semantic_unavailable": "このビルドにはセマンティック検索が含まれていません。--features embeddings と ONNX Runtime で再ビルドしてください。",
     "opt_tolerance": "ピクセル許容値",
     "trash_all": "すべての重複をゴミ箱へ",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "このコピーを参照として選択しました。",
     "comparison_cache_cleared": "比較結果を消去しました。次回のスキャンでペアを再計算します。",
     "status_out": "グループから除外しました（ファイルは削除されていません）: {path}",
+    "status_out_group": "グループを無視しました: リストから {count} 枚の写真を外しました（ファイルはディスクに残ります）。",
     "status_trashed_pair": "2つのファイルをゴミ箱に移動しました: {a} と {b}",
     "status_deleted_pair": "2つのファイルを削除しました: {a} と {b}",
     "status_moved_pair": "2つのファイルを移動しました: {a} と {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "「グループから除外」(o) は、参照画像に似ていないため、このコピーをグループから外します。ファイルはディスクに残り、判断は cache.db に保存されてスキャン後も維持されます。"
+    },
+    {
+      "kind": 2,
+      "text": "「グループを無視」(g) は、おそらく連写や意図的なバリエーションである現在のグループ全体をリストから外します。ファイルはすべてディスクに残り、cache.db に out として記録されるため、次回以降のスキャンでこのグループは再表示されません。"
     },
     {
       "kind": 2,

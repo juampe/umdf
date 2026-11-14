@@ -180,6 +180,7 @@ struct StringsRaw {
     runtime_reinstall: String,
     star: String,
     out: String,
+    ignore_group: String,
     manual_reference: String,
     shortcuts_hint: String,
     semantic_unavailable: String,
@@ -276,6 +277,7 @@ impl StringsRaw {
             runtime_reinstall: self.runtime_reinstall.clone().into(),
             star: self.star.clone().into(),
             out: self.out.clone().into(),
+            ignore_group: self.ignore_group.clone().into(),
             manual_reference: self.manual_reference.clone().into(),
             shortcuts_hint: self.shortcuts_hint.clone().into(),
             semantic_unavailable: self.semantic_unavailable.clone().into(),
@@ -709,6 +711,10 @@ impl Tr {
 
     pub fn status_out(&self, path: &Path) -> String {
         self.fmt("status_out", &[("path", display_path(path))])
+    }
+
+    pub fn status_out_group(&self, count: usize) -> String {
+        self.fmt("status_out_group", &[("count", count.to_string())])
     }
 
     pub fn manual_reference_reason(&self) -> String {

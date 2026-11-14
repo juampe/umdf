@@ -55,8 +55,9 @@
     "runtime_reinstall": "Reinstall CUDA",
     "star": "Set as reference",
     "out": "Remove from group",
+    "ignore_group": "Ignore group",
     "manual_reference": "Manual reference ★",
-    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star · o out · 1/2 rotate · Shift+T/M/D both",
+    "shortcuts_hint": "Enter preview · Esc close · t trash · m move · d delete · s star · o out · g ignore group · 1/2 rotate · Shift+T/M/D both",
     "semantic_unavailable": "Semantic search is not included in this build. Build with --features embeddings and ONNX Runtime.",
     "opt_tolerance": "Pixel tolerance",
     "trash_all": "Trash all duplicates",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "You chose this copy as the reference.",
     "comparison_cache_cleared": "Comparison results cleared; the next scan will recompute the pairs.",
     "status_out": "Removed from its group (the file was not deleted): {path}",
+    "status_out_group": "Group ignored: {count} photos removed from the list (files kept on disk).",
     "status_trashed_pair": "Moved both to trash: {a} and {b}",
     "status_deleted_pair": "Deleted both: {a} and {b}",
     "status_moved_pair": "Moved both: {a} and {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "“Out” (o) removes the copy from its group because it does not look like the reference. The file stays on disk; the decision is saved in cache.db and survives scans."
+    },
+    {
+      "kind": 2,
+      "text": "“Ignore group” (g) removes the whole current group from the list because it is probably a burst or an intended variant. Every file stays on disk and is remembered as out in cache.db, so the group does not return on later scans."
     },
     {
       "kind": 2,

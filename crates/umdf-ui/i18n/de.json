@@ -55,8 +55,9 @@
     "runtime_reinstall": "CUDA neu installieren",
     "star": "Als Referenz festlegen",
     "out": "Aus Gruppe entfernen",
+    "ignore_group": "Gruppe ignorieren",
     "manual_reference": "Manuelle Referenz ★",
-    "shortcuts_hint": "Enter Vorschau · Esc schließen · t Papierkorb · m verschieben · d löschen · s Referenz · o entfernen · 1/2 drehen · Umschalt+T/M/D beide",
+    "shortcuts_hint": "Enter Vorschau · Esc schließen · t Papierkorb · m verschieben · d löschen · s Referenz · o entfernen · g Gruppe ignorieren · 1/2 drehen · Umschalt+T/M/D beide",
     "semantic_unavailable": "Die semantische Suche ist in diesem Build nicht enthalten. Kompilieren Sie mit --features embeddings und ONNX Runtime.",
     "opt_tolerance": "Graustufen-Toleranz",
     "trash_all": "Alle Duplikate in den Papierkorb",
@@ -198,6 +199,7 @@
     "manual_reference_reason": "Sie haben diese Kopie als Referenz gewählt.",
     "comparison_cache_cleared": "Vergleichsergebnisse gelöscht; der nächste Scan berechnet die Paare neu.",
     "status_out": "Aus der Gruppe entfernt (die Datei wurde nicht gelöscht): {path}",
+    "status_out_group": "Gruppe ignoriert: {count} Fotos aus der Liste entfernt (Dateien bleiben auf der Festplatte).",
     "status_trashed_pair": "Beide in den Papierkorb verschoben: {a} und {b}",
     "status_deleted_pair": "Beide gelöscht: {a} und {b}",
     "status_moved_pair": "Beide verschoben: {a} und {b}"
@@ -470,6 +472,10 @@
     {
       "kind": 2,
       "text": "„Entfernen“ (o) nimmt die Kopie aus ihrer Gruppe, weil sie nicht wie die Referenz aussieht. Die Datei bleibt auf der Festplatte; die Entscheidung wird in cache.db gespeichert und bleibt über Scans hinweg erhalten."
+    },
+    {
+      "kind": 2,
+      "text": "„Gruppe ignorieren“ (g) entfernt die gesamte aktuelle Gruppe aus der Liste, weil sie wahrscheinlich eine Serie (Burst) oder eine gewollte Variante ist. Alle Dateien bleiben auf der Festplatte und werden in cache.db als „out“ gemerkt, sodass die Gruppe bei späteren Scans nicht zurückkehrt."
     },
     {
       "kind": 2,
