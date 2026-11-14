@@ -4,6 +4,27 @@ All notable changes to UMDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.8] - 2026-11-14
+
+### Fixed
+
+- Resolution now takes precedence over bytes per pixel when candidates differ
+  in pixel count. A 320×240, 29 KB thumbnail is no longer chosen as the original
+  of a 4160×3120, 2.22 MB photo just because it stores more bytes per pixel. The
+  preview now explains the choice with the resolution advantage.
+- Quality is only compared between files with at least half the largest pixel
+  count. A downscaled copy can have a higher bytes-per-pixel ratio without
+  carrying more detail, so it gets a neutral quality signal and its resolution
+  penalty decides.
+- Weights rebalanced: resolution 0.36, quality 0.30, age 0.10, EXIF 0.08, name
+  0.10, location 0.06. The equal-resolution quality fix from 0.6.7 is preserved,
+  so the 945 KB vs 6.56 MB case still keeps the 6.56 MB file.
+
+### Changed
+
+- Help in all ten languages explains that a low-resolution thumbnail is never
+  preferred to a full-size photo, even when it stores more bytes per pixel.
+
 ## [0.6.7] - 2026-11-13
 
 ### Fixed

@@ -8,36 +8,36 @@
 //!
 //! | Signal | Weight | More original when… |
 //! |--------|-------:|---------------------|
-//! | resolution | 0.20 | more pixels (photos/video) |
-//! | quality    | 0.34 | more bytes per pixel (or per second of audio) |
-//! | age        | 0.12 | older file time, but only when the gap is weeks/months |
-//! | metadata   | 0.10 | richer EXIF, camera make/model present |
-//! | name       | 0.14 | no "copy", "(1)", "edited", "resized", "whatsapp"… |
-//! | location   | 0.10 | DCIM/Camera/Pictures rather than Downloads/Desktop/temp |
+//! | resolution | 0.36 | more pixels; a thumbnail is not a better original |
+//! | quality    | 0.30 | more bytes per pixel, compared at similar resolution |
+//! | age        | 0.10 | older file time, but only when the gap is weeks/months |
+//! | metadata   | 0.08 | richer EXIF, camera make/model present |
+//! | name       | 0.10 | no "copy", "(1)", "edited", "resized", "whatsapp"… |
+//! | location   | 0.06 | DCIM/Camera/Pictures rather than Downloads/Desktop/temp |
 //!
-//! Quality is the heaviest signal by design: it is direct evidence of
-//! recompression. At identical dimensions a file that is several times larger
-//! is almost always the source, while file dates, extra EXIF (editors often add
-//! fields) and copy-marked names are weaker and easily rewritten. Its weight is
-//! intentionally larger than the resolution weight and larger than the usual
-//! combined age/metadata/name advantage, so a dramatic quality gap wins.
+//! Resolution is the primary signal: a 320x240 thumbnail carries far less
+//! information than a 4160x3120 photo, even when its bytes-per-pixel ratio is
+//! higher. Quality is therefore only compared between candidates with
+//! comparable pixel counts (at least half the largest). At similar resolutions
+//! it breaks ties: a file that is several times larger is almost always the
+//! source, while file dates, extra EXIF (editors often add fields) and
+//! copy-marked names are weaker and easily rewritten.
 
 use std::collections::HashMap;
 
 use crate::model::{MediaItem, MediaKind};
 
-// Resolution alone must not beat the fingerprint of a derivative (copy name,
-// download folder, lower bytes-per-pixel), so it is weighted below the sum of
-// the "is this a copy?" signals. Quality is deliberately the heaviest signal:
-// at identical dimensions a 7x smaller file is overwhelmingly a recompressed
-// derivative, whereas an older file date is weak evidence (copies, sync tools
-// and editors often preserve or rewrite timestamps).
-const W_RESOLUTION: f32 = 0.20;
-const W_QUALITY: f32 = 0.34;
-const W_AGE: f32 = 0.12;
-const W_METADATA: f32 = 0.10;
-const W_NAME: f32 = 0.14;
-const W_LOCATION: f32 = 0.10;
+// Resolution is deliberately the heaviest signal: a residual thumbnail must
+// never beat the full-size photo it was derived from. Quality is second and is
+// only compared at similar resolutions. The remaining signals explain the
+// choice when resolution and quality are close, but together they cannot
+// outvote a large resolution or quality gap.
+const W_RESOLUTION: f32 = 0.36;
+const W_QUALITY: f32 = 0.30;
+const W_AGE: f32 = 0.10;
+const W_METADATA: f32 = 0.08;
+const W_NAME: f32 = 0.10;
+const W_LOCATION: f32 = 0.06;
 
 #[derive(Debug, Clone, Default)]
 pub struct Signals {
@@ -79,20 +79,37 @@ pub fn assess_group(items: &[MediaItem], members: &[usize]) -> HashMap<usize, As
     let metadata: Vec<f64> = members.iter().map(|id| metadata_raw(&items[*id])).collect();
 
     let res_range = range(&resolutions);
-    let qual_range = range(&qualities);
+    let max_res = resolutions.iter().copied().fold(0.0, f64::max);
+
+    // Bytes per pixel is only meaningful between files with comparable pixel
+    // counts. A 320x240 thumbnail can have a higher ratio than the 13 MP photo
+    // it came from simply because every retained pixel got more bits; it does
+    // not carry more detail. Exclude items below half the largest pixel count
+    // from the quality comparison and give them a neutral quality signal;
+    // resolution already carries their penalty.
+    let comparable: Vec<usize> = (0..n)
+        .filter(|pos| resolutions[*pos] >= max_res * 0.5)
+        .collect();
+    let comparable_qualities: Vec<f64> = comparable.iter().map(|pos| qualities[*pos]).collect();
+    let qual_range = range(&comparable_qualities);
     let meta_range = range(&metadata);
-    let qual_mean = if qualities.is_empty() {
+    let qual_mean = if comparable_qualities.is_empty() {
         0.0
     } else {
-        qualities.iter().sum::<f64>() / qualities.len() as f64
+        comparable_qualities.iter().sum::<f64>() / comparable_qualities.len() as f64
     };
 
     let mut out = HashMap::with_capacity(n);
     for (pos, id) in members.iter().enumerate() {
         let item = &items[*id];
+        let quality_signal = if resolutions[pos] >= max_res * 0.5 {
+            normalise_log(qualities[pos], qual_range)
+        } else {
+            0.5
+        };
         let signals = Signals {
             resolution: normalise(resolutions[pos], res_range),
-            quality: normalise_log(qualities[pos], qual_range),
+            quality: quality_signal,
             age: age_score(ages[pos], &ages),
             metadata: normalise(metadata[pos], meta_range),
             name: name_score(item),
@@ -132,7 +149,8 @@ pub fn assess_group(items: &[MediaItem], members: &[usize]) -> HashMap<usize, As
         if res_max > 0.0 && resolutions[pos] >= res_max {
             reasons.push(reason::RESOLUTION.to_string());
         }
-        if qual_max > 0.0
+        if qual_range.is_some()
+            && resolutions[pos] >= max_res * 0.5
             && qualities[pos] >= qual_max
             && qual_mean > 0.0
             && qualities[pos] > qual_mean * 1.05
@@ -465,6 +483,39 @@ mod tests {
             scores[&0].confidence
         );
         assert!(scores[&1].reasons.iter().any(|r| r == reason::QUALITY));
+    }
+
+    #[test]
+    fn thumbnail_never_beats_full_resolution_photo() {
+        // Reported pair: a 320x240, 29 KB thumbnail against the 4160x3120,
+        // 2.22 MB photo. The thumbnail has more bytes per pixel, so a naive
+        // quality comparison made it the "original". Resolution must dominate.
+        let mut thumb = dated(
+            item(0, "2016-09-03 15.22.41-1.jpg", 29_723, 320, 240),
+            1_470_000_000, // 2016-08-01, older on purpose
+        );
+        thumb.exif_fields = 2;
+        thumb.exif_camera = false;
+        let mut photo = dated(
+            item(1, "2016-09-03_14.33.22_47.jpg", 2_325_971, 4160, 3120),
+            1_650_000_000, // 2022-04-01
+        );
+        photo.exif_fields = 9;
+        photo.exif_camera = true;
+
+        let scores = assess_group(&[thumb, photo.clone()], &[0, 1]);
+        assert!(
+            scores[&1].confidence > scores[&0].confidence,
+            "full-resolution photo must win: {} vs {}",
+            scores[&1].confidence,
+            scores[&0].confidence
+        );
+        assert!(
+            scores[&1].reasons.iter().any(|r| r == reason::RESOLUTION),
+            "reasons should explain the resolution advantage: {:?}",
+            scores[&1].reasons
+        );
+        assert!(!scores[&1].reasons.iter().any(|r| r == reason::QUALITY));
     }
 
     #[test]

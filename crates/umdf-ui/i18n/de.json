@@ -360,7 +360,7 @@
       "kind": 0
     },
     {
-      "text": "Die Richtlinie „Original“ berechnet eine heuristische Punktzahl aus Auflösung, Bytes pro Pixel, Alter, EXIF-Reichtum, Namensmarkern und Speicherort. Es ist keine Wahrscheinlichkeit und garantiert nicht das Original; die Vorschau zeigt Punktzahl und Gründe. Wenn zwei Kopien dieselbe Auflösung haben, wird die Datei mit deutlich mehr Daten pro Pixel (die größere Datei) stark bevorzugt, weil die kleinere meist eine neu komprimierte Kopie ist.",
+      "text": "Die Richtlinie „Original“ berechnet eine heuristische Punktzahl aus Auflösung, Bytes pro Pixel, Alter, EXIF-Reichtum, Namensmarkern und Speicherort. Es ist keine Wahrscheinlichkeit und garantiert nicht das Original; die Vorschau zeigt Punktzahl und Gründe. Wenn zwei Kopien dieselbe Auflösung haben, wird die Datei mit deutlich mehr Daten pro Pixel (die größere Datei) stark bevorzugt, weil die kleinere meist eine neu komprimierte Kopie ist. Eine niedrig aufgelöste Miniatur wird nie einer vollauflösenden Aufnahme vorgezogen, selbst wenn sie mehr Bytes pro Pixel speichert.",
       "kind": 1
     },
     {

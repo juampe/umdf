@@ -360,7 +360,7 @@
       "kind": 0
     },
     {
-      "text": "La politica «originale» calcola un punteggio euristico da risoluzione, byte per pixel, età, ricchezza EXIF, marcatori nel nome e posizione. Non è una probabilità e non garantisce l'originale; l'anteprima mostra punteggio e motivi. Quando due copie hanno la stessa risoluzione, viene privilegiata nettamente quella con molti più dati per pixel (il file più grande), perché la più piccola è di solito una copia ricompressa.",
+      "text": "La politica «originale» calcola un punteggio euristico da risoluzione, byte per pixel, età, ricchezza EXIF, marcatori nel nome e posizione. Non è una probabilità e non garantisce l'originale; l'anteprima mostra punteggio e motivi. Quando due copie hanno la stessa risoluzione, viene privilegiata nettamente quella con molti più dati per pixel (il file più grande), perché la più piccola è di solito una copia ricompressa. Una miniatura a bassa risoluzione non viene mai preferita a una foto a piena risoluzione, anche se contiene più byte per pixel.",
       "kind": 1
     },
     {
